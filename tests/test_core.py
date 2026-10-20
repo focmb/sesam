@@ -218,3 +218,55 @@ class SudoTests(unittest.TestCase):
             storage.save(cfg, p)
             c = storage.load(p).connections[0]
             self.assertEqual((c.sudo_mode, c.sudo_user), ("shell", "app"))
+
+
+class SudoPasswordTests(unittest.TestCase):
+    def _conn(self, **kw):
+        return Connection("n", "h", user="u", use_password=True, sudo_mode="login", **kw)
+
+    def test_password_not_in_arguments_but_in_env(self):
+        from ssh_verwaltung.connect_cli import prepare
+        args, env = prepare(self._conn(), "geh&eim'1", "/a", {})
+        self.assertNotIn("geh&eim'1", " ".join(args))
+        self.assertEqual(env["LC_SSHV_PW"], "geh&eim'1")
+        self.assertIn("SendEnv=LC_SSHV_PW", args)
+        self.assertTrue(args[-1].endswith("env -u LC_SSHV_PW sudo -i"))
+
+    def test_can_be_disabled_and_needs_password(self):
+        from ssh_verwaltung.connect_cli import prepare
+        args, env = prepare(self._conn(sudo_use_password=False), "pw", "/a", {})
+        self.assertNotIn("LC_SSHV_PW", env)
+        self.assertEqual(args[-1], "sudo -i")
+        args, env = prepare(self._conn(), None, "", {})
+        self.assertEqual(args[-1], "sudo -i")
+
+    def test_remote_script_flow_with_fake_sudo(self):
+        """Führt den Remote-Befehl mit einem Fake-sudo in /bin/sh aus."""
+        import os, stat, subprocess, tempfile
+        from ssh_verwaltung.connect_cli import prepare
+        with tempfile.TemporaryDirectory() as d:
+            sudo = Path(d) / "sudo"
+            sudo.write_text(
+                "#!/bin/sh\n"
+                'case "$*" in\n'
+                "  *-S*) read pw; [ \"$pw\" = \"$EXPECT\" ] && echo VALIDATED || echo WRONG ;;\n"
+                '  *) echo "SESSION args=$* leak=${LC_SSHV_PW:-none}" ;;\n'
+                "esac\n"
+            )
+            sudo.chmod(sudo.stat().st_mode | stat.S_IXUSR)
+            conn = self._conn(remote_command="tmux attach")
+            base = {"PATH": f"{d}:{os.environ['PATH']}", "EXPECT": "p w'&$x"}
+
+            args, env = prepare(conn, "p w'&$x", "/a", base)
+            out = subprocess.run(["sh", "-c", args[-1]], env=env, capture_output=True, text=True).stdout
+            self.assertEqual(out.split(), ["VALIDATED", "SESSION", "args=-i", "tmux", "attach", "leak=none"])
+
+            env_wrong = dict(env, LC_SSHV_PW="falsch")
+            out = subprocess.run(["sh", "-c", args[-1]], env=env_wrong, capture_output=True, text=True).stdout
+            self.assertIn("WRONG", out)          # genau ein Versuch
+            self.assertIn("SESSION", out)        # danach normaler Ablauf
+
+            env_none = {k: v for k, v in env.items() if k != "LC_SSHV_PW"}
+            out = subprocess.run(["sh", "-c", args[-1]], env=env_none, capture_output=True, text=True).stdout
+            self.assertNotIn("WRONG", out)       # ohne Variable kein Versuch (kein Fehlversuch im Log)
+            self.assertNotIn("VALIDATED", out)

@@ -156,6 +156,34 @@ class GuiTests(unittest.TestCase):
         w.search.setText("a")
         self.assertTrue(find("K/Prod") is not None)
 
+    def test_sudo_dialog_and_oneoff_action(self):
+        from ssh_verwaltung.gui.connection_dialog import ConnectionDialog
+        from ssh_verwaltung.models import Connection
+
+        w = self._window()
+        dlg = ConnectionDialog(w.cfg)
+        dlg.name.setText("S")
+        dlg.host.setText("h")
+        self.assertFalse(dlg.sudo_user.isEnabled())
+        dlg.sudo_mode.setCurrentIndex(dlg.sudo_mode.findData("shell"))
+        self.assertTrue(dlg.sudo_user.isEnabled())
+        dlg.sudo_user.setText("app")
+        dlg._accept()
+        c = dlg.result_connection()
+        self.assertEqual((c.sudo_mode, c.sudo_user), ("shell", "app"))
+
+        # Einmalige Aktion "Als root verbinden" überschreibt nur die Kopie
+        plain = Connection("P", "h2")
+        w.cfg.connections += [plain]
+        w.refresh()
+        item = next(w.tree.topLevelItem(i) for i in range(w.tree.topLevelItemCount()) if w.tree.topLevelItem(i).text(0) == "P")
+        w.tree.setCurrentItem(item)
+        with mock.patch("ssh_verwaltung.gui.main_window.launcher.launch") as launch:
+            w.connect_selected(sudo=True)
+        used = launch.call_args.args[1]
+        self.assertEqual(used.sudo_mode, "login")
+        self.assertEqual(plain.sudo_mode, "")  # gespeicherte Verbindung bleibt unverändert
+
 
 if __name__ == "__main__":
     unittest.main()

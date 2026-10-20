@@ -49,6 +49,7 @@ class Connection:
     remote_command: str = ""
     sudo_mode: str = ""  # "" = aus, "login" = sudo -i, "shell" = sudo -s
     sudo_user: str = ""  # Zielbenutzer, leer = root
+    sudo_use_password: bool = True  # gespeichertes Passwort auch für sudo verwenden
     group: str = ""
     terminal_id: str = ""  # leer = Standardterminal
     notes: str = ""

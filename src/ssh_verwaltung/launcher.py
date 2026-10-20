@@ -33,9 +33,14 @@ def destination(conn: Connection) -> str:
 
 
 SUDO_MODES = {"login": "-i", "shell": "-s"}
+SUDO_ENV = "LC_SSHV_PW"  # Träger für das Passwort; Debian/Ubuntu akzeptieren LC_* per AcceptEnv
 
 
-def remote_command_line(conn: Connection) -> str:
+def wants_sudo_password(conn: Connection, password: str | None) -> bool:
+    return bool(password) and bool(SUDO_MODES.get(conn.sudo_mode)) and conn.sudo_use_password
+
+
+def remote_command_line(conn: Connection, sudo_password: bool = False) -> str:
     """Befehl, der auf dem Zielsystem ausgeführt wird (optional mit sudo davor)."""
     cmd = conn.remote_command.strip()
     flag = SUDO_MODES.get(conn.sudo_mode)
@@ -45,11 +50,17 @@ def remote_command_line(conn: Connection) -> str:
             parts += ["-u", conn.sudo_user.strip()]
         parts.append(flag)
         base = shlex.join(parts)  # Zielsystem ist POSIX
+        if sudo_password:
+            # Passwort kommt über die SSH-Umgebung (nicht über Argumente). Nur wenn gesetzt, genau ein Versuch;
+            # schlägt er fehl, fragt sudo -i/-s normal nach. Die Variable wird für sudo selbst entfernt.
+            v = SUDO_ENV
+            auth = f"[ -n \"${v}\" ] && printf '%s\\n' \"${v}\" | sudo -S -p '' -v 2>/dev/null; "
+            base = f"{auth}env -u {v} {base}"
         cmd = f"{base} {cmd}" if cmd else base
     return cmd
 
 
-def build_ssh_args(conn: Connection) -> list[str]:
+def build_ssh_args(conn: Connection, sudo_password: bool = False) -> list[str]:
     args = ["ssh"]
     if conn.port and conn.port != 22:
         args += ["-p", str(conn.port)]
@@ -59,7 +70,9 @@ def build_ssh_args(conn: Connection) -> list[str]:
         args += ["-J", conn.jump_host]
     if conn.extra_args.strip():
         args += split_command(conn.extra_args)
-    remote = remote_command_line(conn)
+    remote = remote_command_line(conn, sudo_password)
+    if sudo_password:
+        args += ["-o", f"SendEnv={SUDO_ENV}"]
     if remote:
         args.append("-t")
     args.append(destination(conn))

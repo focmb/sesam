@@ -13,8 +13,11 @@ from .models import Connection
 
 def prepare(conn: Connection, password: str | None, askpass_script: str, base_env: dict[str, str] | None = None):
     """Baut ssh-Argumente und Umgebung. Rein funktional, daher testbar."""
-    args = launcher.build_ssh_args(conn)
+    use_sudo_pw = launcher.wants_sudo_password(conn, password)
+    args = launcher.build_ssh_args(conn, sudo_password=use_sudo_pw)
     env = dict(os.environ if base_env is None else base_env)
+    if use_sudo_pw:
+        env[launcher.SUDO_ENV] = password
     if password is not None:
         env[ENV_VAR] = password
         env["SSH_ASKPASS"] = askpass_script

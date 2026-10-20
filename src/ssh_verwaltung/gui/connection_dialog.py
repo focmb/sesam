@@ -37,7 +37,9 @@ class ConnectionDialog(QDialog):
         self.password.setPlaceholderText(
             "gespeichert – leer lassen zum Beibehalten" if self.conn.use_password else "optional"
         )
-        self.password.setToolTip("Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei.")
+        self.password.setToolTip(
+            "Für SSH-Login und (optional) sudo. Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei."
+        )
         self.clear_password = QCheckBox("Gespeichertes Passwort löschen")
         self.clear_password.setVisible(self.conn.use_password)
         self.password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
@@ -54,8 +56,20 @@ class ConnectionDialog(QDialog):
         self.sudo_mode.setCurrentIndex(max(self.sudo_mode.findData(self.conn.sudo_mode), 0))
         self.sudo_user = QLineEdit(self.conn.sudo_user)
         self.sudo_user.setPlaceholderText("root (Standard)")
-        self.sudo_mode.currentIndexChanged.connect(lambda *_: self.sudo_user.setEnabled(bool(self.sudo_mode.currentData())))
-        self.sudo_user.setEnabled(bool(self.sudo_mode.currentData()))
+        self.sudo_pw = QCheckBox("Gespeichertes Passwort auch für sudo verwenden")
+        self.sudo_pw.setChecked(self.conn.sudo_use_password)
+        self.sudo_pw.setToolTip(
+            "Das Passwort wird verschlüsselt als Umgebungsvariable (SendEnv) übertragen. "
+            "Der Server muss LC_* per AcceptEnv zulassen (Debian/Ubuntu: Standard); sonst fragt sudo im Terminal."
+        )
+
+        def _sudo_toggled(*_):
+            on = bool(self.sudo_mode.currentData())
+            self.sudo_user.setEnabled(on)
+            self.sudo_pw.setEnabled(on)
+
+        self.sudo_mode.currentIndexChanged.connect(_sudo_toggled)
+        _sudo_toggled()
         self.sudo_mode.setToolTip("Nach dem Login per sudo zu root (oder einem anderen Benutzer) wechseln. "
                                   "Ein sudo-Passwort wird im Terminal abgefragt.")
         self.group = QComboBox()
@@ -85,6 +99,7 @@ class ConnectionDialog(QDialog):
         form.addRow("Remote-Befehl", self.remote)
         form.addRow("Mit sudo", self.sudo_mode)
         form.addRow("sudo als Benutzer", self.sudo_user)
+        form.addRow("", self.sudo_pw)
         form.addRow("Gruppe", self.group)
         form.addRow("Terminal", self.terminal)
         form.addRow("Notizen", self.notes)
@@ -116,6 +131,7 @@ class ConnectionDialog(QDialog):
         c.remote_command = self.remote.text().strip()
         c.sudo_mode = self.sudo_mode.currentData() or ""
         c.sudo_user = self.sudo_user.text().strip() if c.sudo_mode else ""
+        c.sudo_use_password = self.sudo_pw.isChecked()
         c.group = grp.normalize(self.group.currentText())
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()
