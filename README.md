@@ -12,6 +12,8 @@ pip install -e .
 sesam                            # oder: python -m sesam
 ```
 
+Für einen Starter im Anwendungsmenü/Dash siehe „Im Anwendungsmenü / Dash installieren“.
+
 ## Darstellung
 
 *Einstellungen → Darstellung* schaltet zwischen **Systemvorgabe**, **Hell** und **Dunkel** um (wirkt sofort, wird gespeichert).
@@ -139,8 +141,21 @@ Ergebnis in `dist/`: der Ordner `sesam/` und ein Archiv (`sesam-<Version>-linux-
   löst SmartScreen u. U. eine Warnung aus.
 - Es ist bewusst keine Ein-Datei-Variante: der Wrapper startet Sesam bei jeder Verbindung erneut, Entpacken würde jedes Mal dauern.
 
+## Automatischer Build (Gitea Actions)
+
+`.gitea/workflows/build.yml` läuft bei jedem Tag `v*` (z. B. `git tag v0.1.0 && git push --tags`) und auf Knopfdruck
+(*Actions → Build → Run workflow*). Der Linux-Job installiert die Qt-Systembibliotheken, führt die Tests aus und baut mit
+`packaging/build.py`; das Archiv hängt als Artefakt `sesam-linux` am Lauf.
+
+Voraussetzung ist ein Gitea-Runner (`act_runner`, z. B. als Container neben Gitea) mit dem Label `ubuntu-22.04`,
+etwa `ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04`. Der Windows-Job steht auskommentiert im Workflow, bis ein Windows-Runner
+(Label `windows`, mit Python und Git) existiert; bis dahin wird Windows von Hand gebaut (siehe oben).
+
 ## Tests
 
 ```bash
-PYTHONPATH=src python -m unittest discover -s tests
+PYTHONPATH=src python -m unittest discover -s tests      # oder: python -m pytest
 ```
+
+Die GUI-Tests laufen ohne Bildschirm (`QT_QPA_PLATFORM=offscreen` wird gesetzt) und werden übersprungen, wenn PySide6 oder die
+Qt-Systembibliotheken fehlen. Die Sync-Tests brauchen `git`.
