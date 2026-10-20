@@ -1,0 +1,22 @@
+{
+  "extra_args": "",
+  "group": "VZS/Cisco",
+  "host": "192.168.100.91",
+  "id": "478d4a9a0d914bdc829c2d7a5d74fb0f",
+  "identity_file": "",
+  "identity_id": "",
+  "jump_host": "",
+  "name": "ISE",
+  "notes": "",
+  "password_enc": {
+    "ct": "CW/XnL8EUoUVBiy/XVNnYUxZdQVUTVLARKfX",
+    "nonce": "2p9k/UsQQ8Zt+LOO"
+  },
+  "port": 22,
+  "remote_command": "",
+  "sudo_mode": "",
+  "sudo_use_password": true,
+  "sudo_user": "",
+  "terminal_id": "",
+  "user": "admin"
+}
