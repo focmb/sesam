@@ -65,7 +65,7 @@ class MainWindow(QMainWindow):
         self.cfg = cfg
         self.path = path
         self.collapsed: set[str] = set()
-        self.setWindowTitle("SSH-Verwaltung")
+        self.setWindowTitle("Sesam")
         self.resize(940, 580)
 
         self.search = QLineEdit()

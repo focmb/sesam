@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_verwaltung import launcher, storage
-from ssh_verwaltung.models import Config, Connection, Terminal
-from ssh_verwaltung.ssh_config import parse_ssh_config
+from sesam import launcher, storage
+from sesam.models import Config, Connection, Terminal
+from sesam.ssh_config import parse_ssh_config
 
 
 class LauncherTests(unittest.TestCase):
@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
 class PasswordTests(unittest.TestCase):
     def test_wrapper_args_used_when_password(self):
-        from ssh_verwaltung.launcher import wrapper_args
+        from sesam.launcher import wrapper_args
         c = Connection("n", "h", use_password=True)
         w = wrapper_args(c)
         self.assertEqual(w[-2:], ["--connect", c.id])
@@ -88,7 +88,7 @@ class PasswordTests(unittest.TestCase):
         self.assertEqual(launcher.build_terminal_command(t, c, w)[-2:], ["--connect", c.id])
 
     def test_prepare_with_password(self):
-        from ssh_verwaltung.connect_cli import prepare
+        from sesam.connect_cli import prepare
         c = Connection("n", "h", user="u")
         args, env = prepare(c, "geheim", "/x/askpass.sh", {})
         self.assertEqual(args, ["ssh", "-o", "StrictHostKeyChecking=accept-new", "u@h"])
@@ -97,18 +97,18 @@ class PasswordTests(unittest.TestCase):
         self.assertEqual(env["SSH_ASKPASS"], "/x/askpass.sh")
 
     def test_prepare_respects_user_hostkey_option(self):
-        from ssh_verwaltung.connect_cli import prepare
+        from sesam.connect_cli import prepare
         c = Connection("n", "h", extra_args="-o StrictHostKeyChecking=yes")
         args, _ = prepare(c, "pw", "/a", {})
         self.assertNotIn("StrictHostKeyChecking=accept-new", args)
 
     def test_prepare_without_password_leaves_env(self):
-        from ssh_verwaltung.connect_cli import prepare
+        from sesam.connect_cli import prepare
         _, env = prepare(Connection("n", "h"), None, "", {"A": "1"})
         self.assertEqual(env, {"A": "1"})
 
     def test_askpass_answers_only_password_prompts(self):
-        from ssh_verwaltung.askpass import answer
+        from sesam.askpass import answer
         env = {"SSHV_PASSWORD": "pw"}
         self.assertEqual(answer("u@h's password: ", env), "pw")
         self.assertIsNone(answer("Are you sure you want to continue connecting (yes/no)? ", env))
@@ -117,7 +117,7 @@ class PasswordTests(unittest.TestCase):
     def test_askpass_script_is_executable_and_correct(self):
         import os, subprocess, tempfile
         from unittest import mock
-        from ssh_verwaltung import askpass
+        from sesam import askpass
         with tempfile.TemporaryDirectory() as d:
             with mock.patch.object(askpass.storage, "config_dir", return_value=Path(d)):
                 script = askpass.askpass_path()
@@ -131,7 +131,7 @@ class PasswordTests(unittest.TestCase):
 class TemplateTests(unittest.TestCase):
     def test_ghostty_in_linux_templates(self):
         from unittest import mock
-        from ssh_verwaltung import terminals
+        from sesam import terminals
         with mock.patch.object(terminals, "current_platform", return_value="linux"):
             names = [t.name for t in terminals.template_terminals()]
         self.assertIn("Ghostty", names)
@@ -155,27 +155,27 @@ class GroupTests(unittest.TestCase):
         )
 
     def test_all_groups_includes_ancestors_and_empty(self):
-        from ssh_verwaltung import groups as g
+        from sesam import groups as g
         self.assertEqual(g.all_groups(self._cfg()), ["Kunde", "Kunde/Prod", "Kunde/Prod/DB", "Leer"])
 
     def test_normalize(self):
-        from ssh_verwaltung import groups as g
+        from sesam import groups as g
         self.assertEqual(g.normalize(" A / /B\\C/ "), "A/B/C")
         self.assertEqual(g.normalize("  "), "")
 
     def test_rename_moves_subgroups_and_connections(self):
-        from ssh_verwaltung import groups as g
+        from sesam import groups as g
         cfg = self._cfg()
         g.rename_group(cfg, "Kunde/Prod", "Archiv/Alt")
         self.assertEqual([c.group for c in cfg.connections], ["Archiv/Alt", "Kunde", "Archiv/Alt/DB", ""])
 
     def test_rename_into_itself_rejected(self):
-        from ssh_verwaltung import groups as g
+        from sesam import groups as g
         with self.assertRaises(ValueError):
             g.rename_group(self._cfg(), "Kunde", "Kunde/Prod/Neu")
 
     def test_delete_moves_content_up(self):
-        from ssh_verwaltung import groups as g
+        from sesam import groups as g
         cfg = self._cfg()
         g.delete_group(cfg, "Kunde/Prod")
         self.assertEqual([c.group for c in cfg.connections], ["Kunde", "Kunde", "Kunde/DB", ""])
@@ -183,7 +183,7 @@ class GroupTests(unittest.TestCase):
         self.assertNotIn("Leer", g.all_groups(cfg))
 
     def test_add_group_and_roundtrip(self):
-        from ssh_verwaltung import groups as g
+        from sesam import groups as g
         cfg = Config()
         g.add_group(cfg, "X / Y")
         with tempfile.TemporaryDirectory() as d:
@@ -205,7 +205,7 @@ class SudoTests(unittest.TestCase):
         self.assertEqual(launcher.build_ssh_args(Connection("n", "h", user="u")), ["ssh", "u@h"])
 
     def test_wrapper_carries_sudo_override(self):
-        from ssh_verwaltung.connect_cli import parse_overrides
+        from sesam.connect_cli import parse_overrides
         c = Connection("n", "h", use_password=True, sudo_mode="login", sudo_user="")
         w = launcher.wrapper_args(c)
         self.assertEqual(parse_overrides(w), {"sudo_mode": "login", "sudo_user": ""})
@@ -225,7 +225,7 @@ class SudoPasswordTests(unittest.TestCase):
         return Connection("n", "h", user="u", use_password=True, sudo_mode="login", **kw)
 
     def test_password_not_in_arguments_but_in_env(self):
-        from ssh_verwaltung.connect_cli import prepare
+        from sesam.connect_cli import prepare
         args, env = prepare(self._conn(), "geh&eim'1", "/a", {})
         self.assertNotIn("geh&eim'1", " ".join(args))
         self.assertEqual(env["LC_SSHV_PW"], "geh&eim'1")
@@ -233,7 +233,7 @@ class SudoPasswordTests(unittest.TestCase):
         self.assertTrue(args[-1].endswith("env -u LC_SSHV_PW sudo -i"))
 
     def test_can_be_disabled_and_needs_password(self):
-        from ssh_verwaltung.connect_cli import prepare
+        from sesam.connect_cli import prepare
         args, env = prepare(self._conn(sudo_use_password=False), "pw", "/a", {})
         self.assertNotIn("LC_SSHV_PW", env)
         self.assertEqual(args[-1], "sudo -i")
@@ -243,7 +243,7 @@ class SudoPasswordTests(unittest.TestCase):
     def test_remote_script_flow_with_fake_sudo(self):
         """Führt den Remote-Befehl mit einem Fake-sudo in /bin/sh aus."""
         import os, stat, subprocess, tempfile
-        from ssh_verwaltung.connect_cli import prepare
+        from sesam.connect_cli import prepare
         with tempfile.TemporaryDirectory() as d:
             sudo = Path(d) / "sudo"
             sudo.write_text(
@@ -274,7 +274,7 @@ class SudoPasswordTests(unittest.TestCase):
 
 class IdentityTests(unittest.TestCase):
     def _cfg(self):
-        from ssh_verwaltung.models import Identity
+        from sesam.models import Identity
         ident = Identity("deploy", user="deploy", identity_file="/k/id", use_password=True)
         conn = Connection("srv", "h", user="alt", identity_file="/alt", use_password=True, identity_id=ident.id)
         return Config(identities=[ident], connections=[conn]), ident, conn
@@ -313,7 +313,7 @@ class IdentityTests(unittest.TestCase):
 
     def test_wrapper_uses_identity_password_key(self):
         from unittest import mock
-        from ssh_verwaltung import connect_cli, passwords
+        from sesam import connect_cli, passwords
         cfg, ident, conn = self._cfg()
         asked = []
         with mock.patch.object(connect_cli.storage, "load", return_value=cfg), \
@@ -328,8 +328,8 @@ class IdentityTests(unittest.TestCase):
 
     def test_apply_change(self):
         from unittest import mock
-        from ssh_verwaltung import passwords
-        from ssh_verwaltung.models import Identity
+        from sesam import passwords
+        from sesam.models import Identity
         store = {}
         i = Identity("x")
         with mock.patch.object(passwords, "set_password", lambda k, p: store.__setitem__(k, p)), \

@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_verwaltung import syncing
-from ssh_verwaltung.models import Config, Connection, Identity, SyncSettings
-from ssh_verwaltung.syncing import SyncEngine, SyncError, SyncRetry, merge_items, merge_sets, Item
+from sesam import syncing
+from sesam.models import Config, Connection, Identity, SyncSettings
+from sesam.syncing import SyncEngine, SyncError, SyncRetry, merge_items, merge_sets, Item
 
 
 class DictStore:

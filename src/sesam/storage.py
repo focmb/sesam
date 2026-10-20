@@ -15,7 +15,7 @@ def config_dir() -> Path:
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:
         base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return base / "ssh_verwaltung"
+    return base / "sesam"
 
 
 def config_path() -> Path:

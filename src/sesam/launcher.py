@@ -98,7 +98,7 @@ def wrapper_args(conn: Connection) -> list[str]:
     if IS_WINDOWS and exe.lower().endswith("pythonw.exe"):
         console = exe[: -len("pythonw.exe")] + "python.exe"
         exe = console if os.path.exists(console) else exe
-    base = [exe] if getattr(sys, "frozen", False) else [exe, "-m", "ssh_verwaltung"]
+    base = [exe] if getattr(sys, "frozen", False) else [exe, "-m", "sesam"]
     args = base + ["--connect", conn.id]
     if conn.sudo_mode:  # auch für einmalige Überschreibungen (Kontextmenü), die nicht gespeichert sind
         args += ["--sudo-mode", conn.sudo_mode, "--sudo-user", conn.sudo_user]

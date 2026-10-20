@@ -1,4 +1,4 @@
-# SSH-Verwaltung
+# Sesam
 
 Desktop-Tool (Windows und Linux, Python + PySide6) zum Verwalten von SSH-Verbindungen.
 Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
@@ -9,7 +9,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e .
-ssh-verwaltung                   # oder: python -m ssh_verwaltung
+sesam                            # oder: python -m sesam
 ```
 
 ## Gruppen
@@ -85,8 +85,9 @@ gespeicherten HTTPS-Zugangsdaten (im Hintergrund ohne Rückfragen, einmal vorher
 - Leeres Repository anlegen (z. B. bei GitHub/GitLab/Gitea) genügt, das Tool erstellt den Branch selbst.
 
 ## Daten
+Alte Daten aus der früheren Version („ssh_verwaltung“) werden beim ersten Start automatisch übernommen: der Konfigurationsordner wird umbenannt, Passwörter ziehen im Schlüsselbund um.
 
-Konfiguration: `~/.config/ssh_verwaltung/config.json` (Linux), `%APPDATA%\ssh_verwaltung\config.json` (Windows).
+Konfiguration: `~/.config/sesam/config.json` (Linux), `%APPDATA%\sesam\config.json` (Windows).
 Es werden keine Passwörter gespeichert; Authentifizierung läuft über ssh (Schlüssel, Agent, Passwortabfrage im Terminal).
 
 ## Tests

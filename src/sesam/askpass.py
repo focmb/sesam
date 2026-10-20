@@ -45,7 +45,7 @@ def askpass_path() -> str:
         if getattr(sys, "frozen", False):
             line = f'@"{sys.executable}" --askpass %*\r\n'
         else:
-            line = f'@"{_python_console()}" -m ssh_verwaltung --askpass %*\r\n'
+            line = f'@"{_python_console()}" -m sesam --askpass %*\r\n'
         path.write_text(line, encoding="ascii", newline="")
     else:
         path = d / "askpass.sh"

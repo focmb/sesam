@@ -22,7 +22,7 @@ def prepare(conn: Connection, password: str | None, askpass_script: str, base_en
         env[ENV_VAR] = password
         env["SSH_ASKPASS"] = askpass_script
         env["SSH_ASKPASS_REQUIRE"] = "force"
-        env.setdefault("DISPLAY", "ssh-verwaltung")
+        env.setdefault("DISPLAY", "sesam")
         # Askpass kann keine Host-Key-Rückfrage beantworten: unbekannte Hosts automatisch merken,
         # geänderte Schlüssel werden weiterhin abgelehnt.
         if "stricthostkeychecking" not in conn.extra_args.lower():
@@ -31,7 +31,7 @@ def prepare(conn: Connection, password: str | None, askpass_script: str, base_en
 
 
 def _fail(message: str) -> int:
-    print(f"SSH-Verwaltung: {message}", file=sys.stderr)
+    print(f"Sesam: {message}", file=sys.stderr)
     try:
         input("Enter zum Schließen …")
     except EOFError:

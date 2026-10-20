@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-SERVICE = "ssh_verwaltung"
+SERVICE = "sesam"
 
 
 class PasswordError(Exception):

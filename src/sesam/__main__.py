@@ -5,9 +5,7 @@ import sys
 
 def main() -> int:
     if len(sys.argv) >= 3 and sys.argv[1] == "--connect":
-        from .connect_cli import run
-
-        from .connect_cli import parse_overrides
+        from .connect_cli import parse_overrides, run
 
         return run(sys.argv[2], parse_overrides(sys.argv[3:]))
     if len(sys.argv) >= 2 and sys.argv[1] == "--askpass":
@@ -17,11 +15,13 @@ def main() -> int:
 
     from PySide6.QtWidgets import QApplication
 
-    from . import storage
+    from . import migration, storage
     from .gui.main_window import MainWindow
 
+    migration.run(log=lambda m: print(m, file=sys.stderr))
     app = QApplication(sys.argv)
-    app.setApplicationName("SSH-Verwaltung")
+    app.setApplicationName("Sesam")
+    app.setApplicationDisplayName("Sesam")
     path = storage.config_path()
     window = MainWindow(storage.load(path), path)
     window.show()

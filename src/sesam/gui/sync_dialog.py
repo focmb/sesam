@@ -29,7 +29,7 @@ class SyncDialog(QDialog):
         self.enabled = QCheckBox("Synchronisation aktivieren")
         self.enabled.setChecked(s.enabled)
         self.url = QLineEdit(s.url)
-        self.url.setPlaceholderText("git@server:gruppe/ssh-verwaltung.git oder https://…")
+        self.url.setPlaceholderText("git@server:gruppe/sesam.git oder https://…")
         self.branch = QLineEdit(s.branch or "main")
         self.auto = QCheckBox("Automatisch abgleichen (beim Start und nach jeder Änderung)")
         self.auto.setChecked(s.auto)

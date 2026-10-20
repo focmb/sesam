@@ -313,7 +313,7 @@ class SyncEngine:
             else:
                 meta = {"format": FORMAT, "kdf": new_kdf()}
                 key = derive_key(self.passphrase, meta["kdf"])
-                meta["check"] = encrypt(key, "ssh-verwaltung", "check")
+                meta["check"] = encrypt(key, "ssh-verwaltung", "check")  # Prüftext, bewusst unverändert (Kompatibilität)
                 new_meta = True
         items: dict = {}
         for kind, (folder, _cls) in KINDS.items():
@@ -394,7 +394,7 @@ class SyncEngine:
             self.git.run("add", "-A")
             n = len(status.strip().splitlines())
             self.git.run(
-                "-c", "user.name=SSH-Verwaltung", "-c", "user.email=ssh-verwaltung@localhost",
+                "-c", "user.name=Sesam", "-c", "user.email=sesam@localhost",
                 "commit", "-q", "-m", f"Sync von {self.device}: {n} Datei(en)",
             )
             report.committed = True
