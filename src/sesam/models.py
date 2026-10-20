@@ -103,6 +103,7 @@ class Config:
     theme: str = "system"  # "system", "light" oder "dark"
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
+    collapsed_groups: list[str] = field(default_factory=list)  # zugeklappte Gruppen der Hauptansicht (nur lokal, wird nicht synchronisiert)
     version: int = 1
 
     def terminal_by_id(self, terminal_id: str) -> Terminal | None:

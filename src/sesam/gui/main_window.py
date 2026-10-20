@@ -66,7 +66,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.cfg = cfg
         self.path = path
-        self.collapsed: set[str] = set()
+        # zugeklappte Gruppen: aus der Konfiguration wiederherstellen, Verwaistes (gelöschte Gruppen) verwerfen
+        self.collapsed: set[str] = set(cfg.collapsed_groups) & set(grp.all_groups(cfg))
         self.setWindowTitle("Sesam")
         self.resize(1000, 600)
 
@@ -86,6 +87,10 @@ class MainWindow(QMainWindow):
         header.setStretchLastSection(True)
         header.setMinimumSectionSize(60)
         self._apply_column_widths()
+        self._collapse_timer = QTimer(self)  # Einklapp-Zustand kurz nach dem Umschalten speichern
+        self._collapse_timer.setSingleShot(True)
+        self._collapse_timer.setInterval(600)
+        self._collapse_timer.timeout.connect(self._flush_collapsed)
         self._width_timer = QTimer(self)
         self._width_timer.setSingleShot(True)
         self._width_timer.setInterval(600)
@@ -290,12 +295,33 @@ class MainWindow(QMainWindow):
         widths = [header.sectionSize(i) for i in range(header.count())]
         if widths != self.cfg.column_widths:
             self.cfg.column_widths = widths
-            self._save()
+            self._save_no_sync()  # reiner Anzeigezustand: kein Abgleich nötig
+
+    def _collapsed_state(self) -> list[str]:
+        valid = set(grp.all_groups(self.cfg))
+        return sorted(p for p in self.collapsed if p in valid)
+
+    def _flush_collapsed(self):
+        """Speichert den Einklapp-Zustand. Bewusst ohne Synchronisation und ohne Fehlerdialog: reiner Anzeigezustand."""
+        state = self._collapsed_state()
+        if state != self.cfg.collapsed_groups:
+            self.cfg.collapsed_groups = state
+            try:
+                storage.save(self.cfg, self.path)
+            except OSError:
+                pass
+
+    def _remap_collapsed(self, old: str, new: str):
+        """Der Zustand folgt einer umbenannten oder verschobenen Gruppe samt Untergruppen."""
+        self.collapsed = {new + c[len(old):] if c == old or c.startswith(old + "/") else c for c in self.collapsed}
 
     def closeEvent(self, event):
         if self._width_timer.isActive():
             self._width_timer.stop()
             self._flush_widths()
+        if self._collapse_timer.isActive():
+            self._collapse_timer.stop()
+            self._flush_collapsed()
         super().closeEvent(event)
 
     def _expansion_changed(self, item: QTreeWidgetItem, collapsed: bool):
@@ -303,6 +329,7 @@ class MainWindow(QMainWindow):
         if path is None or self.search.text().strip():
             return
         (self.collapsed.add if collapsed else self.collapsed.discard)(path)
+        self._collapse_timer.start()
 
     def refresh(self, *_):
         needle = self.search.text().strip().lower()
@@ -369,6 +396,7 @@ class MainWindow(QMainWindow):
         return conn.group if conn else ""
 
     def _save(self):
+        self.cfg.collapsed_groups = self._collapsed_state()  # jedes Speichern nimmt den aktuellen Zustand mit
         try:
             storage.save(self.cfg, self.path)
         except OSError as exc:
@@ -542,6 +570,7 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.warning(self, "Gruppe", str(exc))
             return
+        self._remap_collapsed(path, grp.normalize(new))
         self._save()
         self.refresh()
 
@@ -557,6 +586,8 @@ class MainWindow(QMainWindow):
         )
         if answer == QMessageBox.StandardButton.Yes:
             grp.delete_group(self.cfg, path)
+            self.collapsed = {  # Untergruppen rücken eine Ebene hoch, die gelöschte Gruppe selbst entfällt
+                grp.join(parent, c[len(path) + 1:]) if c.startswith(path + "/") else c for c in self.collapsed if c != path}
             self._save()
             self.refresh()
 
@@ -570,11 +601,13 @@ class MainWindow(QMainWindow):
         else:
             if target == key or grp.parent_of(key) == target:
                 return
+            new_path = grp.join(target, grp.name_of(key))
             try:
-                grp.rename_group(self.cfg, key, grp.join(target, grp.name_of(key)))
+                grp.rename_group(self.cfg, key, new_path)
             except ValueError as exc:
                 QMessageBox.warning(self, "Gruppe", str(exc))
                 return
+            self._remap_collapsed(key, grp.normalize(new_path))
         if target:
             self.collapsed.difference_update(grp.ancestors(target))
         self._save()
@@ -630,6 +663,7 @@ class MainWindow(QMainWindow):
         self._save_no_sync()
 
     def _save_no_sync(self):
+        self.cfg.collapsed_groups = self._collapsed_state()
         try:
             storage.save(self.cfg, self.path)
         except OSError as exc:
