@@ -74,6 +74,8 @@ def _from_data(data: dict) -> Config:
         connections=[Connection.from_dict(c) for c in data.get("connections", [])],
         default_terminal_id=data.get("default_terminal_id", ""),
         groups=list(data.get("groups", [])),
+        # reiner Anzeigezustand: ein beschädigter Wert darf den Start nie verhindern
+        collapsed_groups=[g for g in data["collapsed_groups"] if isinstance(g, str)] if isinstance(data.get("collapsed_groups"), list) else [],
         sync=SyncSettings.from_dict(data.get("sync", {})),
         theme=data.get("theme", "system") if data.get("theme") in ("system", "light", "dark") else "system",
         column_widths=[int(w) for w in data.get("column_widths", []) if isinstance(w, (int, float))],
