@@ -1,0 +1,22 @@
+{
+  "extra_args": "",
+  "group": "VZS",
+  "host": "192.168.1.10",
+  "id": "6ff56efcd46c4565873696f887216754",
+  "identity_file": "",
+  "identity_id": "",
+  "jump_host": "",
+  "name": "Server 01",
+  "notes": "",
+  "password_enc": {
+    "ct": "gb/Y3hKchPCvDRgKcjAJ8A2Lqpu7fy2KPOxzi4FM",
+    "nonce": "HPk7o0MA72CCw2OD"
+  },
+  "port": 22,
+  "remote_command": "",
+  "sudo_mode": "",
+  "sudo_use_password": true,
+  "sudo_user": "",
+  "terminal_id": "9d34327b10ce4892b9068a9b231848a3",
+  "user": "root"
+}

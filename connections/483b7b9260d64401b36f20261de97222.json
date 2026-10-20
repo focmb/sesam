@@ -1,0 +1,18 @@
+{
+  "extra_args": "",
+  "group": "meowclown",
+  "host": "172.16.1.4",
+  "id": "483b7b9260d64401b36f20261de97222",
+  "identity_file": "",
+  "identity_id": "18879283fb514755aacf8c2dd1e0bc36",
+  "jump_host": "",
+  "name": "hoznja lokal",
+  "notes": "",
+  "port": 22,
+  "remote_command": "",
+  "sudo_mode": "login",
+  "sudo_use_password": true,
+  "sudo_user": "",
+  "terminal_id": "",
+  "user": ""
+}

@@ -1,0 +1,22 @@
+{
+  "extra_args": "",
+  "group": "VZS",
+  "host": "192.168.100.12",
+  "id": "edfd4edd631543668f32211a6f9cd8ac",
+  "identity_file": "",
+  "identity_id": "",
+  "jump_host": "",
+  "name": "DNS 1",
+  "notes": "",
+  "password_enc": {
+    "ct": "XvK30eJ/O/OKlf1nLgNYxxZshcEGTW7DvNZE",
+    "nonce": "QFBrIT6Ft7BqKsKm"
+  },
+  "port": 22,
+  "remote_command": "",
+  "sudo_mode": "",
+  "sudo_use_password": true,
+  "sudo_user": "",
+  "terminal_id": "9d34327b10ce4892b9068a9b231848a3",
+  "user": "vzsnet"
+}

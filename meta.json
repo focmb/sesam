@@ -1,0 +1,14 @@
+{
+  "check": {
+    "ct": "ZPsRclO0uXq5sA9ZSl7b9T8fOJ0EcTLOx7laajmY",
+    "nonce": "BupuUQD7uBGCQ8+9"
+  },
+  "format": 1,
+  "kdf": {
+    "n": 32768,
+    "name": "scrypt",
+    "p": 1,
+    "r": 8,
+    "salt": "depDC5aVGpZXR5qOO9WtRQ=="
+  }
+}

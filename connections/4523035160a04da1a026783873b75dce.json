@@ -1,0 +1,22 @@
+{
+  "extra_args": "",
+  "group": "VZS",
+  "host": "192.168.100.100",
+  "id": "4523035160a04da1a026783873b75dce",
+  "identity_file": "",
+  "identity_id": "",
+  "jump_host": "",
+  "name": "Testing RE",
+  "notes": "",
+  "password_enc": {
+    "ct": "ghY83jPLo+TAp4LYXUS9k1uj6Czd8aC3Uw==",
+    "nonce": "ItcGOLixhrU13LFX"
+  },
+  "port": 22,
+  "remote_command": "",
+  "sudo_mode": "",
+  "sudo_use_password": true,
+  "sudo_user": "",
+  "terminal_id": "",
+  "user": "vzstesting"
+}
