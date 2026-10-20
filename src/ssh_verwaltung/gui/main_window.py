@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QAbstractItemView, QHeaderView, QInputDialog, QLineEdit, QMainWindow, QMenu, QMessageBox,
+    QAbstractItemView, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
     QStyle, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -17,6 +17,8 @@ from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
 from .connection_dialog import ConnectionDialog
 from .identities_dialog import IdentitiesDialog
+from .sync_controller import SyncController
+from .sync_dialog import SyncDialog
 from .terminals_dialog import TerminalsDialog
 
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
@@ -97,8 +99,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tree)
         self.setCentralWidget(central)
 
+        self.sync = SyncController(self.cfg, lambda: storage.save(self.cfg, self.path), self)
+        self.sync.status.connect(self._sync_status)
+        self.sync.cfg_changed.connect(self._sync_changed_config)
+        self.sync.finished.connect(self._sync_finished)
+        self.sync_label = QLabel("")
+        self.statusBar().addPermanentWidget(self.sync_label)
+
         self._build_actions()
         self.refresh()
+        if self.sync.enabled() and self.cfg.sync.auto:
+            QTimer.singleShot(500, lambda: self.sync.sync())  # beim Start abgleichen
 
     # --- Aufbau ---
     def _build_actions(self):
@@ -117,6 +128,8 @@ class MainWindow(QMainWindow):
         self.a_del = act("Löschen", self.delete_selected, "Del")
         self.a_terms = act("Terminals …", self.edit_terminals)
         self.a_identities = act("Identitäten …", self.edit_identities)
+        self.a_sync = act("Jetzt synchronisieren", lambda: self.sync.sync(manual=True), "F5")
+        self.a_sync_settings = act("Synchronisation …", self.edit_sync)
         self.a_import = act("Aus ~/.ssh/config importieren", self.import_ssh_config)
 
         bar = QToolBar("Hauptleiste")
@@ -124,17 +137,20 @@ class MainWindow(QMainWindow):
         for a in (self.a_connect, self.a_new, self.a_new_group, self.a_edit, self.a_dup, self.a_del):
             bar.addAction(a)
         bar.addSeparator()
+        bar.addAction(self.a_sync)
         bar.addAction(self.a_identities)
         bar.addAction(self.a_terms)
         self.addToolBar(bar)
 
         menu = self.menuBar().addMenu("&Datei")
+        menu.addAction(self.a_sync)
         menu.addAction(self.a_import)
         menu.addSeparator()
         menu.addAction(act("Beenden", self.close, "Ctrl+Q"))
         menu = self.menuBar().addMenu("&Einstellungen")
         menu.addAction(self.a_identities)
         menu.addAction(self.a_terms)
+        menu.addAction(self.a_sync_settings)
 
     # --- Anzeige ---
     def _terminal_name(self, conn: Connection) -> str:
@@ -240,6 +256,8 @@ class MainWindow(QMainWindow):
             storage.save(self.cfg, self.path)
         except OSError as exc:
             QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
+            return
+        self.sync.schedule()  # Automatikmodus: verzögert abgleichen
 
     def _context_menu(self, pos):
         item = self.tree.itemAt(pos)
@@ -434,6 +452,42 @@ class MainWindow(QMainWindow):
                     c.terminal_id = ""
             self._save()
             self.refresh()
+
+    # --- Synchronisation ---
+    def _sync_status(self, text: str, error: bool):
+        self.sync_label.setText(("⚠ " if error else "⟳ " if text.endswith("…") else "✓ ") + text)
+        self.sync_label.setToolTip(text)
+
+    def _sync_changed_config(self):
+        try:
+            storage.save(self.cfg, self.path)  # ohne erneuten Abgleich auszulösen
+        except OSError:
+            pass
+        self.refresh()
+
+    def _sync_finished(self, report, error, manual: bool):
+        if error and manual:
+            QMessageBox.warning(self, "Synchronisation fehlgeschlagen", str(error))
+        elif report is not None and report.conflicts:
+            QMessageBox.information(
+                self,
+                "Synchronisation",
+                "Es gab widersprüchliche Änderungen an: " + ", ".join(report.conflicts)
+                + ".\nDeine Version blieb erhalten, die andere steht als „… (Konflikt)“ daneben.",
+            )
+
+    def edit_sync(self):
+        dlg = SyncDialog(self.cfg, self)
+        if dlg.exec():
+            self._save_no_sync()
+            if self.sync.enabled():
+                self.sync.sync(manual=True)
+
+    def _save_no_sync(self):
+        try:
+            storage.save(self.cfg, self.path)
+        except OSError as exc:
+            QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
 
     def edit_identities(self):
         IdentitiesDialog(self.cfg, self._save, self).exec()

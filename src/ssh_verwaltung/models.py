@@ -77,11 +77,29 @@ class Connection:
 
 
 @dataclass
+class SyncSettings:
+    """Einstellungen für die Synchronisation über ein Git-Repository (nur lokal, nicht synchronisiert)."""
+
+    enabled: bool = False
+    url: str = ""
+    branch: str = "main"
+    auto: bool = True  # beim Start abgleichen und nach jeder Änderung
+    passwords: bool = True  # Passwörter verschlüsselt mitsynchronisieren
+    passphrase_saved: bool = False  # Sync-Passwort liegt im Schlüsselbund
+    last_sync: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SyncSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
 class Config:
     terminals: list[Terminal] = field(default_factory=list)
     connections: list[Connection] = field(default_factory=list)
     identities: list[Identity] = field(default_factory=list)
     default_terminal_id: str = ""
+    sync: SyncSettings = field(default_factory=SyncSettings)
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     version: int = 1

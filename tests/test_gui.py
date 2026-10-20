@@ -256,6 +256,25 @@ class GuiTests(unittest.TestCase):
         d._accept()
         self.assertIsNone(d.password_change)
 
+    def test_column_widths_resizable_and_persisted(self):
+        from PySide6.QtWidgets import QHeaderView
+        from ssh_verwaltung import storage
+
+        w = self._window()
+        header = w.tree.header()
+        self.assertEqual(header.sectionResizeMode(0), QHeaderView.ResizeMode.Interactive)
+        self.assertEqual(header.sectionResizeMode(1), QHeaderView.ResizeMode.Interactive)
+        self.assertEqual([header.sectionSize(0), header.sectionSize(1)], [280, 260])  # Standardbreiten
+        header.resizeSection(0, 333)
+        header.resizeSection(1, 222)
+        self.assertTrue(w._width_timer.isActive())  # Speichern erfolgt verzögert
+        w._flush_widths()
+        saved = storage.load(self.path).column_widths
+        self.assertEqual(saved[:2], [333, 222])
+
+        w2 = self._window()  # neu geöffnet: gespeicherte Breiten werden angewendet
+        self.assertEqual([w2.tree.header().sectionSize(0), w2.tree.header().sectionSize(1)], [333, 222])
+
 
 if __name__ == "__main__":
     unittest.main()
