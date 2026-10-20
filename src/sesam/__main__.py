@@ -65,6 +65,7 @@ def main() -> int:
     if cfg is None:
         return 1
     theme.apply(app, cfg.theme)
+    theme.apply_scale(app, cfg.font_scale)
     window = MainWindow(cfg, path)
     window.show()
     return app.exec()

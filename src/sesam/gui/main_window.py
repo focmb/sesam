@@ -133,7 +133,9 @@ class MainWindow(QMainWindow):
         def act(text, slot, shortcut=None):
             a = QAction(text, self)
             a.triggered.connect(lambda *_: slot())
-            if shortcut:
+            if isinstance(shortcut, (list, tuple)):
+                a.setShortcuts([QKeySequence(k) for k in shortcut])
+            elif shortcut:
                 a.setShortcut(QKeySequence(shortcut))
             return a
 
@@ -173,10 +175,29 @@ class MainWindow(QMainWindow):
             group.addAction(a)
             theme_menu.addAction(a)
             self.theme_actions[mode] = a
+        size_menu = menu.addMenu("Schriftgröße")
+        self.scale_actions: dict[int, QAction] = {}
+        size_group = QActionGroup(self)
+        size_group.setExclusive(True)
+        for pct in theme.SCALE_STEPS:
+            a = QAction(f"{pct} %", self)
+            a.setCheckable(True)
+            a.triggered.connect(lambda _=False, v=pct: self.set_font_scale(v))
+            size_group.addAction(a)
+            size_menu.addAction(a)
+            self.scale_actions[pct] = a
+        size_menu.addSeparator()
+        self.a_font_bigger = act("Größer", lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, +1)), ["Ctrl++", "Ctrl+="])
+        self.a_font_smaller = act("Kleiner", lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, -1)), "Ctrl+-")
+        self.a_font_reset = act("Zurücksetzen (100 %)", lambda: self.set_font_scale(100), "Ctrl+0")
+        for a in (self.a_font_bigger, self.a_font_smaller, self.a_font_reset):
+            size_menu.addAction(a)
+        self._mark_font_scale()
         theme.notifier().changed.connect(self._theme_changed)
         self._refresh_icons()
 
     # --- Seitenleiste ---
+    SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
         ("a_connect", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
         ("a_sync", "a_identities", "a_terms"),
@@ -186,7 +207,7 @@ class MainWindow(QMainWindow):
         """Alle Hauptaktionen untereinander in einer Leiste am rechten Rand."""
         side = QWidget()
         side.setObjectName("sidebar")
-        side.setFixedWidth(190)
+        side.setFixedWidth(self.SIDEBAR_MIN_WIDTH)
         lay = QVBoxLayout(side)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
@@ -208,13 +229,14 @@ class MainWindow(QMainWindow):
                 button.setFocusPolicy(Qt.FocusPolicy.TabFocus)  # ein Klick nimmt dem Baum den Fokus nicht
                 button.setCursor(Qt.CursorShape.PointingHandCursor)
                 button.clicked.connect(lambda _=False, a=action: a.trigger())
-                action.changed.connect(lambda b=button, a=action: self._sync_button(b, a))
+                action.changed.connect(lambda b=button, a=action: (self._sync_button(b, a), self._fit_to_font()))  # Text kann sich ändern (z. B. Sync)
                 self._sync_button(button, action)
                 lay.addWidget(button)
                 self.side_buttons[attr] = button
         lay.addStretch(1)
         self._outer_layout.addWidget(side)
         self.sidebar = side
+        self._fit_to_font()
         # Die Tastenkürzel hingen früher an der Werkzeugleiste: jetzt direkt am Fenster registrieren.
         self.addActions([getattr(self, attr) for group in self.SIDEBAR_GROUPS for attr in group])
 
@@ -265,8 +287,20 @@ class MainWindow(QMainWindow):
             action.setVisible(bool(text))
 
     def _theme_changed(self):
+        self._fit_to_font()
+        QTimer.singleShot(0, self._fit_to_font)  # Qt reicht die neue Schrift erst danach an alle Widgets weiter
         self._refresh_icons()
         self.refresh()
+
+    def _fit_to_font(self):
+        """Icons und Seitenleiste wachsen mit der Schrift mit, damit nichts abgeschnitten wird."""
+        size = max(14, round(18 * theme.scale() / 100))
+        self.tree.setIconSize(QSize(size, size))
+        for button in self.side_buttons.values():
+            button.setIconSize(QSize(size, size))
+            button.ensurePolished()
+        widest = max(b.sizeHint().width() for b in self.side_buttons.values())
+        self.sidebar.setFixedWidth(max(self.SIDEBAR_MIN_WIDTH, widest))
 
     # --- Anzeige ---
     def _terminal_name(self, conn: Connection) -> str:
@@ -654,6 +688,21 @@ class MainWindow(QMainWindow):
             self._save_no_sync()
             if self.sync.enabled():
                 self.sync.sync(manual=True)
+
+    def _mark_font_scale(self):
+        current = self.cfg.font_scale
+        for pct, a in self.scale_actions.items():
+            a.setChecked(pct == current)
+
+    def set_font_scale(self, percent: int):
+        percent = theme.clamp_scale(percent)
+        app = QApplication.instance()
+        if app is not None:
+            percent = theme.apply_scale(app, percent)
+        if percent != self.cfg.font_scale:
+            self.cfg.font_scale = percent
+            self._save_no_sync()  # reiner Anzeigezustand: kein Abgleich nötig
+        self._mark_font_scale()
 
     def set_theme(self, mode: str):
         self.cfg.theme = mode
