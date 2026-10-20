@@ -44,7 +44,22 @@ class SidebarTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.addCleanup(self._close_widgets)
+        self._forbid_modal_dialogs()
         self.path = Path(self.tmp.name) / "c.json"
+
+    def _forbid_modal_dialogs(self):
+        """Ein unerwartetes modales Fenster würde den Test endlos blockieren – lieber sofort fehlschlagen."""
+        from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
+
+        def boom(*_a, **_k):
+            raise AssertionError("Unerwartetes modales Fenster im Test (würde hängen)")
+
+        for owner, names in ((QDialog, ["exec"]), (QMessageBox, ["information", "question", "warning", "critical"]),
+                             (QInputDialog, ["getText", "getItem", "getInt"])):
+            for name in names:
+                patcher = mock.patch.object(owner, name, boom)
+                patcher.start()
+                self.addCleanup(patcher.stop)
 
     def _window(self):
         from sesam import storage
@@ -128,6 +143,81 @@ class SidebarTests(unittest.TestCase):
         dark = w.side_buttons["a_new"].icon().pixmap(18, 18).toImage().pixelColor(9, 5).name()
         theme.apply(self.app, "system")
         self.assertNotEqual(light, dark)
+
+    def _tree_ids(self, w):
+        from PySide6.QtWidgets import QTreeWidgetItemIterator
+
+        from sesam.gui.main_window import ID_ROLE
+
+        out, it = [], QTreeWidgetItemIterator(w.tree)
+        while it.value():
+            out.append(it.value().data(0, ID_ROLE))
+            it += 1
+        return [i for i in out if i]
+
+    def _window_with_connection(self, group="G"):
+        from sesam.models import Connection
+
+        w = self._window()
+        conn = Connection("web-01", "h.example", user="u", group=group)
+        w.cfg.connections.append(conn)
+        w.cfg.groups = [group] if group else []
+        w.refresh()
+        self.assertTrue(w._select_connection(conn.id))
+        return w, conn
+
+    def test_duplicate_opens_edit_dialog_for_the_copy(self):
+        from sesam import storage
+        from sesam.gui.connection_dialog import ConnectionDialog
+
+        w, conn = self._window_with_connection()
+        seen = {}
+
+        def fake_exec(dlg):
+            seen["name"] = dlg.name.text()
+            seen["selected"] = dlg.name.selectedText()
+            dlg.name.setText("web-02")  # der Nutzer vergibt einen neuen Namen
+            dlg._accept()
+            return 1
+
+        with mock.patch.object(ConnectionDialog, "exec", fake_exec):
+            w.duplicate_selected()
+        self.assertEqual(seen["name"], "web-01 (Kopie)")
+        self.assertEqual(seen["selected"], "web-01 (Kopie)")  # Name ist markiert und sofort überschreibbar
+        names = sorted(c.name for c in w.cfg.connections)
+        self.assertEqual(names, ["web-01", "web-02"])  # Original unverändert, Kopie umbenannt
+        self.assertEqual(sorted(c.name for c in storage.load(self.path).connections), ["web-01", "web-02"])  # gespeichert
+        copy = next(c for c in w.cfg.connections if c.id != conn.id)
+        self.assertEqual((copy.host, copy.user, copy.group), (conn.host, conn.user, conn.group))
+        self.assertEqual(w._selected().id, copy.id)  # die Kopie ist ausgewählt
+
+    def test_duplicate_cancel_keeps_the_copy_selected(self):
+        from sesam.gui.connection_dialog import ConnectionDialog
+
+        w, conn = self._window_with_connection()
+        calls = []
+        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: calls.append(dlg) or 0):
+            w.duplicate_selected()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(sorted(c.name for c in w.cfg.connections), ["web-01", "web-01 (Kopie)"])
+        self.assertEqual(w._selected().name, "web-01 (Kopie)")
+
+    def test_duplicate_expands_collapsed_group_and_needs_selection(self):
+        from sesam.gui.connection_dialog import ConnectionDialog
+
+        w, conn = self._window_with_connection()
+        w.tree.topLevelItem(0).setExpanded(False)  # Gruppe zugeklappt
+        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: 0):
+            w.duplicate_selected()
+        self.assertTrue(w.tree.topLevelItem(0).isExpanded())
+        self.assertEqual(len(self._tree_ids(w)), 2)
+        # ohne Auswahl passiert nichts
+        w.tree.setCurrentItem(None)
+        calls = []
+        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: calls.append(dlg) or 0):
+            w.duplicate_selected()
+        self.assertEqual(calls, [])
+        self.assertEqual(len(w.cfg.connections), 2)
 
     def test_search_has_own_clear_button(self):
         w = self._window()

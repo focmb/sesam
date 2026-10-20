@@ -53,6 +53,7 @@ class GuiTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.addCleanup(self._close_widgets)
+        self._forbid_modal_dialogs()
         self.path = Path(self.tmp.name) / "c.json"
 
     def _window(self):
@@ -60,6 +61,20 @@ class GuiTests(unittest.TestCase):
         from sesam.gui.main_window import MainWindow
 
         return MainWindow(storage.load(self.path), self.path)
+
+    def _forbid_modal_dialogs(self):
+        """Ein unerwartetes modales Fenster würde den Test endlos blockieren – lieber sofort fehlschlagen."""
+        from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
+
+        def boom(*_a, **_k):
+            raise AssertionError("Unerwartetes modales Fenster im Test (würde hängen)")
+
+        for owner, names in ((QDialog, ["exec"]), (QMessageBox, ["information", "question", "warning", "critical"]),
+                             (QInputDialog, ["getText", "getItem", "getInt"])):
+            for name in names:
+                patcher = mock.patch.object(owner, name, boom)
+                patcher.start()
+                self.addCleanup(patcher.stop)
 
     def test_password_lifecycle(self):
         from sesam import storage
@@ -82,7 +97,8 @@ class GuiTests(unittest.TestCase):
         self.assertNotIn("pw1", self.path.read_text())  # nie in der Konfigurationsdatei
 
         w.tree.setCurrentItem(w.tree.topLevelItem(0))
-        w.duplicate_selected()
+        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: 0):  # Bearbeiten-Dialog der Kopie abbrechen
+            w.duplicate_selected()
         self.assertEqual(len(w.cfg.connections), 2)
         self.assertEqual(self.store[w.cfg.connections[1].id], "pw1")
 
