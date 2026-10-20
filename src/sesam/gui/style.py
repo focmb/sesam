@@ -249,17 +249,26 @@ def _pixmap(name: str, color: str, size: int) -> QPixmap:
     return pix
 
 
-# Programm-Icon (Fenster, Taskleiste). Identisch mit packaging/linux/sesam.svg – ein Test stellt das sicher.
+# Programm-Icon (Fenster, Taskleiste): das Tor aus „Sesam, öffne dich“ – ein Höhlentor, aus dem Licht fällt. Identisch mit packaging/linux/sesam.svg – ein Test stellt das sicher.
 APP_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#5b8cff"/>
-      <stop offset="1" stop-color="#2f5bd6"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b5bdb"/>
+      <stop offset="1" stop-color="#1e2f7a"/>
     </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.62" r="0.6">
+      <stop offset="0" stop-color="#fff4c2"/>
+      <stop offset="0.55" stop-color="#ffd24d"/>
+      <stop offset="1" stop-color="#f59f00"/>
+    </radialGradient>
   </defs>
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#g)"/>
-  <path d="M19 22l11 10-11 10" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M34 44h14" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg)"/>
+  <path d="M14 56V30a18 18 0 0 1 36 0v26z" fill="#141c4d"/>
+  <path d="M19 56V30a13 13 0 0 1 26 0v26z" fill="url(#glow)"/>
+  <path d="M19 56V30a13 13 0 0 1 4-9.4L27 56z" fill="#7a4a1c"/>
+  <path d="M45 56V30a13 13 0 0 0-4-9.4L37 56z" fill="#7a4a1c"/>
+  <path d="M14 56V30a18 18 0 0 1 36 0v26" fill="none" stroke="#c9d3ff" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M10 56h44" stroke="#c9d3ff" stroke-width="2.5" stroke-linecap="round"/>
 </svg>
 """
 
