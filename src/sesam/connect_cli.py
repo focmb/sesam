@@ -49,7 +49,12 @@ def parse_overrides(argv: list[str]) -> dict[str, str]:
 
 
 def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
-    cfg = storage.load()
+    try:
+        cfg = storage.load()
+    except storage.ConfigError as exc:
+        return _fail(f"Die Konfiguration ist beschädigt ({exc.reason}).\nStarte Sesam, um sie zu sichern, oder repariere {exc.path}.")
+    except OSError as exc:
+        return _fail(f"Die Konfiguration kann nicht gelesen werden: {exc}")
     conn = cfg.connection_by_id(conn_id)
     if conn is None:
         return _fail("Verbindung nicht gefunden.")
