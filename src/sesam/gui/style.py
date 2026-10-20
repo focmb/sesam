@@ -77,8 +77,8 @@ def palette(t: dict[str, str]) -> QPalette:
     return p
 
 
-def stylesheet(t: dict[str, str]) -> str:
-    t = {**t, **_arrow_files(t)}
+def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
+    t = {**t, **_arrow_files(t, base)}
     qss = """
     QMainWindow, QDialog { background: @bg@; }
     QToolTip { background: @surface@; color: @text@; border: 1px solid @border@; border-radius: 6px; padding: 4px 8px; }
@@ -93,17 +93,18 @@ def stylesheet(t: dict[str, str]) -> str:
     QMenu::item:disabled { color: @muted@; }
     QMenu::separator { height: 1px; background: @border@; margin: 5px 8px; }
 
-    /* Werkzeugleiste */
-    QToolBar { background: transparent; border: none; spacing: 2px; padding: 8px 10px 2px 10px; }
-    QToolBar::separator { width: 1px; background: @border@; margin: 6px 8px; }
-    QToolButton { background: transparent; color: @text@; border: none; border-radius: 8px; padding: 6px 10px; }
-    QToolButton:hover { background: @hover@; }
-    QToolButton:pressed { background: @pressed@; }
-    QToolButton:disabled { color: @muted@; }
-    QToolButton#primary { background: @accent@; color: @accent_text@; font-weight: 600; }
-    QToolButton#primary:hover { background: @accent_hover@; }
-    QToolButton#primary:disabled { background: @hover@; color: @muted@; }
-    QToolButton::menu-indicator { image: none; }
+    /* Seitenleiste mit den Hauptaktionen */
+    QWidget#sidebar { background: transparent; }
+    QFrame#sideSep { background: @border@; border: none; }
+    QPushButton#side { background: transparent; color: @text@; border: 1px solid transparent; border-radius: 8px;
+        padding: 7px 12px; text-align: left; }
+    QPushButton#side:hover { background: @hover@; border-color: transparent; }
+    QPushButton#side:pressed { background: @pressed@; }
+    QPushButton#side:focus { border-color: @accent@; }
+    QPushButton#side:disabled { background: transparent; color: @muted@; border-color: transparent; }
+    QPushButton#side[primary="true"] { background: @accent@; color: @accent_text@; font-weight: 600; }
+    QPushButton#side[primary="true"]:hover { background: @accent_hover@; }
+    QPushButton#side[primary="true"]:disabled { background: @hover@; color: @muted@; }
 
     /* Eingabefelder */
     QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {
@@ -115,13 +116,13 @@ def stylesheet(t: dict[str, str]) -> str:
     QLineEdit:disabled, QSpinBox:disabled, QComboBox:disabled, QPlainTextEdit:disabled, QTextEdit:disabled {
         background: @surface_alt@; color: @muted@; }
     QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: center right; width: 28px; border: none; }
-    QComboBox::down-arrow { image: url(@arrow_down@); }
+    QComboBox::down-arrow { image: url("@arrow_down@"); }
     QSpinBox::up-button, QDoubleSpinBox::up-button { subcontrol-origin: border; subcontrol-position: top right;
         width: 24px; border: none; background: transparent; }
     QSpinBox::down-button, QDoubleSpinBox::down-button { subcontrol-origin: border; subcontrol-position: bottom right;
         width: 24px; border: none; background: transparent; }
-    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url(@arrow_up@); }
-    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url(@arrow_down@); }
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url("@arrow_up@"); }
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url("@arrow_down@"); }
     QComboBox QAbstractItemView { background: @surface@; color: @text@; border: 1px solid @border@; border-radius: 8px;
         padding: 4px; outline: 0; selection-background-color: @accent_soft@; selection-color: @text@; }
 
@@ -145,8 +146,8 @@ def stylesheet(t: dict[str, str]) -> str:
     QTreeView::branch { background: transparent; }
     QTreeView::branch:hover { background: @row_hover@; }
     QTreeView::branch:selected { background: @sel@; }
-    QTreeView::branch:closed:has-children { image: url(@arrow_right@); }
-    QTreeView::branch:open:has-children { image: url(@arrow_down@); }
+    QTreeView::branch:closed:has-children { image: url("@arrow_right@"); }
+    QTreeView::branch:open:has-children { image: url("@arrow_down@"); }
     QTreeView::item:selected, QListView::item:selected,
     QTreeView::item:selected:active, QListView::item:selected:active { background: @sel@; color: @text@; }
     QHeaderView { background: transparent; }
@@ -180,10 +181,11 @@ def stylesheet(t: dict[str, str]) -> str:
     return qss
 
 
-def _arrow_files(t: dict[str, str]) -> dict[str, str]:
+def _arrow_files(t: dict[str, str], base: Path | None = None) -> dict[str, str]:
     """Schreibt die Auf-/Zuklapp-Pfeile des Baums als PNG (Stylesheets können nur Dateien einbinden)."""
-    folder = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation) or tempfile.gettempdir())
-    folder = folder / "sesam-ui"
+    if base is None:
+        base = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation) or tempfile.gettempdir())
+    folder = base / "sesam-ui"
     out = {"arrow_right": "none", "arrow_down": "none", "arrow_up": "none"}
     try:
         folder.mkdir(parents=True, exist_ok=True)
@@ -218,6 +220,7 @@ _ICONS = {
     "chevron_right": '<path d="M9 6l6 6-6 6"/>',
     "chevron_up": '<path d="M6 15l6-6 6 6"/>',
     "chevron_down": '<path d="M6 9l6 6 6-6"/>',
+    "close": '<path d="M7 7l10 10M17 7L7 17"/>',
     "search": '<circle cx="11" cy="11" r="6.500"/><path d="M16 16l4 4"/>',
 }
 

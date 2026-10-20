@@ -16,6 +16,9 @@ Für einen Starter im Anwendungsmenü/Dash siehe „Im Anwendungsmenü / Dash in
 
 ## Darstellung
 
+Alle Hauptaktionen (Verbinden, Neue Verbindung, Neue Gruppe, Bearbeiten, Duplizieren, Löschen, Synchronisieren, Identitäten, Terminals)
+stehen untereinander in einer Seitenleiste am rechten Rand; die Tastenkürzel (Enter, Strg+N, F2, Entf, Strg+D, F5 …) gelten im ganzen Fenster.
+
 *Einstellungen → Darstellung* schaltet zwischen **Systemvorgabe**, **Hell** und **Dunkel** um (wirkt sofort, wird gespeichert).
 Bei *Systemvorgabe* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
 andernfalls stellst du es manuell ein.
@@ -40,7 +43,7 @@ Der Befehl `sesam` liegt in `~/.local/bin` (bei manchen Distributionen muss der 
 ## Gruppen
 
 Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z. B. `Kunde A/Produktion`).
-- *Neue Gruppe …* (Strg+Umschalt+N, Toolbar oder Kontextmenü) legt auch leere Gruppen an; im Kontextmenü einer Gruppe: Untergruppe, Umbenennen/Verschieben, Löschen.
+- *Neue Gruppe …* (Strg+Umschalt+N, Seitenleiste oder Kontextmenü) legt auch leere Gruppen an; im Kontextmenü einer Gruppe: Untergruppe, Umbenennen/Verschieben, Löschen.
 - Per **Drag & Drop** verschiebst du Verbindungen und ganze Gruppen; Ablegen auf freier Fläche = oberste Ebene.
 - Eine Gruppe zu löschen entfernt keine Verbindungen, sie rücken in die übergeordnete Gruppe.
 - Neue Verbindungen landen in der aktuell ausgewählten Gruppe. Das Suchfeld filtert auch nach Gruppen.
@@ -68,7 +71,7 @@ findest du ebenfalls unter *Neu ▾*.
 ## Identitäten
 
 Eine Identität bündelt **Benutzer, Schlüsseldatei und Passwort** und kann von beliebig vielen Verbindungen verwendet werden.
-- Verwalten unter *Einstellungen → Identitäten …* (Toolbar) oder direkt beim Anlegen einer Verbindung über *Identität → Neu …*.
+- Verwalten unter *Einstellungen → Identitäten …* (oder Seitenleiste) oder direkt beim Anlegen einer Verbindung über *Identität → Neu …*.
 - Wählst du in einer Verbindung eine Identität, ersetzt sie Benutzer, Schlüsseldatei und Passwort der Verbindung (die Felder sind dann gesperrt, die eigenen Werte bleiben erhalten und gelten wieder bei „Keine“).
 - Das Passwort liegt im Schlüsselbund, einmal pro Identität. Ändert sich ein Passwort, wird es nur an einer Stelle angepasst. Das gilt auch für sudo.
 - Eine Identität zu löschen entfernt sie auch aus allen Verbindungen, die sie nutzen (diese brauchen danach wieder eigene Zugangsdaten).

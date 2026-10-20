@@ -7,8 +7,9 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
-    QSizePolicy, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
+    QMessageBox, QPushButton,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from .. import groups as grp
@@ -67,12 +68,12 @@ class MainWindow(QMainWindow):
         self.path = path
         self.collapsed: set[str] = set()
         self.setWindowTitle("Sesam")
-        self.resize(940, 580)
+        self.resize(1000, 600)
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Suchen (Name, Host, Benutzer, Gruppe) …")
-        self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self.refresh)
+        self.search.textChanged.connect(self._search_text_changed)
 
         self.tree = ConnectionTree()
         self.tree.setHeaderLabels(["Name", "Ziel", "Terminal"])
@@ -98,11 +99,15 @@ class MainWindow(QMainWindow):
         self.tree.moved.connect(lambda k, key, tgt: QTimer.singleShot(0, lambda: self._move(k, key, tgt)))
 
         central = QWidget()
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(14, 6, 14, 10)
+        outer = QHBoxLayout(central)
+        outer.setContentsMargins(14, 10, 14, 10)
+        outer.setSpacing(14)
+        layout = QVBoxLayout()
         layout.setSpacing(10)
         layout.addWidget(self.search)
         layout.addWidget(self.tree)
+        outer.addLayout(layout, 1)
+        self._outer_layout = outer  # die Seitenleiste kommt rechts dazu, sobald die Aktionen existieren
         self.setCentralWidget(central)
 
         self.sync = SyncController(self.cfg, lambda: storage.save(self.cfg, self.path), self)
@@ -139,27 +144,7 @@ class MainWindow(QMainWindow):
         self.a_sync_settings = act("Synchronisation …", self.edit_sync)
         self.a_import = act("Aus ~/.ssh/config importieren", self.import_ssh_config)
 
-        bar = QToolBar("Hauptleiste")
-        bar.setMovable(False)
-        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        bar.setIconSize(QSize(18, 18))
-        self.toolbar = bar
-        for a in (self.a_connect, self.a_new, self.a_new_group, self.a_edit, self.a_dup, self.a_del):
-            bar.addAction(a)
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        bar.addWidget(spacer)
-        for a in (self.a_sync, self.a_identities, self.a_terms):
-            bar.addAction(a)
-            button = bar.widgetForAction(a)
-            if button is not None:
-                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)  # Text steht im Tooltip
-        self.addToolBar(bar)
-        button = bar.widgetForAction(self.a_connect)
-        if button is not None:
-            button.setObjectName("primary")  # hebt „Verbinden“ als Hauptaktion hervor
-            button.style().unpolish(button)
-            button.style().polish(button)  # damit das Stylesheet den neuen Namen übernimmt
+        self._build_sidebar()
 
         menu = self.menuBar().addMenu("&Datei")
         menu.addAction(self.a_sync)
@@ -186,6 +171,58 @@ class MainWindow(QMainWindow):
         theme.notifier().changed.connect(self._theme_changed)
         self._refresh_icons()
 
+    # --- Seitenleiste ---
+    SIDEBAR_GROUPS = (
+        ("a_connect", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
+        ("a_sync", "a_identities", "a_terms"),
+    )
+
+    def _build_sidebar(self):
+        """Alle Hauptaktionen untereinander in einer Leiste am rechten Rand."""
+        side = QWidget()
+        side.setObjectName("sidebar")
+        side.setFixedWidth(190)
+        lay = QVBoxLayout(side)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        self.side_buttons: dict[str, QPushButton] = {}
+        for index, group in enumerate(self.SIDEBAR_GROUPS):
+            if index:
+                line = QFrame()
+                line.setObjectName("sideSep")
+                line.setFixedHeight(1)
+                lay.addSpacing(6)
+                lay.addWidget(line)
+                lay.addSpacing(6)
+            for attr in group:
+                action: QAction = getattr(self, attr)
+                button = QPushButton()
+                button.setObjectName("side")
+                button.setProperty("primary", attr == "a_connect")  # hebt „Verbinden“ als Hauptaktion hervor
+                button.setIconSize(QSize(18, 18))
+                button.setFocusPolicy(Qt.FocusPolicy.TabFocus)  # ein Klick nimmt dem Baum den Fokus nicht
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
+                button.clicked.connect(lambda _=False, a=action: a.trigger())
+                action.changed.connect(lambda b=button, a=action: self._sync_button(b, a))
+                self._sync_button(button, action)
+                lay.addWidget(button)
+                self.side_buttons[attr] = button
+        lay.addStretch(1)
+        self._outer_layout.addWidget(side)
+        self.sidebar = side
+        # Die Tastenkürzel hingen früher an der Werkzeugleiste: jetzt direkt am Fenster registrieren.
+        self.addActions([getattr(self, attr) for group in self.SIDEBAR_GROUPS for attr in group])
+
+    @staticmethod
+    def _sync_button(button: QPushButton, action: QAction):
+        """Übernimmt Text, Icon und Zustand der Aktion (Icons werden bei Themenwechsel neu gesetzt)."""
+        button.setText(action.text())
+        button.setIcon(action.icon())
+        button.setEnabled(action.isEnabled())
+        label = action.text().replace("&", "")
+        shortcut = action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        button.setToolTip(f"{label} ({shortcut})" if shortcut else label)
+
     # --- Icons ---
     ACTION_ICONS = (
         ("a_connect", "connect"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
@@ -208,6 +245,19 @@ class MainWindow(QMainWindow):
             self.search.removeAction(self._search_action)
         self._search_action = self.search.addAction(
             style.icon("search", c["muted"]), QLineEdit.ActionPosition.LeadingPosition)
+        # Eigener Löschknopf: der eingebaute braucht ein Icon-Theme des Systems und fehlt sonst (z. B. unter Windows).
+        if getattr(self, "_clear_action", None) is not None:
+            self.search.removeAction(self._clear_action)
+        self._clear_action = self.search.addAction(
+            style.icon("close", c["muted"]), QLineEdit.ActionPosition.TrailingPosition)
+        self._clear_action.setToolTip("Suche leeren")
+        self._clear_action.triggered.connect(self.search.clear)
+        self._clear_action.setVisible(bool(self.search.text()))
+
+    def _search_text_changed(self, text: str):
+        action = getattr(self, "_clear_action", None)
+        if action is not None:
+            action.setVisible(bool(text))
 
     def _theme_changed(self):
         self._refresh_icons()
@@ -223,7 +273,7 @@ class MainWindow(QMainWindow):
         base = f"{conn.user}@{conn.host}" if conn.user else conn.host
         return f"{base}:{conn.port}" if conn.port != 22 else base
 
-    DEFAULT_WIDTHS = (280, 260, 160)
+    DEFAULT_WIDTHS = (250, 230, 150)
 
     def _apply_column_widths(self):
         widths = self.cfg.column_widths
