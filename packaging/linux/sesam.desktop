@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Sesam
+GenericName=SSH-Verbindungsverwaltung
+Comment=SSH-Verbindungen verwalten und im Terminal öffnen
+Exec="@EXEC@"
+Icon=sesam
+Terminal=false
+Categories=Network;RemoteAccess;Utility;
+Keywords=ssh;terminal;verbindung;server;sudo;
+StartupWMClass=Sesam

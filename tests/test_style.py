@@ -61,6 +61,21 @@ class StyleTests(unittest.TestCase):
         self.assertEqual(theme.colors()["bg"], style.TOKENS["light"]["bg"])
         self.assertEqual(len(changed), 2)
 
+    def test_app_icon_renders_and_matches_packaged_svg(self):
+        from pathlib import Path
+
+        from sesam.gui import style
+
+        icon = style.app_icon()
+        self.assertFalse(icon.isNull())
+        self.assertIn(64, [size.width() for size in icon.availableSizes()])
+        image = icon.pixmap(64, 64).toImage()
+        self.assertGreater(image.pixelColor(32, 32).alpha(), 0)  # Mitte der Fläche ist gefüllt
+        self.assertEqual(image.pixelColor(0, 0).alpha(), 0)  # Ecke ist wegen der Rundung transparent
+        svg_file = Path(__file__).resolve().parent.parent / "packaging" / "linux" / "sesam.svg"
+        if svg_file.exists():
+            self.assertEqual(svg_file.read_text(encoding="utf-8"), style.APP_ICON_SVG)
+
     def test_main_window_recolors_icons_on_theme_change(self):
         import tempfile
         from pathlib import Path

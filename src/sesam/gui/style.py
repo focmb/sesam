@@ -244,3 +244,32 @@ def _pixmap(name: str, color: str, size: int) -> QPixmap:
     painter.end()
     pix.setDevicePixelRatio(ratio)
     return pix
+
+
+# Programm-Icon (Fenster, Taskleiste). Identisch mit packaging/linux/sesam.svg – ein Test stellt das sicher.
+APP_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b8cff"/>
+      <stop offset="1" stop-color="#2f5bd6"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#g)"/>
+  <path d="M19 22l11 10-11 10" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 44h14" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+</svg>
+"""
+
+
+def app_icon() -> QIcon:
+    result = QIcon()
+    renderer = QSvgRenderer(QByteArray(APP_ICON_SVG.encode()))
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        pix = QPixmap(size, size)
+        pix.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        renderer.render(painter, QRectF(0, 0, size, size))
+        painter.end()
+        result.addPixmap(pix)
+    return result
