@@ -61,6 +61,7 @@ class Config:
     terminals: list[Terminal] = field(default_factory=list)
     connections: list[Connection] = field(default_factory=list)
     default_terminal_id: str = ""
+    groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     version: int = 1
 
     def terminal_by_id(self, terminal_id: str) -> Terminal | None:
@@ -68,6 +69,3 @@ class Config:
 
     def connection_by_id(self, connection_id: str) -> Connection | None:
         return next((c for c in self.connections if c.id == connection_id), None)
-
-    def groups(self) -> list[str]:
-        return sorted({c.group for c in self.connections if c.group}, key=str.lower)

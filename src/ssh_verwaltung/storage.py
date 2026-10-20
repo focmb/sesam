@@ -33,6 +33,7 @@ def load(path: Path | None = None) -> Config:
         terminals=[Terminal.from_dict(t) for t in data.get("terminals", [])],
         connections=[Connection.from_dict(c) for c in data.get("connections", [])],
         default_terminal_id=data.get("default_terminal_id", ""),
+        groups=list(data.get("groups", [])),
         version=data.get("version", 1),
     )
     if not cfg.terminals:

@@ -41,7 +41,7 @@ def parse_ssh_config(path: Path | None = None) -> list[Connection]:
                 port=port,
                 identity_file=e.get("identityfile", ""),
                 jump_host=e.get("proxyjump", ""),
-                group="Aus ~/.ssh/config",
+                group="ssh-config",
             )
         )
     return result

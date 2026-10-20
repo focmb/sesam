@@ -5,11 +5,12 @@ from PySide6.QtWidgets import (
     QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from .. import groups as grp
 from ..models import Config, Connection
 
 
 class ConnectionDialog(QDialog):
-    def __init__(self, cfg: Config, conn: Connection | None = None, parent=None):
+    def __init__(self, cfg: Config, conn: Connection | None = None, parent=None, default_group: str = ""):
         super().__init__(parent)
         self.cfg = cfg
         self.conn = conn or Connection(name="", host="")
@@ -48,8 +49,9 @@ class ConnectionDialog(QDialog):
         self.remote.setPlaceholderText("optional, z. B. tmux attach")
         self.group = QComboBox()
         self.group.setEditable(True)
-        self.group.addItems([""] + cfg.groups())
-        self.group.setCurrentText(self.conn.group)
+        self.group.addItems([""] + grp.all_groups(cfg))
+        self.group.setCurrentText(self.conn.group if conn else default_group)
+        self.group.setToolTip("Untergruppen mit „/“ trennen, z. B. Kunde A/Produktion")
         self.terminal = QComboBox()
         self.terminal.addItem("Standardterminal", "")
         for t in cfg.terminals:
@@ -99,7 +101,7 @@ class ConnectionDialog(QDialog):
         c.jump_host = self.jump.text().strip()
         c.extra_args = self.extra.text().strip()
         c.remote_command = self.remote.text().strip()
-        c.group = self.group.currentText().strip()
+        c.group = grp.normalize(self.group.currentText())
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()
         if self.password.text():

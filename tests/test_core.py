@@ -140,3 +140,53 @@ class TemplateTests(unittest.TestCase):
         t = Terminal("G", "ghostty --title={title} -e {ssh_args}")
         c = Connection("Srv", "h", user="u")
         self.assertEqual(launcher.build_terminal_command(t, c), ["ghostty", "--title=Srv", "-e", "ssh", "u@h"])
+
+
+class GroupTests(unittest.TestCase):
+    def _cfg(self):
+        return Config(
+            connections=[
+                Connection("a", "h", group="Kunde/Prod"),
+                Connection("b", "h", group="Kunde"),
+                Connection("c", "h", group="Kunde/Prod/DB"),
+                Connection("d", "h"),
+            ],
+            groups=["Leer"],
+        )
+
+    def test_all_groups_includes_ancestors_and_empty(self):
+        from ssh_verwaltung import groups as g
+        self.assertEqual(g.all_groups(self._cfg()), ["Kunde", "Kunde/Prod", "Kunde/Prod/DB", "Leer"])
+
+    def test_normalize(self):
+        from ssh_verwaltung import groups as g
+        self.assertEqual(g.normalize(" A / /B\\C/ "), "A/B/C")
+        self.assertEqual(g.normalize("  "), "")
+
+    def test_rename_moves_subgroups_and_connections(self):
+        from ssh_verwaltung import groups as g
+        cfg = self._cfg()
+        g.rename_group(cfg, "Kunde/Prod", "Archiv/Alt")
+        self.assertEqual([c.group for c in cfg.connections], ["Archiv/Alt", "Kunde", "Archiv/Alt/DB", ""])
+
+    def test_rename_into_itself_rejected(self):
+        from ssh_verwaltung import groups as g
+        with self.assertRaises(ValueError):
+            g.rename_group(self._cfg(), "Kunde", "Kunde/Prod/Neu")
+
+    def test_delete_moves_content_up(self):
+        from ssh_verwaltung import groups as g
+        cfg = self._cfg()
+        g.delete_group(cfg, "Kunde/Prod")
+        self.assertEqual([c.group for c in cfg.connections], ["Kunde", "Kunde", "Kunde/DB", ""])
+        g.delete_group(cfg, "Leer")
+        self.assertNotIn("Leer", g.all_groups(cfg))
+
+    def test_add_group_and_roundtrip(self):
+        from ssh_verwaltung import groups as g
+        cfg = Config()
+        g.add_group(cfg, "X / Y")
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.json"
+            storage.save(cfg, p)
+            self.assertEqual(storage.load(p).groups, ["X/Y"])
