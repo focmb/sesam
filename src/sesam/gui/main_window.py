@@ -9,7 +9,7 @@ from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QPushButton,
-    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
 )
 
 from .. import groups as grp
@@ -438,7 +438,7 @@ class MainWindow(QMainWindow):
             self._save()
             self.refresh()
 
-    def edit_selected(self):
+    def edit_selected(self, select_name: bool = False):
         group = self._selected_group()
         if group is not None:
             self.rename_group(group)
@@ -447,6 +447,8 @@ class MainWindow(QMainWindow):
         if not conn:
             return
         dlg = ConnectionDialog(self.cfg, conn, parent=self, save_callback=self._save)
+        if select_name:
+            dlg.name.selectAll()  # der Name lässt sich sofort überschreiben
         if dlg.exec():
             self._apply_password(conn, dlg.password_change)
             self._save()
@@ -472,6 +474,26 @@ class MainWindow(QMainWindow):
         self.cfg.connections.append(clone)
         self._save()
         self.refresh()
+        # Die Kopie gleich zum Bearbeiten öffnen; bricht man ab, bleibt sie (ausgewählt) erhalten.
+        if self._select_connection(clone.id):
+            self.edit_selected(select_name=True)
+            self._select_connection(clone.id)  # das Speichern baut den Baum neu auf und verliert die Auswahl
+
+    def _select_connection(self, conn_id: str) -> bool:
+        """Wählt die Verbindung im Baum aus (klappt übergeordnete Gruppen auf). Liefert False, wenn sie nicht sichtbar ist."""
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            item = it.value()
+            if item.data(0, ID_ROLE) == conn_id:
+                parent = item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                self.tree.setCurrentItem(item)
+                self.tree.scrollToItem(item)
+                return True
+            it += 1
+        return False
 
     def delete_selected(self):
         group = self._selected_group()
