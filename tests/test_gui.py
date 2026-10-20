@@ -285,7 +285,7 @@ class GuiTests(unittest.TestCase):
         header = w.tree.header()
         self.assertEqual(header.sectionResizeMode(0), QHeaderView.ResizeMode.Interactive)
         self.assertEqual(header.sectionResizeMode(1), QHeaderView.ResizeMode.Interactive)
-        self.assertEqual([header.sectionSize(0), header.sectionSize(1)], [280, 260])  # Standardbreiten
+        self.assertEqual([header.sectionSize(0), header.sectionSize(1)], list(w.DEFAULT_WIDTHS[:2]))  # Standardbreiten
         header.resizeSection(0, 333)
         header.resizeSection(1, 222)
         self.assertTrue(w._width_timer.isActive())  # Speichern erfolgt verzögert

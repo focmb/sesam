@@ -49,6 +49,31 @@ class StyleTests(unittest.TestCase):
             self.assertNotEqual(files[key], "none", key)
             self.assertTrue(Path(files[key]).exists(), key)
 
+    def test_stylesheet_parses_with_awkward_cache_paths(self):
+        """Pfade mit Leerzeichen, Umlauten oder <> dürfen das Stylesheet nicht zerstören (sonst startet Sesam ungestylt)."""
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        from PySide6.QtCore import qInstallMessageHandler
+
+        from sesam.gui import style
+
+        names = ["mit Leerzeichen", "Müller äöü"] + ([] if sys.platform.startswith("win") else ["<stdin>"])
+        messages = []
+        previous = qInstallMessageHandler(lambda mode, ctx, msg: messages.append(msg))
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                for name in names:
+                    base = Path(tmp) / name
+                    qss = style.stylesheet(style.tokens("dark"), base)
+                    self.assertIn(str(base.as_posix()), qss, name)  # Pfeile wurden wirklich dort abgelegt
+                    self.app.setStyleSheet(qss)
+                    self.app.processEvents()
+        finally:
+            qInstallMessageHandler(previous)
+        self.assertEqual([m for m in messages if "parse" in m.lower()], [])
+
     def test_theme_switch_applies_colors_and_notifies(self):
         from sesam.gui import style, theme
 
