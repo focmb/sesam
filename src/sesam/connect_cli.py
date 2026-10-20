@@ -6,7 +6,7 @@ import subprocess
 import sys
 from dataclasses import replace
 
-from . import askpass, launcher, passwords, storage
+from . import askpass, launcher, passwords, runtime, storage
 from .askpass import ENV_VAR
 from .models import Connection
 
@@ -15,7 +15,7 @@ def prepare(conn: Connection, password: str | None, askpass_script: str, base_en
     """Baut ssh-Argumente und Umgebung. Rein funktional, daher testbar."""
     use_sudo_pw = launcher.wants_sudo_password(conn, password)
     args = launcher.build_ssh_args(conn, sudo_password=use_sudo_pw)
-    env = dict(os.environ if base_env is None else base_env)
+    env = runtime.clean_env(base_env)
     if use_sudo_pw:
         env[launcher.SUDO_ENV] = password
     if password is not None:

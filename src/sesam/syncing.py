@@ -29,7 +29,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
 
-from . import passwords, storage
+from . import passwords, runtime, storage
 from .models import Config, Connection, Identity, SyncSettings, new_id
 
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
@@ -174,7 +174,7 @@ class Git:
         self.repo = repo
 
     def run(self, *args: str, check: bool = True, timeout: int = 120) -> str:
-        env = dict(os.environ)
+        env = runtime.clean_env()
         env.setdefault("GIT_TERMINAL_PROMPT", "0")
         env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
         kwargs = {}

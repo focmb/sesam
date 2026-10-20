@@ -5,7 +5,7 @@ import os
 import stat
 import sys
 
-from . import storage
+from . import runtime, storage
 
 ENV_VAR = "SSHV_PASSWORD"
 
@@ -27,26 +27,14 @@ def main(argv: list[str]) -> int:
     return 0
 
 
-def _python_console() -> str:
-    exe = sys.executable
-    if sys.platform.startswith("win") and exe.lower().endswith("pythonw.exe"):
-        candidate = exe[: -len("pythonw.exe")] + "python.exe"
-        if os.path.exists(candidate):
-            return candidate
-    return exe
-
-
 def askpass_path() -> str:
     """Legt das SSH_ASKPASS-Skript an (falls nötig) und liefert dessen Pfad."""
     d = storage.config_dir()
     d.mkdir(parents=True, exist_ok=True)
     if sys.platform.startswith("win"):
         path = d / "askpass.cmd"
-        if getattr(sys, "frozen", False):
-            line = f'@"{sys.executable}" --askpass %*\r\n'
-        else:
-            line = f'@"{_python_console()}" -m sesam --askpass %*\r\n'
-        path.write_text(line, encoding="ascii", newline="")
+        line = "@" + " ".join(f'"{part}"' for part in runtime.self_command()) + " --askpass %*\r\n"
+        path.write_text(line, encoding="oem", newline="")  # cmd liest die OEM-Codepage (Pfade mit Umlauten)
     else:
         path = d / "askpass.sh"
         path.write_text(

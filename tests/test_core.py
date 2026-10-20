@@ -342,3 +342,43 @@ class IdentityTests(unittest.TestCase):
             passwords.apply_change(i, "")
             self.assertFalse(i.use_password)
             self.assertEqual(store, {})
+
+
+class RuntimeTests(unittest.TestCase):
+    def test_normal_python_command(self):
+        from sesam import runtime
+        cmd = runtime.self_command()
+        self.assertEqual(cmd[1:], ["-m", "sesam"])
+        c = Connection("n", "h")
+        self.assertEqual(launcher.wrapper_args(c)[1:], ["-m", "sesam", "--connect", c.id])
+
+    def test_frozen_uses_cli_sibling_when_present(self):
+        import os
+        from unittest import mock
+        from sesam import runtime
+        with tempfile.TemporaryDirectory() as d:
+            gui = Path(d) / "sesam"
+            gui.write_text("")
+            with mock.patch.object(runtime.sys, "frozen", True, create=True), \
+                 mock.patch.object(runtime.sys, "executable", str(gui)), mock.patch.object(runtime, "IS_WINDOWS", False):
+                self.assertEqual(runtime.self_command(), [str(gui)])      # kein Geschwister -> dasselbe Programm
+                (Path(d) / "sesam-cli").write_text("")
+                self.assertEqual(runtime.self_command(), [str(Path(d) / "sesam-cli")])
+                c = Connection("n", "h")
+                self.assertEqual(launcher.wrapper_args(c), [str(Path(d) / "sesam-cli"), "--connect", c.id])
+
+    def test_clean_env_restores_library_path_when_frozen(self):
+        from unittest import mock
+        from sesam import runtime
+        env = {"LD_LIBRARY_PATH": "/tmp/_MEI123", "LD_LIBRARY_PATH_ORIG": "/usr/lib/x", "_PYI_APPLICATION_HOME_DIR": "/x", "PATH": "/bin"}
+        with mock.patch.object(runtime.sys, "frozen", True, create=True):
+            out = runtime.clean_env(env)
+        self.assertEqual(out["LD_LIBRARY_PATH"], "/usr/lib/x")
+        self.assertNotIn("LD_LIBRARY_PATH_ORIG", out)
+        self.assertNotIn("_PYI_APPLICATION_HOME_DIR", out)
+        self.assertEqual(out["PYINSTALLER_RESET_ENVIRONMENT"], "1")
+        self.assertEqual(out["PATH"], "/bin")
+        with mock.patch.object(runtime.sys, "frozen", True, create=True):
+            out = runtime.clean_env({"LD_LIBRARY_PATH": "/tmp/_MEI123"})
+        self.assertNotIn("LD_LIBRARY_PATH", out)       # nichts Ursprüngliches vorhanden -> entfernen
+        self.assertEqual(runtime.clean_env({"LD_LIBRARY_PATH": "/x"}), {"LD_LIBRARY_PATH": "/x"})  # nicht gebündelt: unverändert

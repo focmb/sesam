@@ -8,6 +8,7 @@ import sys
 
 from dataclasses import replace
 
+from . import runtime
 from .models import Config, Connection, Terminal
 from .terminals import current_platform
 
@@ -94,12 +95,7 @@ def resolve(cfg: Config, conn: Connection) -> tuple[Connection, str]:
 
 def wrapper_args(conn: Connection) -> list[str]:
     """Befehl, der im Terminal läuft und ssh samt Passwort aus dem Schlüsselbund startet."""
-    exe = sys.executable
-    if IS_WINDOWS and exe.lower().endswith("pythonw.exe"):
-        console = exe[: -len("pythonw.exe")] + "python.exe"
-        exe = console if os.path.exists(console) else exe
-    base = [exe] if getattr(sys, "frozen", False) else [exe, "-m", "sesam"]
-    args = base + ["--connect", conn.id]
+    args = runtime.self_command() + ["--connect", conn.id]
     if conn.sudo_mode:  # auch für einmalige Überschreibungen (Kontextmenü), die nicht gespeichert sind
         args += ["--sudo-mode", conn.sudo_mode, "--sudo-user", conn.sudo_user]
     return args
@@ -154,7 +150,10 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None) -> l
     else:
         kwargs["start_new_session"] = True
     try:
-        subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
+        subprocess.Popen(
+            cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            env=runtime.clean_env(), **kwargs,
+        )
     except OSError as exc:
         raise LaunchError(f"Terminal konnte nicht gestartet werden: {exc}") from exc
     return cmd
