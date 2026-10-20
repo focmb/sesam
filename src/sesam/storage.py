@@ -35,6 +35,7 @@ def load(path: Path | None = None) -> Config:
         default_terminal_id=data.get("default_terminal_id", ""),
         groups=list(data.get("groups", [])),
         sync=SyncSettings.from_dict(data.get("sync", {})),
+        theme=data.get("theme", "system") if data.get("theme") in ("system", "light", "dark") else "system",
         column_widths=[int(w) for w in data.get("column_widths", []) if isinstance(w, (int, float))],
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
         version=data.get("version", 1),

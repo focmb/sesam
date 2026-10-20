@@ -16,6 +16,7 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
 
     from . import migration, storage
+    from .gui import theme
     from .gui.main_window import MainWindow
 
     migration.run(log=lambda m: print(m, file=sys.stderr))
@@ -23,7 +24,9 @@ def main() -> int:
     app.setApplicationName("Sesam")
     app.setApplicationDisplayName("Sesam")
     path = storage.config_path()
-    window = MainWindow(storage.load(path), path)
+    cfg = storage.load(path)
+    theme.apply(app, cfg.theme)
+    window = MainWindow(cfg, path)
     window.show()
     return app.exec()
 

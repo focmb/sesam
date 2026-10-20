@@ -12,6 +12,12 @@ pip install -e .
 sesam                            # oder: python -m sesam
 ```
 
+## Darstellung
+
+*Einstellungen → Darstellung* schaltet zwischen **Systemvorgabe**, **Hell** und **Dunkel** um (wirkt sofort, wird gespeichert).
+Bei *Systemvorgabe* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
+andernfalls stellst du es manuell ein.
+
 ## Gruppen
 
 Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z. B. `Kunde A/Produktion`).

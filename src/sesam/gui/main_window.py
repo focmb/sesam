@@ -5,13 +5,14 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (
-    QAbstractItemView, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
+    QAbstractItemView, QApplication, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
     QStyle, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from .. import groups as grp
+from . import theme
 from .. import launcher, passwords, storage
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -151,6 +152,19 @@ class MainWindow(QMainWindow):
         menu.addAction(self.a_identities)
         menu.addAction(self.a_terms)
         menu.addAction(self.a_sync_settings)
+        menu.addSeparator()
+        theme_menu = menu.addMenu("Darstellung")
+        self.theme_actions: dict[str, QAction] = {}
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        for mode in theme.MODES:
+            a = QAction(theme.LABELS[mode], self)
+            a.setCheckable(True)
+            a.setChecked(self.cfg.theme == mode)
+            a.triggered.connect(lambda _=False, m=mode: self.set_theme(m))
+            group.addAction(a)
+            theme_menu.addAction(a)
+            self.theme_actions[mode] = a
 
     # --- Anzeige ---
     def _terminal_name(self, conn: Connection) -> str:
@@ -482,6 +496,13 @@ class MainWindow(QMainWindow):
             self._save_no_sync()
             if self.sync.enabled():
                 self.sync.sync(manual=True)
+
+    def set_theme(self, mode: str):
+        self.cfg.theme = mode
+        app = QApplication.instance()
+        if app is not None:
+            theme.apply(app, mode)
+        self._save_no_sync()
 
     def _save_no_sync(self):
         try:

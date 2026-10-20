@@ -19,7 +19,7 @@ class GuiTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        from sesam import passwords
+        from ssh_verwaltung import passwords
 
         self.store = {}
         patches = [
@@ -35,14 +35,14 @@ class GuiTests(unittest.TestCase):
         self.path = Path(self.tmp.name) / "c.json"
 
     def _window(self):
-        from sesam import storage
-        from sesam.gui.main_window import MainWindow
+        from ssh_verwaltung import storage
+        from ssh_verwaltung.gui.main_window import MainWindow
 
         return MainWindow(storage.load(self.path), self.path)
 
     def test_password_lifecycle(self):
-        from sesam import storage
-        from sesam.gui.connection_dialog import ConnectionDialog
+        from ssh_verwaltung import storage
+        from ssh_verwaltung.gui.connection_dialog import ConnectionDialog
 
         w = self._window()
         dlg = ConnectionDialog(w.cfg)
@@ -76,8 +76,8 @@ class GuiTests(unittest.TestCase):
         self.assertEqual([c.use_password for c in storage.load(self.path).connections], [False, True])
 
     def test_custom_terminal_and_templates(self):
-        from sesam import storage
-        from sesam.gui.terminals_dialog import TerminalsDialog
+        from ssh_verwaltung import storage
+        from ssh_verwaltung.gui.terminals_dialog import TerminalsDialog
 
         cfg = storage.load(self.path)
         td = TerminalsDialog(cfg)
@@ -94,9 +94,9 @@ class GuiTests(unittest.TestCase):
     def test_group_tree_and_moves(self):
         from PySide6.QtCore import QMimeData, QPointF, Qt
         from PySide6.QtGui import QDropEvent
-        from sesam import groups as g
-        from sesam.gui.main_window import GROUP_ROLE, ID_ROLE
-        from sesam.models import Connection
+        from ssh_verwaltung import groups as g
+        from ssh_verwaltung.gui.main_window import GROUP_ROLE, ID_ROLE
+        from ssh_verwaltung.models import Connection
 
         w = self._window()
         cfg = w.cfg
@@ -124,7 +124,7 @@ class GuiTests(unittest.TestCase):
         # Gruppe in Gruppe verschieben, Zyklus wird abgelehnt
         w._move("group", "Leer", "K")
         self.assertIn("K/Leer", g.all_groups(cfg))
-        with mock.patch("sesam.gui.main_window.QMessageBox.warning") as warn:
+        with mock.patch("ssh_verwaltung.gui.main_window.QMessageBox.warning") as warn:
             w._move("group", "K", "K/Prod")
         warn.assert_called_once()
 
@@ -157,8 +157,8 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(find("K/Prod") is not None)
 
     def test_sudo_dialog_and_oneoff_action(self):
-        from sesam.gui.connection_dialog import ConnectionDialog
-        from sesam.models import Connection
+        from ssh_verwaltung.gui.connection_dialog import ConnectionDialog
+        from ssh_verwaltung.models import Connection
 
         w = self._window()
         dlg = ConnectionDialog(w.cfg)
@@ -181,16 +181,16 @@ class GuiTests(unittest.TestCase):
         w.refresh()
         item = next(w.tree.topLevelItem(i) for i in range(w.tree.topLevelItemCount()) if w.tree.topLevelItem(i).text(0) == "P")
         w.tree.setCurrentItem(item)
-        with mock.patch("sesam.gui.main_window.launcher.launch") as launch:
+        with mock.patch("ssh_verwaltung.gui.main_window.launcher.launch") as launch:
             w.connect_selected(sudo=True)
         used = launch.call_args.args[1]
         self.assertEqual(used.sudo_mode, "login")
         self.assertEqual(plain.sudo_mode, "")  # gespeicherte Verbindung bleibt unverändert
 
     def test_identities_in_connection_dialog(self):
-        from sesam.gui.connection_dialog import ConnectionDialog
-        from sesam.gui.identities_dialog import IdentitiesDialog, IdentityEditDialog
-        from sesam.models import Connection, Identity
+        from ssh_verwaltung.gui.connection_dialog import ConnectionDialog
+        from ssh_verwaltung.gui.identities_dialog import IdentitiesDialog, IdentityEditDialog
+        from ssh_verwaltung.models import Connection, Identity
 
         w = self._window()
         saved = []
@@ -198,7 +198,7 @@ class GuiTests(unittest.TestCase):
         dlg = ConnectionDialog(w.cfg, save_callback=lambda: saved.append(1))
         self.assertEqual(dlg.identity_combo.count(), 1)
         self.assertTrue(dlg.user.isEnabled())
-        with mock.patch("sesam.gui.connection_dialog.IdentityEditDialog") as edit_cls:
+        with mock.patch("ssh_verwaltung.gui.connection_dialog.IdentityEditDialog") as edit_cls:
             ident = Identity("deploy", user="deploy", identity_file="/k")
             inst = edit_cls.return_value
             inst.exec.return_value = True
@@ -231,7 +231,7 @@ class GuiTests(unittest.TestCase):
         # Identität löschen räumt Verbindungen und Schlüsselbund auf
         ids = IdentitiesDialog(w.cfg, lambda: None)
         ids.list.setCurrentRow(0)
-        with mock.patch("sesam.gui.identities_dialog.QMessageBox.question",
+        with mock.patch("ssh_verwaltung.gui.identities_dialog.QMessageBox.question",
                         return_value=__import__("PySide6.QtWidgets", fromlist=["QMessageBox"]).QMessageBox.StandardButton.Yes):
             ids._delete()
         self.assertEqual(w.cfg.identities, [])
@@ -239,8 +239,8 @@ class GuiTests(unittest.TestCase):
         self.assertNotIn(ident.id, self.store)
 
     def test_identity_edit_dialog_password_semantics(self):
-        from sesam.gui.identities_dialog import IdentityEditDialog
-        from sesam.models import Identity
+        from ssh_verwaltung.gui.identities_dialog import IdentityEditDialog
+        from ssh_verwaltung.models import Identity
 
         d = IdentityEditDialog()
         d.name.setText("x")
@@ -258,7 +258,7 @@ class GuiTests(unittest.TestCase):
 
     def test_column_widths_resizable_and_persisted(self):
         from PySide6.QtWidgets import QHeaderView
-        from sesam import storage
+        from ssh_verwaltung import storage
 
         w = self._window()
         header = w.tree.header()
@@ -274,6 +274,113 @@ class GuiTests(unittest.TestCase):
 
         w2 = self._window()  # neu geöffnet: gespeicherte Breiten werden angewendet
         self.assertEqual([w2.tree.header().sectionSize(0), w2.tree.header().sectionSize(1)], [333, 222])
+
+    def test_sync_controller_end_to_end_and_window_integration(self):
+        import subprocess
+        from PySide6.QtCore import QEventLoop, QTimer
+        from ssh_verwaltung import storage
+        from ssh_verwaltung.gui.main_window import MainWindow
+        from ssh_verwaltung.gui.sync_controller import SyncController
+        from ssh_verwaltung.models import Config, Connection, SyncSettings
+        from ssh_verwaltung.syncing import SyncEngine
+
+        class Store:
+            d = {}
+            get = lambda self, k: self.d.get(k)
+            set = lambda self, k, v: self.d.__setitem__(k, v)
+            delete = lambda self, k: self.d.pop(k, None)
+
+        remote = Path(self.tmp.name) / "remote.git"
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
+
+        def controller(name):
+            cfg = Config(sync=SyncSettings(enabled=True, url=str(remote), passwords=False))
+            work = Path(self.tmp.name) / name
+            c = SyncController(cfg, lambda: None, engine_factory=lambda: SyncEngine(cfg.sync, work, None, Store(), device=name))
+            return cfg, c
+
+        def run(c, manual=True):
+            loop = QEventLoop()
+            out = {}
+            c.finished.connect(lambda r, e, m: (out.update(report=r, error=e, manual=m), loop.quit()))
+            QTimer.singleShot(60000, loop.quit)
+            c.sync(manual=manual)
+            loop.exec()
+            return out
+
+        cfgA, A = controller("A")
+        cfgA.connections.append(Connection("server", "h.example"))
+        out = run(A)
+        self.assertIsNone(out["error"])
+        self.assertTrue(out["report"].pushed)
+        self.assertTrue(out["manual"])
+        self.assertTrue(cfgA.sync.last_sync)
+
+        cfgB, B = controller("B")
+        changed = []
+        B.cfg_changed.connect(lambda: changed.append(1))
+        statuses = []
+        B.status.connect(lambda t, e: statuses.append((t, e)))
+        out = run(B, manual=False)
+        self.assertIsNone(out["error"])
+        self.assertEqual([c.name for c in cfgB.connections], ["server"])
+        self.assertEqual(changed, [1])
+        self.assertEqual(statuses[0], ("Synchronisiere …", False))
+        self.assertIn("Synchronisiert", statuses[-1][0])
+
+        # Fehlerfall wird gemeldet statt zu hängen
+        cfgB.sync.url = str(Path(self.tmp.name) / "gibt-es-nicht.git")
+        out = run(B)
+        self.assertIsNotNone(out["error"])
+        self.assertTrue(statuses[-1][1])
+        self.assertFalse(B.busy)
+
+        # Fenster: Änderungen lösen im Automatikmodus verzögert einen Abgleich aus, ohne Aktivierung nicht
+        w = self._window()
+        w._save()
+        self.assertFalse(w.sync.debounce.isActive())
+        w.cfg.sync = SyncSettings(enabled=True, url=str(remote), passwords=False, auto=True)
+        w._save()
+        self.assertTrue(w.sync.debounce.isActive())
+        w.sync.debounce.stop()
+        w.cfg.sync.auto = False
+        w._save()
+        self.assertFalse(w.sync.debounce.isActive())
+
+    def test_sync_dialog_validation(self):
+        from ssh_verwaltung.gui.sync_dialog import SyncDialog
+
+        w = self._window()
+        cfg = w.cfg
+        dlg = SyncDialog(cfg)
+        self.assertFalse(dlg.url.isEnabled())            # deaktiviert -> Felder gesperrt
+        dlg.enabled.setChecked(True)
+        self.assertTrue(dlg.url.isEnabled() and dlg.phrase.isEnabled())
+        with mock.patch("ssh_verwaltung.gui.sync_dialog.QMessageBox.warning") as warn:
+            dlg._accept()                                 # URL fehlt
+            dlg.url.setText("git@host:r.git")
+            dlg._accept()                                 # Sync-Passwort fehlt
+            dlg.phrase.setText("kurz")
+            dlg._accept()                                 # zu kurz
+            dlg.phrase.setText("langgenug1")
+            dlg.phrase2.setText("anders123")
+            dlg._accept()                                 # Wiederholung weicht ab
+        self.assertEqual(warn.call_count, 4)
+        self.assertFalse(cfg.sync.enabled)
+        dlg.phrase2.setText("langgenug1")
+        dlg._accept()
+        self.assertTrue(cfg.sync.enabled and cfg.sync.passphrase_saved)
+        self.assertEqual(cfg.sync.url, "git@host:r.git")
+        from ssh_verwaltung import syncing
+        self.assertEqual(self.store[syncing.PASSPHRASE_KEY], "langgenug1")
+        # Ohne Passwort-Sync braucht es kein Sync-Passwort
+        cfg2 = type(cfg)()
+        d2 = SyncDialog(cfg2)
+        d2.enabled.setChecked(True)
+        d2.url.setText("x")
+        d2.passwords.setChecked(False)
+        d2._accept()
+        self.assertTrue(cfg2.sync.enabled and not cfg2.sync.passwords)
 
 
 if __name__ == "__main__":

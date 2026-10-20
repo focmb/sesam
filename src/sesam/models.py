@@ -100,6 +100,7 @@ class Config:
     identities: list[Identity] = field(default_factory=list)
     default_terminal_id: str = ""
     sync: SyncSettings = field(default_factory=SyncSettings)
+    theme: str = "system"  # "system", "light" oder "dark"
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     version: int = 1
