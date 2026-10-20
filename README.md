@@ -40,6 +40,13 @@ Eigene Terminals (z. B. Ghostty) legst du über *Neu ▾ → Eigenes Terminal* a
 ausführbare Datei auswählen, falls sie nicht im `PATH` liegt (z. B. AppImage). Die Vorlagen für nicht installierte Terminals
 findest du ebenfalls unter *Neu ▾*.
 
+## sudo
+
+Pro Verbindung kannst du *Mit sudo* aktivieren: nach dem Login wechselt die Sitzung direkt zu root oder einem anderen Benutzer
+(`sudo -i` = Login-Shell, `sudo -s` = Shell mit bisheriger Umgebung; Zielbenutzer optional). Zusätzlich gibt es im Kontextmenü
+*Als root verbinden (sudo -i)* für einen einmaligen Wechsel, ohne die Verbindung zu ändern.
+Ein sudo-Passwort wird im Terminal abgefragt (das gespeicherte SSH-Passwort wird dafür nicht verwendet).
+
 ## Passwörter
 
 Pro Verbindung kann ein Passwort hinterlegt werden. Es wird im Schlüsselbund des Betriebssystems gespeichert

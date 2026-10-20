@@ -47,6 +47,8 @@ class Connection:
     jump_host: str = ""
     extra_args: str = ""
     remote_command: str = ""
+    sudo_mode: str = ""  # "" = aus, "login" = sudo -i, "shell" = sudo -s
+    sudo_user: str = ""  # Zielbenutzer, leer = root
     group: str = ""
     terminal_id: str = ""  # leer = Standardterminal
     notes: str = ""

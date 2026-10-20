@@ -32,6 +32,23 @@ def destination(conn: Connection) -> str:
     return f"{conn.user}@{conn.host}" if conn.user else conn.host
 
 
+SUDO_MODES = {"login": "-i", "shell": "-s"}
+
+
+def remote_command_line(conn: Connection) -> str:
+    """Befehl, der auf dem Zielsystem ausgeführt wird (optional mit sudo davor)."""
+    cmd = conn.remote_command.strip()
+    flag = SUDO_MODES.get(conn.sudo_mode)
+    if flag:
+        parts = ["sudo"]
+        if conn.sudo_user.strip():
+            parts += ["-u", conn.sudo_user.strip()]
+        parts.append(flag)
+        base = shlex.join(parts)  # Zielsystem ist POSIX
+        cmd = f"{base} {cmd}" if cmd else base
+    return cmd
+
+
 def build_ssh_args(conn: Connection) -> list[str]:
     args = ["ssh"]
     if conn.port and conn.port != 22:
@@ -42,11 +59,12 @@ def build_ssh_args(conn: Connection) -> list[str]:
         args += ["-J", conn.jump_host]
     if conn.extra_args.strip():
         args += split_command(conn.extra_args)
-    if conn.remote_command.strip():
+    remote = remote_command_line(conn)
+    if remote:
         args.append("-t")
     args.append(destination(conn))
-    if conn.remote_command.strip():
-        args.append(conn.remote_command)
+    if remote:
+        args.append(remote)
     return args
 
 
@@ -56,9 +74,11 @@ def wrapper_args(conn: Connection) -> list[str]:
     if IS_WINDOWS and exe.lower().endswith("pythonw.exe"):
         console = exe[: -len("pythonw.exe")] + "python.exe"
         exe = console if os.path.exists(console) else exe
-    if getattr(sys, "frozen", False):
-        return [exe, "--connect", conn.id]
-    return [exe, "-m", "ssh_verwaltung", "--connect", conn.id]
+    base = [exe] if getattr(sys, "frozen", False) else [exe, "-m", "ssh_verwaltung"]
+    args = base + ["--connect", conn.id]
+    if conn.sudo_mode:  # auch für einmalige Überschreibungen (Kontextmenü), die nicht gespeichert sind
+        args += ["--sudo-mode", conn.sudo_mode, "--sudo-user", conn.sudo_user]
+    return args
 
 
 def resolve_terminal(cfg: Config, conn: Connection) -> Terminal:

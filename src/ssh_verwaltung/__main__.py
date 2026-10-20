@@ -7,7 +7,9 @@ def main() -> int:
     if len(sys.argv) >= 3 and sys.argv[1] == "--connect":
         from .connect_cli import run
 
-        return run(sys.argv[2])
+        from .connect_cli import parse_overrides
+
+        return run(sys.argv[2], parse_overrides(sys.argv[3:]))
     if len(sys.argv) >= 2 and sys.argv[1] == "--askpass":
         from .askpass import main as askpass_main
 

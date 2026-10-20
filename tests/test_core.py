@@ -190,3 +190,31 @@ class GroupTests(unittest.TestCase):
             p = Path(d) / "c.json"
             storage.save(cfg, p)
             self.assertEqual(storage.load(p).groups, ["X/Y"])
+
+
+class SudoTests(unittest.TestCase):
+    def test_sudo_login(self):
+        c = Connection("n", "h", user="u", sudo_mode="login")
+        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "u@h", "sudo -i"])
+
+    def test_sudo_shell_other_user_with_command(self):
+        c = Connection("n", "h", sudo_mode="shell", sudo_user="www data", remote_command="tmux attach")
+        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "h", "sudo -u 'www data' -s tmux attach"])
+
+    def test_no_sudo_unchanged(self):
+        self.assertEqual(launcher.build_ssh_args(Connection("n", "h", user="u")), ["ssh", "u@h"])
+
+    def test_wrapper_carries_sudo_override(self):
+        from ssh_verwaltung.connect_cli import parse_overrides
+        c = Connection("n", "h", use_password=True, sudo_mode="login", sudo_user="")
+        w = launcher.wrapper_args(c)
+        self.assertEqual(parse_overrides(w), {"sudo_mode": "login", "sudo_user": ""})
+        self.assertEqual(parse_overrides(["--connect", "x"]), {})
+
+    def test_roundtrip_fields(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.json"
+            cfg = Config(connections=[Connection("n", "h", sudo_mode="shell", sudo_user="app")])
+            storage.save(cfg, p)
+            c = storage.load(p).connections[0]
+            self.assertEqual((c.sudo_mode, c.sudo_user), ("shell", "app"))

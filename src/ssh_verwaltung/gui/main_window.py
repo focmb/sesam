@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -211,6 +212,7 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         if conn:
             menu.addAction(self.a_connect)
+            menu.addAction("Als root verbinden (sudo -i)").triggered.connect(lambda: self.connect_selected(sudo=True))
             sub = menu.addMenu("Verbinden mit …")
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
@@ -235,10 +237,12 @@ class MainWindow(QMainWindow):
             self.connect_selected()
 
     # --- Verbindungen ---
-    def connect_selected(self, terminal: Terminal | None = None):
+    def connect_selected(self, terminal: Terminal | None = None, sudo: bool = False):
         conn = self._selected()
         if not conn:
             return
+        if sudo:  # einmalig, wird nicht gespeichert
+            conn = replace(conn, sudo_mode=conn.sudo_mode or "login")
         try:
             launcher.launch(self.cfg, conn, terminal)
         except launcher.LaunchError as exc:

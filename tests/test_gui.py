@@ -91,6 +91,71 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(default)
         self.assertIn("/opt/my ghostty/ghostty", terms[-1].command)
 
+    def test_group_tree_and_moves(self):
+        from PySide6.QtCore import QMimeData, QPointF, Qt
+        from PySide6.QtGui import QDropEvent
+        from ssh_verwaltung import groups as g
+        from ssh_verwaltung.gui.main_window import GROUP_ROLE, ID_ROLE
+        from ssh_verwaltung.models import Connection
+
+        w = self._window()
+        cfg = w.cfg
+        cfg.connections += [Connection("a", "h", group="K/Prod"), Connection("b", "h"), Connection("c", "h", group="K")]
+        cfg.groups = ["Leer"]
+        w.refresh()
+
+        def find(path):
+            stack = [w.tree.topLevelItem(i) for i in range(w.tree.topLevelItemCount())]
+            while stack:
+                it = stack.pop()
+                if it.data(0, GROUP_ROLE) == path:
+                    return it
+                stack += [it.child(i) for i in range(it.childCount())]
+
+        top = [w.tree.topLevelItem(i).text(0) for i in range(w.tree.topLevelItemCount())]
+        self.assertEqual(top, ["K", "Leer", "b"])  # Gruppen zuerst, dann Verbindungen
+        self.assertEqual(find("K/Prod").parent(), find("K"))
+        self.assertEqual(find("Leer").text(1), "leer")
+
+        # Verbindung per Methode in Untergruppe verschieben
+        b = next(c for c in cfg.connections if c.name == "b")
+        w._move("conn", b.id, "K/Prod")
+        self.assertEqual(b.group, "K/Prod")
+        # Gruppe in Gruppe verschieben, Zyklus wird abgelehnt
+        w._move("group", "Leer", "K")
+        self.assertIn("K/Leer", g.all_groups(cfg))
+        with mock.patch("ssh_verwaltung.gui.main_window.QMessageBox.warning") as warn:
+            w._move("group", "K", "K/Prod")
+        warn.assert_called_once()
+
+        # Echtes Drop-Ereignis: Verbindung "c" auf Gruppe "K/Prod" ziehen
+        w.show()
+        w.refresh()
+        c = next(x for x in cfg.connections if x.name == "c")
+        item_c = next(
+            it for it in (find("K").child(i) for i in range(find("K").childCount())) if it.data(0, ID_ROLE) == c.id
+        )
+        w.tree.setCurrentItem(item_c)
+        target = find("K/Prod")
+        pos = w.tree.visualItemRect(target).center()
+        got = []
+        w.tree.moved.disconnect()
+        w.tree.moved.connect(lambda *a: got.append(a))
+        ev = QDropEvent(QPointF(pos), Qt.DropAction.MoveAction, QMimeData(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        w.tree.dropEvent(ev)
+        self.assertEqual(got, [("conn", c.id, "K/Prod")])
+        # Drop auf leere Fläche = oberste Ebene
+        w.tree.setCurrentItem(item_c)
+        ev = QDropEvent(QPointF(5, w.tree.viewport().height() - 2), Qt.DropAction.MoveAction, QMimeData(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        w.tree.dropEvent(ev)
+        self.assertEqual(got[-1], ("conn", c.id, ""))
+
+        # Suche blendet nicht passende Gruppen aus
+        w.search.setText("zzz")
+        self.assertEqual(w.tree.topLevelItemCount(), 0)
+        w.search.setText("a")
+        self.assertTrue(find("K/Prod") is not None)
+
 
 if __name__ == "__main__":
     unittest.main()

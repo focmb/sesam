@@ -47,6 +47,17 @@ class ConnectionDialog(QDialog):
         self.extra.setPlaceholderText("z. B. -o ServerAliveInterval=30 -L 8080:localhost:80")
         self.remote = QLineEdit(self.conn.remote_command)
         self.remote.setPlaceholderText("optional, z. B. tmux attach")
+        self.sudo_mode = QComboBox()
+        self.sudo_mode.addItem("Aus", "")
+        self.sudo_mode.addItem("sudo -i (Login-Shell des Zielbenutzers)", "login")
+        self.sudo_mode.addItem("sudo -s (Shell, Umgebung bleibt)", "shell")
+        self.sudo_mode.setCurrentIndex(max(self.sudo_mode.findData(self.conn.sudo_mode), 0))
+        self.sudo_user = QLineEdit(self.conn.sudo_user)
+        self.sudo_user.setPlaceholderText("root (Standard)")
+        self.sudo_mode.currentIndexChanged.connect(lambda *_: self.sudo_user.setEnabled(bool(self.sudo_mode.currentData())))
+        self.sudo_user.setEnabled(bool(self.sudo_mode.currentData()))
+        self.sudo_mode.setToolTip("Nach dem Login per sudo zu root (oder einem anderen Benutzer) wechseln. "
+                                  "Ein sudo-Passwort wird im Terminal abgefragt.")
         self.group = QComboBox()
         self.group.setEditable(True)
         self.group.addItems([""] + grp.all_groups(cfg))
@@ -72,6 +83,8 @@ class ConnectionDialog(QDialog):
         form.addRow("Jump-Host", self.jump)
         form.addRow("Zusätzliche Optionen", self.extra)
         form.addRow("Remote-Befehl", self.remote)
+        form.addRow("Mit sudo", self.sudo_mode)
+        form.addRow("sudo als Benutzer", self.sudo_user)
         form.addRow("Gruppe", self.group)
         form.addRow("Terminal", self.terminal)
         form.addRow("Notizen", self.notes)
@@ -101,6 +114,8 @@ class ConnectionDialog(QDialog):
         c.jump_host = self.jump.text().strip()
         c.extra_args = self.extra.text().strip()
         c.remote_command = self.remote.text().strip()
+        c.sudo_mode = self.sudo_mode.currentData() or ""
+        c.sudo_user = self.sudo_user.text().strip() if c.sudo_mode else ""
         c.group = grp.normalize(self.group.currentText())
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()

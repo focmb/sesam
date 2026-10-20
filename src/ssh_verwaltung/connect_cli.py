@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from dataclasses import replace
 
 from . import askpass, launcher, passwords, storage
 from .askpass import ENV_VAR
@@ -35,10 +36,21 @@ def _fail(message: str) -> int:
     return 1
 
 
-def run(conn_id: str) -> int:
+def parse_overrides(argv: list[str]) -> dict[str, str]:
+    """Liest --sudo-mode/--sudo-user aus den Wrapper-Argumenten."""
+    out: dict[str, str] = {}
+    for key, field in (("--sudo-mode", "sudo_mode"), ("--sudo-user", "sudo_user")):
+        if key in argv and argv.index(key) + 1 < len(argv):
+            out[field] = argv[argv.index(key) + 1]
+    return out
+
+
+def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
     conn = storage.load().connection_by_id(conn_id)
     if conn is None:
         return _fail("Verbindung nicht gefunden.")
+    if overrides:
+        conn = replace(conn, **overrides)
     password = None
     if conn.use_password:
         try:
