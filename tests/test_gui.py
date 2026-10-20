@@ -18,6 +18,26 @@ class GuiTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    @classmethod
+    def tearDownClass(cls):
+        cls._close_widgets()
+
+    @staticmethod
+    def _close_widgets():
+        """Alle Fenster/Dialoge schließen und zerstören, bevor Python beendet wird.
+
+        Sonst räumt Qt sie beim Interpreter-Ende in beliebiger Reihenfolge ab,
+        was sporadisch mit einem Segfault (Exit-Code 139) endet.
+        """
+        from PySide6.QtCore import QCoreApplication, QEvent
+
+        for widget in QApplication.topLevelWidgets():
+            widget.close()
+            widget.deleteLater()
+        QCoreApplication.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QCoreApplication.processEvents()
+
     def setUp(self):
         from sesam import passwords
 
@@ -32,6 +52,7 @@ class GuiTests(unittest.TestCase):
             self.addCleanup(p.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        self.addCleanup(self._close_widgets)
         self.path = Path(self.tmp.name) / "c.json"
 
     def _window(self):
