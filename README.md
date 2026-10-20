@@ -85,10 +85,11 @@ gespeicherten HTTPS-Zugangsdaten (im Hintergrund ohne Rückfragen, einmal vorher
 - Leeres Repository anlegen (z. B. bei GitHub/GitLab/Gitea) genügt, das Tool erstellt den Branch selbst.
 
 ## Daten
-Alte Daten aus der früheren Version („ssh_verwaltung“) werden beim ersten Start automatisch übernommen: der Konfigurationsordner wird umbenannt, Passwörter ziehen im Schlüsselbund um.
 
 Konfiguration: `~/.config/sesam/config.json` (Linux), `%APPDATA%\sesam\config.json` (Windows).
-Es werden keine Passwörter gespeichert; Authentifizierung läuft über ssh (Schlüssel, Agent, Passwortabfrage im Terminal).
+Passwörter stehen nie in dieser Datei, sondern im Schlüsselbund des Betriebssystems; ohne gespeichertes Passwort läuft die Anmeldung über ssh (Schlüssel, Agent, Abfrage im Terminal).
+
+Alte Daten aus der früheren Version („ssh_verwaltung“) werden beim ersten Start automatisch übernommen: der Konfigurationsordner wird umbenannt, Passwörter ziehen im Schlüsselbund um.
 
 ## Tests
 
