@@ -1,0 +1,61 @@
+name: Build
+
+# Baut Sesam bei jedem Tag "v*" (z. B. v0.1.0) und auf Knopfdruck
+# (Gitea: Actions -> Build -> "Run workflow").
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  linux:
+    # Label des Runners (siehe GITEA_RUNNER_LABELS); Ubuntu 22.04 = glibc 2.35,
+    # das Programm läuft damit auf allen neueren Linux-Distributionen.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Systembibliotheken für Qt
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pyinstaller
+
+      - name: Tests
+        run: |
+          python -m pip install pytest
+          QT_QPA_PLATFORM=offscreen python -m pytest -q
+
+      - name: Programm bauen
+        run: python packaging/build.py
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: sesam-linux
+          path: dist/*.tar.gz
+
+  # Windows-Build: erst einschalten, wenn ein Windows-Runner mit dem Label
+  # "windows" registriert ist (act_runner register ... --labels windows:host;
+  # auf dem Rechner müssen Python 3.10+ und Git installiert sein).
+  #
+  # windows:
+  #   runs-on: windows
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: python -m pip install -e . pyinstaller pytest
+  #     - run: python -m pytest -q
+  #     - run: python packaging/build.py
+  #     - uses: actions/upload-artifact@v3
+  #       with:
+  #         name: sesam-windows
+  #         path: dist/*.zip
