@@ -1,0 +1,18 @@
+{
+  "extra_args": "",
+  "group": "VZS/Cisco Switche",
+  "host": "172.16.2.9",
+  "id": "e7e7f2f087b04cdca05cfceca86677a3",
+  "identity_file": "",
+  "identity_id": "7498eddc561b40598b4279fe69a920c0",
+  "jump_host": "",
+  "name": "B170_10 (Kopie)",
+  "notes": "",
+  "port": 22,
+  "remote_command": "",
+  "sudo_mode": "",
+  "sudo_use_password": true,
+  "sudo_user": "",
+  "terminal_id": "9d34327b10ce4892b9068a9b231848a3",
+  "user": ""
+}
