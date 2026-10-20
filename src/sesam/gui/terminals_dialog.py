@@ -71,6 +71,8 @@ class TerminalsDialog(QDialog):
         test.clicked.connect(self._test)
 
         form = QFormLayout()
+
+        form.setVerticalSpacing(8)
         form.addRow("Name", self.name)
         form.addRow("Befehlsvorlage", self.command)
         form.addRow("", pick)
@@ -92,6 +94,8 @@ class TerminalsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
         layout.addLayout(body)
         layout.addWidget(buttons)
 

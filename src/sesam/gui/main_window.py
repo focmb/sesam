@@ -4,15 +4,15 @@ import copy
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
-    QStyle, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QSizePolicy, QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from .. import groups as grp
-from . import theme
+from . import style, theme
 from .. import launcher, passwords, storage
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -76,7 +76,10 @@ class MainWindow(QMainWindow):
 
         self.tree = ConnectionTree()
         self.tree.setHeaderLabels(["Name", "Ziel", "Terminal"])
-        self.tree.setAlternatingRowColors(True)
+        self.tree.setAlternatingRowColors(False)
+        self.tree.setIndentation(22)
+        self.tree.setUniformRowHeights(True)
+        self.tree.setIconSize(QSize(18, 18))
         header = self.tree.header()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)  # Breite frei ziehbar
         header.setStretchLastSection(True)
@@ -96,6 +99,8 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
         layout = QVBoxLayout(central)
+        layout.setContentsMargins(14, 6, 14, 10)
+        layout.setSpacing(10)
         layout.addWidget(self.search)
         layout.addWidget(self.tree)
         self.setCentralWidget(central)
@@ -106,6 +111,7 @@ class MainWindow(QMainWindow):
         self.sync.finished.connect(self._sync_finished)
         self.sync_label = QLabel("")
         self.statusBar().addPermanentWidget(self.sync_label)
+        self.statusBar().setSizeGripEnabled(False)
 
         self._build_actions()
         self.refresh()
@@ -135,13 +141,25 @@ class MainWindow(QMainWindow):
 
         bar = QToolBar("Hauptleiste")
         bar.setMovable(False)
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        bar.setIconSize(QSize(18, 18))
+        self.toolbar = bar
         for a in (self.a_connect, self.a_new, self.a_new_group, self.a_edit, self.a_dup, self.a_del):
             bar.addAction(a)
-        bar.addSeparator()
-        bar.addAction(self.a_sync)
-        bar.addAction(self.a_identities)
-        bar.addAction(self.a_terms)
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        bar.addWidget(spacer)
+        for a in (self.a_sync, self.a_identities, self.a_terms):
+            bar.addAction(a)
+            button = bar.widgetForAction(a)
+            if button is not None:
+                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)  # Text steht im Tooltip
         self.addToolBar(bar)
+        button = bar.widgetForAction(self.a_connect)
+        if button is not None:
+            button.setObjectName("primary")  # hebt „Verbinden“ als Hauptaktion hervor
+            button.style().unpolish(button)
+            button.style().polish(button)  # damit das Stylesheet den neuen Namen übernimmt
 
         menu = self.menuBar().addMenu("&Datei")
         menu.addAction(self.a_sync)
@@ -165,6 +183,35 @@ class MainWindow(QMainWindow):
             group.addAction(a)
             theme_menu.addAction(a)
             self.theme_actions[mode] = a
+        theme.notifier().changed.connect(self._theme_changed)
+        self._refresh_icons()
+
+    # --- Icons ---
+    ACTION_ICONS = (
+        ("a_connect", "connect"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
+        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_identities", "user"), ("a_terms", "sliders"),
+    )
+
+    def _refresh_icons(self):
+        """Färbt alle Icons passend zur aktuellen Darstellung (hell/dunkel) ein."""
+        c = theme.colors()
+        for attr, name in self.ACTION_ICONS:
+            action: QAction = getattr(self, attr)
+            if attr == "a_connect":  # steht auf der Akzentfläche
+                action.setIcon(style.icon(name, c["accent_text"], c["muted"]))
+            elif attr == "a_del":
+                action.setIcon(style.icon(name, c["danger"], c["muted"]))
+            else:
+                action.setIcon(style.icon(name, c["text"], c["muted"]))
+            action.setIconVisibleInMenu(False)
+        if getattr(self, "_search_action", None) is not None:
+            self.search.removeAction(self._search_action)
+        self._search_action = self.search.addAction(
+            style.icon("search", c["muted"]), QLineEdit.ActionPosition.LeadingPosition)
+
+    def _theme_changed(self):
+        self._refresh_icons()
+        self.refresh()
 
     # --- Anzeige ---
     def _terminal_name(self, conn: Connection) -> str:
@@ -222,14 +269,17 @@ class MainWindow(QMainWindow):
         else:
             group_paths = grp.all_groups(self.cfg)
 
-        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+        c = theme.colors()
+        folder_icon = style.icon("folder", c["accent"])
+        server_icon = style.icon("server", c["muted"])
+        muted = QBrush(QColor(c["muted"]))
         self.tree.blockSignals(True)
         self.tree.clear()
         nodes: dict[str, QTreeWidgetItem] = {}
         for path in group_paths:  # sortiert: Eltern stehen vor Kindern
             item = QTreeWidgetItem([grp.name_of(path)])
             item.setData(0, GROUP_ROLE, path)
-            item.setIcon(0, icon)
+            item.setIcon(0, folder_icon)
             font = item.font(0)
             font.setBold(True)
             item.setFont(0, font)
@@ -239,6 +289,8 @@ class MainWindow(QMainWindow):
         for conn in matches:
             item = QTreeWidgetItem([conn.name, self._target(conn), self._terminal_name(conn)])
             item.setData(0, ID_ROLE, conn.id)
+            item.setIcon(0, server_icon)
+            item.setForeground(2, muted)
             if conn.notes:
                 item.setToolTip(0, conn.notes)
             (nodes.get(conn.group) or self.tree.invisibleRootItem()).addChild(item)
@@ -246,6 +298,7 @@ class MainWindow(QMainWindow):
             item.setExpanded(bool(needle) or path not in self.collapsed)
             count = len(grp.connections_in(self.cfg, path))
             item.setText(1, f"{count} Verbindung(en)" if count else "leer")
+            item.setForeground(1, muted)
         self.tree.blockSignals(False)
 
     def _selected(self) -> Connection | None:

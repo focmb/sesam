@@ -26,7 +26,7 @@ class IdentityEditDialog(QDialog):
         self.user = QLineEdit(self.ident.user)
         self.key = QLineEdit(self.ident.identity_file)
         browse = QPushButton("…")
-        browse.setFixedWidth(32)
+        browse.setFixedWidth(40)
         browse.clicked.connect(self._browse)
         key_row = QWidget()
         row = QHBoxLayout(key_row)
@@ -43,6 +43,8 @@ class IdentityEditDialog(QDialog):
         self.notes.setFixedHeight(60)
 
         form = QFormLayout()
+
+        form.setVerticalSpacing(8)
         form.addRow("Name*", self.name)
         form.addRow("Benutzer", self.user)
         form.addRow("Schlüsseldatei", key_row)
@@ -53,6 +55,8 @@ class IdentityEditDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
         layout.addLayout(form)
         layout.addWidget(buttons)
 
@@ -110,6 +114,8 @@ class IdentitiesDialog(QDialog):
         close.rejected.connect(self.reject)
         close.accepted.connect(self.accept)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
         layout.addWidget(self.list)
         layout.addLayout(buttons)
         layout.addWidget(close)

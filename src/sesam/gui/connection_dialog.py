@@ -29,7 +29,7 @@ class ConnectionDialog(QDialog):
         self.identity = QLineEdit(self.conn.identity_file)
         browse = QPushButton("…")
         self._browse_btn = browse
-        browse.setFixedWidth(32)
+        browse.setFixedWidth(40)
         browse.clicked.connect(self._browse_key)
         identity_row = QWidget()
         row = QHBoxLayout(identity_row)
@@ -103,6 +103,8 @@ class ConnectionDialog(QDialog):
         self.notes.setFixedHeight(70)
 
         form = QFormLayout()
+
+        form.setVerticalSpacing(8)
         form.addRow("Name*", self.name)
         form.addRow("Host*", self.host)
         form.addRow("Identität", identity_pick)
@@ -127,6 +129,8 @@ class ConnectionDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
         layout.addLayout(form)
         layout.addWidget(buttons)
 

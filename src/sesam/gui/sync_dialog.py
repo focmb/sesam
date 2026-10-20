@@ -48,6 +48,8 @@ class SyncDialog(QDialog):
         self.test_result.setWordWrap(True)
 
         form = QFormLayout()
+
+        form.setVerticalSpacing(8)
         form.addRow("Repository-URL", self.url)
         form.addRow("Branch", self.branch)
         form.addRow("", self.auto)
@@ -68,6 +70,8 @@ class SyncDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
         layout.addWidget(self.enabled)
         layout.addLayout(form)
         layout.addWidget(help_label)
