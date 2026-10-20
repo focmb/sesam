@@ -13,6 +13,7 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metada
 
 ROOT = Path(SPECPATH).parent
 IS_WIN = sys.platform.startswith("win")
+ICON = str(ROOT / "packaging" / "windows" / "sesam.ico") if IS_WIN else None  # Programm-Icon der .exe (erzeugt von packaging/make_icon.py)
 
 datas, binaries, hiddenimports = [], [], []
 # keyring findet seine Backends über Entry-Points (Paket-Metadaten) -> vollständig einsammeln
@@ -41,9 +42,9 @@ a = Analysis(
 pyz = PYZ(a.pure)
 
 exes = [
-    EXE(pyz, a.scripts, [], exclude_binaries=True, name="sesam", console=not IS_WIN, disable_windowed_traceback=False),
+    EXE(pyz, a.scripts, [], exclude_binaries=True, name="sesam", console=not IS_WIN, disable_windowed_traceback=False, icon=ICON),
 ]
 if IS_WIN:
-    exes.append(EXE(pyz, a.scripts, [], exclude_binaries=True, name="sesam-cli", console=True))
+    exes.append(EXE(pyz, a.scripts, [], exclude_binaries=True, name="sesam-cli", console=True, icon=ICON))
 
 coll = COLLECT(*exes, a.binaries, a.datas, strip=False, upx=False, name="sesam")
