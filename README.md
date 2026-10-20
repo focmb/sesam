@@ -14,6 +14,16 @@ sesam                            # oder: python -m sesam
 
 Für einen Starter im Anwendungsmenü/Dash siehe „Im Anwendungsmenü / Dash installieren“.
 
+## Screenshots
+
+![Hauptfenster (hell)](docs/screenshots/hauptfenster-hell.png)
+
+| Dunkel | Verbindung bearbeiten |
+| --- | --- |
+| ![Hauptfenster (dunkel)](docs/screenshots/hauptfenster-dunkel.png) | ![Dialog „Verbindung bearbeiten“](docs/screenshots/verbindung-bearbeiten.png) |
+
+Die Bilder zeigen Beispieldaten (erfundene Hosts) und wurden mit dem Qt-Plattform-Plugin „offscreen“ erzeugt; echte Fenster können je nach Desktop in Rahmen und Schrift abweichen.
+
 ## Darstellung
 
 Alle Hauptaktionen (Verbinden, Neue Verbindung, Neue Gruppe, Bearbeiten, Duplizieren, Löschen, Synchronisieren, Identitäten, Terminals)
