@@ -82,6 +82,7 @@ class Config:
     connections: list[Connection] = field(default_factory=list)
     identities: list[Identity] = field(default_factory=list)
     default_terminal_id: str = ""
+    column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     version: int = 1
 

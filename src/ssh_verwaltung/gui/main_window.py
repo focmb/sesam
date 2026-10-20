@@ -74,7 +74,16 @@ class MainWindow(QMainWindow):
         self.tree = ConnectionTree()
         self.tree.setHeaderLabels(["Name", "Ziel", "Terminal"])
         self.tree.setAlternatingRowColors(True)
-        self.tree.header().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header = self.tree.header()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)  # Breite frei ziehbar
+        header.setStretchLastSection(True)
+        header.setMinimumSectionSize(60)
+        self._apply_column_widths()
+        self._width_timer = QTimer(self)
+        self._width_timer.setSingleShot(True)
+        self._width_timer.setInterval(600)
+        self._width_timer.timeout.connect(self._flush_widths)
+        header.sectionResized.connect(lambda *_: self._width_timer.start())
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._context_menu)
         self.tree.itemDoubleClicked.connect(self._double_clicked)
@@ -136,6 +145,31 @@ class MainWindow(QMainWindow):
         conn, _ = launcher.resolve(self.cfg, conn)
         base = f"{conn.user}@{conn.host}" if conn.user else conn.host
         return f"{base}:{conn.port}" if conn.port != 22 else base
+
+    DEFAULT_WIDTHS = (280, 260, 160)
+
+    def _apply_column_widths(self):
+        widths = self.cfg.column_widths
+        if len(widths) != len(self.DEFAULT_WIDTHS) or any(w < 30 for w in widths):
+            widths = list(self.DEFAULT_WIDTHS)
+        header = self.tree.header()
+        header.blockSignals(True)
+        for i, w in enumerate(widths):
+            header.resizeSection(i, w)
+        header.blockSignals(False)
+
+    def _flush_widths(self):
+        header = self.tree.header()
+        widths = [header.sectionSize(i) for i in range(header.count())]
+        if widths != self.cfg.column_widths:
+            self.cfg.column_widths = widths
+            self._save()
+
+    def closeEvent(self, event):
+        if self._width_timer.isActive():
+            self._width_timer.stop()
+            self._flush_widths()
+        super().closeEvent(event)
 
     def _expansion_changed(self, item: QTreeWidgetItem, collapsed: bool):
         path = item.data(0, GROUP_ROLE)
