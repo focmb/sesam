@@ -270,3 +270,75 @@ class SudoPasswordTests(unittest.TestCase):
             out = subprocess.run(["sh", "-c", args[-1]], env=env_none, capture_output=True, text=True).stdout
             self.assertNotIn("WRONG", out)       # ohne Variable kein Versuch (kein Fehlversuch im Log)
             self.assertNotIn("VALIDATED", out)
+
+
+class IdentityTests(unittest.TestCase):
+    def _cfg(self):
+        from ssh_verwaltung.models import Identity
+        ident = Identity("deploy", user="deploy", identity_file="/k/id", use_password=True)
+        conn = Connection("srv", "h", user="alt", identity_file="/alt", use_password=True, identity_id=ident.id)
+        return Config(identities=[ident], connections=[conn]), ident, conn
+
+    def test_identity_overrides_credentials(self):
+        cfg, ident, conn = self._cfg()
+        eff, key = launcher.resolve(cfg, conn)
+        self.assertEqual((eff.user, eff.identity_file, eff.use_password), ("deploy", "/k/id", True))
+        self.assertEqual(key, ident.id)          # Passwort liegt unter der Identitäts-ID
+        self.assertEqual(eff.id, conn.id)
+        self.assertEqual(conn.user, "alt")       # Original bleibt unverändert
+        self.assertEqual(launcher.build_ssh_args(eff), ["ssh", "-i", "/k/id", "deploy@h"])
+
+    def test_identity_without_password_ignores_connection_password(self):
+        cfg, ident, conn = self._cfg()
+        ident.use_password = False
+        eff, _ = launcher.resolve(cfg, conn)
+        self.assertFalse(eff.use_password)
+
+    def test_unknown_or_no_identity_uses_connection_values(self):
+        cfg, _, conn = self._cfg()
+        conn.identity_id = "gibt-es-nicht"
+        eff, key = launcher.resolve(cfg, conn)
+        self.assertEqual((eff.user, key), ("alt", conn.id))
+        conn.identity_id = ""
+        self.assertIs(launcher.resolve(cfg, conn)[0], conn)
+
+    def test_roundtrip_identities(self):
+        cfg, ident, conn = self._cfg()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.json"
+            storage.save(cfg, p)
+            loaded = storage.load(p)
+            self.assertEqual(loaded.identities, cfg.identities)
+            self.assertEqual(loaded.connections[0].identity_id, ident.id)
+
+    def test_wrapper_uses_identity_password_key(self):
+        from unittest import mock
+        from ssh_verwaltung import connect_cli, passwords
+        cfg, ident, conn = self._cfg()
+        asked = []
+        with mock.patch.object(connect_cli.storage, "load", return_value=cfg), \
+             mock.patch.object(connect_cli.passwords, "get_password", side_effect=lambda k: asked.append(k) or "geheim"), \
+             mock.patch.object(connect_cli.askpass, "askpass_path", return_value="/a"), \
+             mock.patch.object(connect_cli.os, "execvpe") as ex:
+            connect_cli.run(conn.id)
+        self.assertEqual(asked, [ident.id])
+        args, env = ex.call_args.args[1], ex.call_args.args[2]
+        self.assertEqual(args[-1], "deploy@h")
+        self.assertEqual(env["SSHV_PASSWORD"], "geheim")
+
+    def test_apply_change(self):
+        from unittest import mock
+        from ssh_verwaltung import passwords
+        from ssh_verwaltung.models import Identity
+        store = {}
+        i = Identity("x")
+        with mock.patch.object(passwords, "set_password", lambda k, p: store.__setitem__(k, p)), \
+             mock.patch.object(passwords, "delete_password", lambda k: store.pop(k, None)):
+            passwords.apply_change(i, None)
+            self.assertFalse(i.use_password)
+            passwords.apply_change(i, "pw")
+            self.assertTrue(i.use_password)
+            self.assertEqual(store[i.id], "pw")
+            passwords.apply_change(i, "")
+            self.assertFalse(i.use_password)
+            self.assertEqual(store, {})

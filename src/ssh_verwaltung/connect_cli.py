@@ -49,15 +49,17 @@ def parse_overrides(argv: list[str]) -> dict[str, str]:
 
 
 def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
-    conn = storage.load().connection_by_id(conn_id)
+    cfg = storage.load()
+    conn = cfg.connection_by_id(conn_id)
     if conn is None:
         return _fail("Verbindung nicht gefunden.")
     if overrides:
         conn = replace(conn, **overrides)
+    conn, password_key = launcher.resolve(cfg, conn)
     password = None
     if conn.use_password:
         try:
-            password = passwords.get_password(conn.id)
+            password = passwords.get_password(password_key)
         except passwords.PasswordError as exc:
             return _fail(str(exc))
         if password is None:

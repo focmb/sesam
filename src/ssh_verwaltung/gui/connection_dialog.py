@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
+    QCheckBox, QComboBox, QDialog, QLabel, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
     QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from .. import groups as grp
+from .. import passwords
 from ..models import Config, Connection
+from .identities_dialog import IdentityEditDialog, save_identity
 
 
 class ConnectionDialog(QDialog):
-    def __init__(self, cfg: Config, conn: Connection | None = None, parent=None, default_group: str = ""):
+    def __init__(self, cfg: Config, conn: Connection | None = None, parent=None, default_group: str = "", save_callback=None):
         super().__init__(parent)
         self.cfg = cfg
+        self.save_callback = save_callback or (lambda: None)
         self.conn = conn or Connection(name="", host="")
         self.setWindowTitle("Verbindung bearbeiten" if conn else "Neue Verbindung")
         self.setMinimumWidth(480)
@@ -25,6 +28,7 @@ class ConnectionDialog(QDialog):
         self.port.setValue(self.conn.port or 22)
         self.identity = QLineEdit(self.conn.identity_file)
         browse = QPushButton("…")
+        self._browse_btn = browse
         browse.setFixedWidth(32)
         browse.clicked.connect(self._browse_key)
         identity_row = QWidget()
@@ -43,6 +47,18 @@ class ConnectionDialog(QDialog):
         self.clear_password = QCheckBox("Gespeichertes Passwort löschen")
         self.clear_password.setVisible(self.conn.use_password)
         self.password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
+        self.identity_combo = QComboBox()
+        self.identity_info = QLabel()
+        self.identity_info.setWordWrap(True)
+        new_identity = QPushButton("Neu …")
+        new_identity.clicked.connect(self._new_identity)
+        identity_pick = QWidget()
+        pick_row = QHBoxLayout(identity_pick)
+        pick_row.setContentsMargins(0, 0, 0, 0)
+        pick_row.addWidget(self.identity_combo, 1)
+        pick_row.addWidget(new_identity)
+        self._fill_identities(self.conn.identity_id)
+        self.identity_combo.currentIndexChanged.connect(self._identity_changed)
         self.jump = QLineEdit(self.conn.jump_host)
         self.jump.setPlaceholderText("z. B. user@bastion.example.org")
         self.extra = QLineEdit(self.conn.extra_args)
@@ -89,6 +105,8 @@ class ConnectionDialog(QDialog):
         form = QFormLayout()
         form.addRow("Name*", self.name)
         form.addRow("Host*", self.host)
+        form.addRow("Identität", identity_pick)
+        form.addRow("", self.identity_info)
         form.addRow("Benutzer", self.user)
         form.addRow("Port", self.port)
         form.addRow("Schlüsseldatei", identity_row)
@@ -104,12 +122,44 @@ class ConnectionDialog(QDialog):
         form.addRow("Terminal", self.terminal)
         form.addRow("Notizen", self.notes)
 
+        self._identity_changed()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(buttons)
+
+    def _fill_identities(self, select: str = ""):
+        self.identity_combo.blockSignals(True)
+        self.identity_combo.clear()
+        self.identity_combo.addItem("Keine – Zugangsdaten direkt eintragen", "")
+        for ident in sorted(self.cfg.identities, key=lambda i: i.name.lower()):
+            self.identity_combo.addItem(ident.name, ident.id)
+        self.identity_combo.setCurrentIndex(max(self.identity_combo.findData(select), 0))
+        self.identity_combo.blockSignals(False)
+
+    def _identity_changed(self, *_):
+        ident = self.cfg.identity_by_id(self.identity_combo.currentData() or "")
+        own = ident is None
+        for w in (self.user, self.identity, self._browse_btn, self.password, self.clear_password):
+            w.setEnabled(own)
+        if ident is None:
+            self.identity_info.setText("")
+        else:
+            self.identity_info.setText(
+                f"Benutzer: {ident.user or '—'} · Schlüssel: {ident.identity_file or '—'} · "
+                f"Passwort: {'gespeichert' if ident.use_password else '—'}"
+            )
+
+    def _new_identity(self):
+        dlg = IdentityEditDialog(parent=self)
+        if dlg.exec():
+            save_identity(self, dlg.ident, dlg.password_change)
+            self.cfg.identities.append(dlg.ident)
+            self.save_callback()
+            self._fill_identities(dlg.ident.id)
+            self._identity_changed()
 
     def _browse_key(self):
         path, _ = QFileDialog.getOpenFileName(self, "Schlüsseldatei wählen")
@@ -123,6 +173,7 @@ class ConnectionDialog(QDialog):
         c = self.conn
         c.name = self.name.text().strip()
         c.host = self.host.text().strip()
+        c.identity_id = self.identity_combo.currentData() or ""
         c.user = self.user.text().strip()
         c.port = self.port.value()
         c.identity_file = self.identity.text().strip()

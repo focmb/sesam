@@ -16,6 +16,7 @@ from .. import launcher, passwords, storage
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
 from .connection_dialog import ConnectionDialog
+from .identities_dialog import IdentitiesDialog
 from .terminals_dialog import TerminalsDialog
 
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
@@ -106,6 +107,7 @@ class MainWindow(QMainWindow):
         self.a_dup = act("Duplizieren", self.duplicate_selected, "Ctrl+D")
         self.a_del = act("Löschen", self.delete_selected, "Del")
         self.a_terms = act("Terminals …", self.edit_terminals)
+        self.a_identities = act("Identitäten …", self.edit_identities)
         self.a_import = act("Aus ~/.ssh/config importieren", self.import_ssh_config)
 
         bar = QToolBar("Hauptleiste")
@@ -113,6 +115,7 @@ class MainWindow(QMainWindow):
         for a in (self.a_connect, self.a_new, self.a_new_group, self.a_edit, self.a_dup, self.a_del):
             bar.addAction(a)
         bar.addSeparator()
+        bar.addAction(self.a_identities)
         bar.addAction(self.a_terms)
         self.addToolBar(bar)
 
@@ -121,6 +124,7 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction(act("Beenden", self.close, "Ctrl+Q"))
         menu = self.menuBar().addMenu("&Einstellungen")
+        menu.addAction(self.a_identities)
         menu.addAction(self.a_terms)
 
     # --- Anzeige ---
@@ -128,8 +132,8 @@ class MainWindow(QMainWindow):
         t = self.cfg.terminal_by_id(conn.terminal_id) if conn.terminal_id else None
         return t.name if t else "Standard"
 
-    @staticmethod
-    def _target(conn: Connection) -> str:
+    def _target(self, conn: Connection) -> str:
+        conn, _ = launcher.resolve(self.cfg, conn)
         base = f"{conn.user}@{conn.host}" if conn.user else conn.host
         return f"{base}:{conn.port}" if conn.port != 22 else base
 
@@ -252,17 +256,12 @@ class MainWindow(QMainWindow):
         if change is None:
             return
         try:
-            if change:
-                passwords.set_password(conn.id, change)
-                conn.use_password = True
-            else:
-                passwords.delete_password(conn.id)
-                conn.use_password = False
+            passwords.apply_change(conn, change)
         except passwords.PasswordError as exc:
             QMessageBox.critical(self, "Passwort", str(exc))
 
     def new_connection(self):
-        dlg = ConnectionDialog(self.cfg, parent=self, default_group=self._current_group_context())
+        dlg = ConnectionDialog(self.cfg, parent=self, default_group=self._current_group_context(), save_callback=self._save)
         if dlg.exec():
             conn = dlg.result_connection()
             self._apply_password(conn, dlg.password_change)
@@ -278,7 +277,7 @@ class MainWindow(QMainWindow):
         conn = self._selected()
         if not conn:
             return
-        dlg = ConnectionDialog(self.cfg, conn, parent=self)
+        dlg = ConnectionDialog(self.cfg, conn, parent=self, save_callback=self._save)
         if dlg.exec():
             self._apply_password(conn, dlg.password_change)
             self._save()
@@ -401,6 +400,10 @@ class MainWindow(QMainWindow):
                     c.terminal_id = ""
             self._save()
             self.refresh()
+
+    def edit_identities(self):
+        IdentitiesDialog(self.cfg, self._save, self).exec()
+        self.refresh()
 
     def import_ssh_config(self):
         found = parse_ssh_config()

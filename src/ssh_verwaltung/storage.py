@@ -6,7 +6,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from .models import Config, Connection, Terminal
+from .models import Config, Connection, Identity, Terminal
 from .terminals import default_terminals
 
 
@@ -34,6 +34,7 @@ def load(path: Path | None = None) -> Config:
         connections=[Connection.from_dict(c) for c in data.get("connections", [])],
         default_terminal_id=data.get("default_terminal_id", ""),
         groups=list(data.get("groups", [])),
+        identities=[Identity.from_dict(i) for i in data.get("identities", [])],
         version=data.get("version", 1),
     )
     if not cfg.terminals:

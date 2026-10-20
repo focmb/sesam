@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import sys
 
+from dataclasses import replace
+
 from .models import Config, Connection, Terminal
 from .terminals import current_platform
 
@@ -81,6 +83,15 @@ def build_ssh_args(conn: Connection, sudo_password: bool = False) -> list[str]:
     return args
 
 
+def resolve(cfg: Config, conn: Connection) -> tuple[Connection, str]:
+    """Wendet die gewählte Identität an. Liefert die wirksame Verbindung und den Schlüsselbund-Schlüssel des Passworts."""
+    ident = cfg.identity_by_id(conn.identity_id) if conn.identity_id else None
+    if ident is None:
+        return conn, conn.id
+    eff = replace(conn, user=ident.user, identity_file=ident.identity_file, use_password=ident.use_password)
+    return eff, ident.id
+
+
 def wrapper_args(conn: Connection) -> list[str]:
     """Befehl, der im Terminal läuft und ssh samt Passwort aus dem Schlüsselbund startet."""
     exe = sys.executable
@@ -129,6 +140,7 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
 
 
 def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None) -> list[str]:
+    conn, _ = resolve(cfg, conn)
     terminal = terminal or resolve_terminal(cfg, conn)
     cmd = build_terminal_command(terminal, conn, wrapper_args(conn) if conn.use_password else None)
     if shutil.which(cmd[0]) is None:

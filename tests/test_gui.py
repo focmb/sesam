@@ -165,12 +165,15 @@ class GuiTests(unittest.TestCase):
         dlg.name.setText("S")
         dlg.host.setText("h")
         self.assertFalse(dlg.sudo_user.isEnabled())
+        self.assertFalse(dlg.sudo_pw.isEnabled())
         dlg.sudo_mode.setCurrentIndex(dlg.sudo_mode.findData("shell"))
         self.assertTrue(dlg.sudo_user.isEnabled())
+        self.assertTrue(dlg.sudo_pw.isEnabled() and dlg.sudo_pw.isChecked())  # Standard: Passwort für sudo nutzen
         dlg.sudo_user.setText("app")
+        dlg.sudo_pw.setChecked(False)
         dlg._accept()
         c = dlg.result_connection()
-        self.assertEqual((c.sudo_mode, c.sudo_user), ("shell", "app"))
+        self.assertEqual((c.sudo_mode, c.sudo_user, c.sudo_use_password), ("shell", "app", False))
 
         # Einmalige Aktion "Als root verbinden" überschreibt nur die Kopie
         plain = Connection("P", "h2")

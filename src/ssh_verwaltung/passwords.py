@@ -39,3 +39,18 @@ def delete_password(connection_id: str) -> None:
         pass  # war nicht vorhanden
     except Exception as exc:
         raise PasswordError(f"Passwort konnte nicht gelöscht werden: {exc}") from exc
+
+
+def apply_change(item, change: str | None) -> None:
+    """Wendet eine Passwortänderung auf Verbindung oder Identität an.
+
+    change: None = unverändert, "" = löschen, sonst neues Passwort.
+    """
+    if change is None:
+        return
+    if change:
+        set_password(item.id, change)
+        item.use_password = True
+    else:
+        delete_password(item.id)
+        item.use_password = False

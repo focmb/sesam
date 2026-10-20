@@ -36,11 +36,28 @@ class Terminal:
 
 
 @dataclass
+class Identity:
+    """Wiederverwendbare Anmeldedaten: Benutzer, Schlüsseldatei und Passwort (im Schlüsselbund)."""
+
+    name: str
+    id: str = field(default_factory=new_id)
+    user: str = ""
+    identity_file: str = ""
+    use_password: bool = False  # Passwort liegt im Schlüsselbund unter der Identitäts-ID
+    notes: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Identity":
+        return _from_dict(cls, data)
+
+
+@dataclass
 class Connection:
     name: str
     host: str
     id: str = field(default_factory=new_id)
     user: str = ""
+    identity_id: str = ""  # gewählte Identität; ersetzt dann Benutzer, Schlüsseldatei und Passwort
     port: int = 22
     identity_file: str = ""
     use_password: bool = False  # Passwort liegt im Schlüsselbund des Betriebssystems
@@ -63,12 +80,16 @@ class Connection:
 class Config:
     terminals: list[Terminal] = field(default_factory=list)
     connections: list[Connection] = field(default_factory=list)
+    identities: list[Identity] = field(default_factory=list)
     default_terminal_id: str = ""
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     version: int = 1
 
     def terminal_by_id(self, terminal_id: str) -> Terminal | None:
         return next((t for t in self.terminals if t.id == terminal_id), None)
+
+    def identity_by_id(self, identity_id: str) -> Identity | None:
+        return next((i for i in self.identities if i.id == identity_id), None)
 
     def connection_by_id(self, connection_id: str) -> Connection | None:
         return next((c for c in self.connections if c.id == connection_id), None)
