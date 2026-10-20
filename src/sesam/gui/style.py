@@ -249,26 +249,46 @@ def _pixmap(name: str, color: str, size: int) -> QPixmap:
     return pix
 
 
-# Programm-Icon (Fenster, Taskleiste): das Tor aus „Sesam, öffne dich“ – ein Höhlentor, aus dem Licht fällt. Identisch mit packaging/linux/sesam.svg – ein Test stellt das sicher.
-APP_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+# Programm-Icon (Fenster, Taskleiste): das Tor aus „Sesam, öffne dich“ – ein goldenes Tor, das sich einen Spalt öffnet (Schlüssel mit Terminal-Prompt). Identisch mit packaging/linux/sesam.svg – ein Test stellt das sicher.
+APP_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3b5bdb"/>
-      <stop offset="1" stop-color="#1e2f7a"/>
+      <stop offset="0" stop-color="#52627f"/>
+      <stop offset="1" stop-color="#262e48"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.62" r="0.6">
-      <stop offset="0" stop-color="#fff4c2"/>
-      <stop offset="0.55" stop-color="#ffd24d"/>
-      <stop offset="1" stop-color="#f59f00"/>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe38a"/>
+      <stop offset="0.5" stop-color="#f2b53a"/>
+      <stop offset="1" stop-color="#b9771c"/>
+    </linearGradient>
+    <linearGradient id="gap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a3d0c"/>
+      <stop offset="0.6" stop-color="#ffb43a"/>
+      <stop offset="1" stop-color="#fff0b3"/>
+    </linearGradient>
+    <radialGradient id="floor" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffcf66" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#ffcf66" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg)"/>
-  <path d="M14 56V30a18 18 0 0 1 36 0v26z" fill="#141c4d"/>
-  <path d="M19 56V30a13 13 0 0 1 26 0v26z" fill="url(#glow)"/>
-  <path d="M19 56V30a13 13 0 0 1 4-9.4L27 56z" fill="#7a4a1c"/>
-  <path d="M45 56V30a13 13 0 0 0-4-9.4L37 56z" fill="#7a4a1c"/>
-  <path d="M14 56V30a18 18 0 0 1 36 0v26" fill="none" stroke="#c9d3ff" stroke-width="2.5" stroke-linejoin="round"/>
-  <path d="M10 56h44" stroke="#c9d3ff" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+  <ellipse cx="64" cy="110" rx="30" ry="6" fill="url(#floor)"/>
+  <g fill="none" stroke="#e9b44c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M30 62 L20 62 L15 57"/><circle cx="15" cy="57" r="1.9"/><path d="M98 62 L108 62 L113 57"/><circle cx="113" cy="57" r="1.9"/><path d="M30 69 L17 69"/><circle cx="17" cy="69" r="1.9"/><path d="M98 69 L111 69"/><circle cx="111" cy="69" r="1.9"/><path d="M30 76 L21 76 L15 82"/><circle cx="15" cy="82" r="1.9"/><path d="M98 76 L107 76 L113 82"/><circle cx="113" cy="82" r="1.9"/><path d="M30 84 L22 84 L22 94"/><circle cx="22" cy="94" r="1.9"/><path d="M98 84 L106 84 L106 94"/><circle cx="106" cy="94" r="1.9"/><path d="M33 45 L26 38 L20 38"/><circle cx="20" cy="38" r="1.9"/><path d="M95 45 L102 38 L108 38"/><circle cx="108" cy="38" r="1.9"/><path d="M37 35 L31 27 L31 20"/><circle cx="31" cy="20" r="1.9"/><path d="M91 35 L97 27 L97 20"/><circle cx="97" cy="20" r="1.9"/></g>
+  <g fill="#e9b44c" stroke="none"></g>
+  <path d="M27 108V58a37 37 0 0 1 74 0v50z" fill="url(#gold)" stroke="#8a560f" stroke-width="1.6" stroke-linejoin="round"/>
+  <g stroke="#8a560f" stroke-width="1.3" stroke-linecap="round"><line x1="40.5" y1="49.4" x2="29.2" y2="45.3"/><line x1="46.3" y1="40.3" x2="37.8" y2="31.8"/><line x1="55.4" y1="34.5" x2="51.3" y2="23.2"/><line x1="64.0" y1="33.0" x2="64.0" y2="21.0"/><line x1="72.6" y1="34.5" x2="76.7" y2="23.2"/><line x1="81.7" y1="40.3" x2="90.2" y2="31.8"/><line x1="87.5" y1="49.4" x2="98.8" y2="45.3"/></g>
+  <path d="M38 108V58a26 26 0 0 1 52 0v50z" fill="#3a2008"/>
+  <path d="M60 34.3V108h8V34.3z" fill="url(#gap)"/>
+  <path d="M40 106V58A24 24 0 0 1 60 34.3V106z" fill="url(#gold)" stroke="#8a560f" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M88 106V58A24 24 0 0 0 68 34.3V106z" fill="url(#gold)" stroke="#8a560f" stroke-width="1.4" stroke-linejoin="round"/>
+  <g fill="none" stroke="#9a6414" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"><path d="M46 96 L46 80 L52 74 L52 60"/><circle cx="52" cy="60" r="1.6"/><path d="M54 96 L54 86 L57 82"/><circle cx="57" cy="82" r="1.6"/><path d="M46 70 L50 66 L50 52"/><circle cx="50" cy="52" r="1.6"/><path d="M56 56 L56 46"/><circle cx="56" cy="46" r="1.6"/></g>
+  <rect x="21" y="103" width="21" height="7" rx="1.5" fill="url(#gold)" stroke="#8a560f" stroke-width="1.2"/>
+  <rect x="86" y="103" width="21" height="7" rx="1.5" fill="url(#gold)" stroke="#8a560f" stroke-width="1.2"/>
+  <path d="M71.5 79h5v22h-5v-3h-4v-3h4v-3h-3v-3h3z" fill="#ffe9a8" stroke="#6b3f08" stroke-width="1.4" stroke-linejoin="round"/>
+  <circle cx="74" cy="66" r="15" fill="url(#gold)" stroke="#8a560f" stroke-width="1.6"/>
+  <circle cx="74" cy="66" r="10.5" fill="#4a280a" stroke="#ffd36a" stroke-width="1.8"/>
+  <path d="M68 62l6 4-6 4" fill="none" stroke="#ffc24a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M76.5 71h6" fill="none" stroke="#ffc24a" stroke-width="2.4" stroke-linecap="round"/>
 </svg>
 """
 
