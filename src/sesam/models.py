@@ -14,6 +14,9 @@ def _from_dict(cls, data: dict[str, Any]):
     return cls(**{k: v for k, v in data.items() if k in names})
 
 
+FONT_SCALE_MIN, FONT_SCALE_MAX = 70, 200  # erlaubter Bereich der Schriftgröße in Prozent
+
+
 @dataclass
 class Terminal:
     """Ein Terminal-Programm, definiert über eine Befehlsvorlage.
@@ -101,6 +104,7 @@ class Config:
     default_terminal_id: str = ""
     sync: SyncSettings = field(default_factory=SyncSettings)
     theme: str = "system"  # "system", "light" oder "dark"
+    font_scale: int = 100  # Schriftgröße der Oberfläche in Prozent (nur lokal, wird nicht synchronisiert)
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     collapsed_groups: list[str] = field(default_factory=list)  # zugeklappte Gruppen der Hauptansicht (nur lokal, wird nicht synchronisiert)

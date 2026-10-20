@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from .models import Config, Connection, Identity, SyncSettings, Terminal
+from .models import FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SyncSettings, Terminal
 from .terminals import default_terminals
 
 
@@ -68,6 +68,13 @@ def quarantine(path: Path) -> Path:
     return target
 
 
+def _font_scale(value) -> int:
+    """Reiner Anzeigewert: Unbrauchbares ergibt 100 %, Außergewöhnliches wird auf den erlaubten Bereich begrenzt."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+        return 100
+    return max(FONT_SCALE_MIN, min(FONT_SCALE_MAX, int(value)))
+
+
 def _from_data(data: dict) -> Config:
     return Config(
         terminals=[Terminal.from_dict(t) for t in data.get("terminals", [])],
@@ -78,6 +85,7 @@ def _from_data(data: dict) -> Config:
         collapsed_groups=[g for g in data["collapsed_groups"] if isinstance(g, str)] if isinstance(data.get("collapsed_groups"), list) else [],
         sync=SyncSettings.from_dict(data.get("sync", {})),
         theme=data.get("theme", "system") if data.get("theme") in ("system", "light", "dark") else "system",
+        font_scale=_font_scale(data.get("font_scale")),
         column_widths=[int(w) for w in data.get("column_widths", []) if isinstance(w, (int, float))],
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
         version=data.get("version", 1),
