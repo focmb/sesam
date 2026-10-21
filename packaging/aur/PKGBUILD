@@ -1,0 +1,34 @@
+# Maintainer: Christian Leitzke <christian.leitzke@gmail.com>
+pkgname=sesam
+pkgver=1.2.1
+pkgrel=1
+pkgdesc="SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen"
+arch=('any')
+url="https://gitea.meowclown.de/focmb/sesam"
+license=('MIT')
+depends=('python' 'pyside6' 'python-keyring' 'python-cryptography'
+         'python-paramiko' 'openssh')
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+optdepends=('gnome-keyring: Passwörter im Schlüsselbund speichern'
+            'kwallet: Passwörter im Schlüsselbund speichern')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # nach dem Push des Tags: updpkgsums
+
+build() {
+  cd "$srcdir/$pkgname"
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+
+  install -Dm644 packaging/linux/sesam.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/sesam.svg"
+
+  # Platzhalter @EXEC@ im Starter durch den Befehl ersetzen
+  sed 's|"@EXEC@"|sesam|' packaging/linux/sesam.desktop > "$srcdir/sesam.desktop"
+  install -Dm644 "$srcdir/sesam.desktop" "$pkgdir/usr/share/applications/sesam.desktop"
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

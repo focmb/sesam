@@ -1,0 +1,23 @@
+pkgbase = sesam
+	pkgdesc = SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen
+	pkgver = 1.2.1
+	pkgrel = 1
+	url = https://gitea.meowclown.de/focmb/sesam
+	arch = any
+	license = MIT
+	makedepends = python-build
+	makedepends = python-installer
+	makedepends = python-setuptools
+	makedepends = python-wheel
+	depends = python
+	depends = pyside6
+	depends = python-keyring
+	depends = python-cryptography
+	depends = python-paramiko
+	depends = openssh
+	optdepends = gnome-keyring: Passwörter im Schlüsselbund speichern
+	optdepends = kwallet: Passwörter im Schlüsselbund speichern
+	source = sesam-1.2.1.tar.gz::https://gitea.meowclown.de/focmb/sesam/archive/v1.2.1.tar.gz
+	sha256sums = SKIP
+
+pkgname = sesam
