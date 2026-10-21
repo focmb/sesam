@@ -87,6 +87,7 @@ class FontScaleTests(GuiTestCase):
         w.set_font_scale(200)
         self.app.processEvents()
         self.assertGreater(w.tree.iconSize().width(), small[1])
+        wide = w.sidebar.maximumWidth()
         for button in w.side_buttons.values():  # nichts wird abgeschnitten
             self.assertLessEqual(button.sizeHint().width(), w.sidebar.maximumWidth())
         original = w.a_sync.text()
@@ -95,7 +96,7 @@ class FontScaleTests(GuiTestCase):
         w.a_sync.setText(original)
         w.set_font_scale(100)
         self.app.processEvents()
-        self.assertLess(w.sidebar.maximumWidth(), 260)  # und schrumpft mit der Schrift wieder
+        self.assertLess(w.sidebar.maximumWidth(), wide)  # und schrumpft mit der Schrift wieder
 
     def test_shortcuts(self):
         from PySide6.QtGui import QKeySequence

@@ -12,6 +12,8 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+WINDOWS = sys.platform.startswith("win")
+
 from sesam import keys, keystore, launcher, passwords
 from sesam.models import Config, Connection, Identity, SshKey
 
@@ -60,6 +62,7 @@ class GenerateTests(unittest.TestCase):
         self.assertNotEqual(keys.generate("ed25519").public, self.ed.public)
 
     @unittest.skipIf(shutil.which("ssh-keygen") is None, "ssh-keygen nicht verfügbar")
+    @unittest.skipIf(WINDOWS, "OpenSSH unter Windows prüft Dateirechte per ACL, chmod(0o600) genügt dort nicht")
     def test_openssh_accepts_key_and_agrees_on_public_key_and_fingerprint(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "id"
@@ -78,6 +81,7 @@ class GenerateTests(unittest.TestCase):
         self.assertEqual(pk.fingerprint, self.ed.fingerprint)
 
     @unittest.skipIf(shutil.which("ssh-keygen") is None, "ssh-keygen nicht verfügbar")
+    @unittest.skipIf(WINDOWS, "OpenSSH unter Windows prüft Dateirechte per ACL, chmod(0o600) genügt dort nicht")
     def test_passphrase_protected_key_is_valid_for_openssh(self):
         material = keys.generate("ed25519", "geheim")
         self.assertTrue(material.encrypted)
@@ -140,7 +144,7 @@ class ReadKeyTests(unittest.TestCase):
             (Path(tmp) / "id_ed25519.pub").write_text(m.public + " me@host\n")
             got = keys.read_key_file(path)
             self.assertEqual((got.public, got.encrypted), (m.public, True))
-            (Path(tmp) / "id_ed25519.pub").write_text("müll\n")  # unbrauchbare .pub-Datei: wie fehlend
+            (Path(tmp) / "id_ed25519.pub").write_bytes(b"m\xfcll\n")  # kein gültiges UTF-8: wie fehlend
             with self.assertRaises(keys.NeedsPassphrase):
                 keys.read_key_file(path)
 
@@ -311,6 +315,7 @@ class InstallTests(unittest.TestCase):
     def authorized(self):
         return self.home / ".ssh" / "authorized_keys"
 
+    @unittest.skipIf(WINDOWS, "POSIX-Dateirechte (0o600/0o700) gibt es unter Windows nicht")
     def test_installs_into_new_file_with_private_permissions(self):
         self.assertTrue(self.install())
         self.assertEqual(self.authorized.read_text(), self.line + "\n")

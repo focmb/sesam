@@ -1,3 +1,4 @@
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -316,13 +317,19 @@ class IdentityTests(unittest.TestCase):
         from sesam import connect_cli, passwords
         cfg, ident, conn = self._cfg()
         asked = []
+        windows = sys.platform.startswith("win")  # dort startet connect_cli ssh per subprocess.call statt os.execvpe
+        launch = mock.patch.object(connect_cli.subprocess, "call", return_value=0) if windows \
+            else mock.patch.object(connect_cli.os, "execvpe")
         with mock.patch.object(connect_cli.storage, "load", return_value=cfg), \
              mock.patch.object(connect_cli.passwords, "get_password", side_effect=lambda k: asked.append(k) or "geheim"), \
              mock.patch.object(connect_cli.askpass, "askpass_path", return_value="/a"), \
-             mock.patch.object(connect_cli.os, "execvpe") as ex:
+             launch as ex:
             connect_cli.run(conn.id)
         self.assertEqual(asked, [ident.id])
-        args, env = ex.call_args.args[1], ex.call_args.args[2]
+        if windows:
+            args, env = ex.call_args.args[0], ex.call_args.kwargs["env"]
+        else:
+            args, env = ex.call_args.args[1], ex.call_args.args[2]
         self.assertEqual(args[-1], "deploy@h")
         self.assertEqual(env["SSHV_PASSWORD"], "geheim")
 

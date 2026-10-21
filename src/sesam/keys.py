@@ -144,7 +144,7 @@ def read_key_file(path: str | Path, passphrase: str | None = None) -> KeyMateria
         try:
             hint = pub.read_text(encoding="utf-8").strip().splitlines()[0]
             fingerprint(hint)
-        except (OSError, IndexError, KeyManagementError):
+        except (OSError, ValueError, IndexError, KeyManagementError):  # ValueError: kein gültiges UTF-8
             hint = None
     return read_key(text, passphrase, hint)
 

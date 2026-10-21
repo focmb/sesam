@@ -59,7 +59,8 @@ class CommandTests(unittest.TestCase):
         self.assertIn('exec "${SHELL:-sh}" -l', snippets.remote_command(Snippet("x", command="ls", after="shell")))
         self.assertIn("read -r", snippets.remote_command(Snippet("x", command="ls", after="wait")))
 
-    @unittest.skipIf(shutil.which("sh") is None, "sh nicht verfügbar")
+    @unittest.skipIf(shutil.which("sh") is None or sys.platform.startswith("win"),
+                     "braucht eine POSIX-sh (unter Windows andere Pfadschreibweise)")
     def test_hostile_text_stays_data(self):
         with tempfile.TemporaryDirectory() as tmp:
             evil = Snippet("x", command=f"echo 'a'; echo \"it's\" > {tmp}/out", after="close")
