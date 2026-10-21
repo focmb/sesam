@@ -86,7 +86,7 @@ class MainWindow(QMainWindow):
         # zugeklappte Gruppen: aus der Konfiguration wiederherstellen, Verwaistes (gelöschte Gruppen) verwerfen
         self.collapsed: set[str] = set(cfg.collapsed_groups) & set(grp.all_groups(cfg))
         self.setWindowTitle("Sesam")
-        self.resize(1000, 600)
+        self._restore_window_size()
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Suchen (Name, Host, Benutzer, Gruppe) …")
@@ -370,7 +370,33 @@ class MainWindow(QMainWindow):
         """Der Zustand folgt einer umbenannten oder verschobenen Gruppe samt Untergruppen."""
         self.collapsed = {new + c[len(old):] if c == old or c.startswith(old + "/") else c for c in self.collapsed}
 
+    def _restore_window_size(self):
+        """Fenstergröße vom letzten Beenden wiederherstellen (nie größer als der Bildschirm)."""
+        w, h = self.cfg.window_size if len(self.cfg.window_size) == 2 else (1000, 600)
+        screen = self.screen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            w, h = min(w, avail.width()), min(h, avail.height())
+        self.resize(w, h)
+        if self.cfg.window_maximized:
+            self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
+
+    def _flush_window_size(self):
+        """Merkt sich Größe und Maximiert-Zustand. Reiner Anzeigezustand: kein Abgleich, kein Fehlerdialog."""
+        maximized = self.isMaximized() or self.isFullScreen()
+        size = self.normalGeometry().size() if maximized else self.size()
+        new = [size.width(), size.height()]
+        if new != self.cfg.window_size or maximized != self.cfg.window_maximized:
+            if all(300 <= v <= 20000 for v in new):
+                self.cfg.window_size = new
+            self.cfg.window_maximized = maximized
+            try:
+                storage.save(self.cfg, self.path)
+            except OSError:
+                pass
+
     def closeEvent(self, event):
+        self._flush_window_size()
         for window in list(self._sftp_windows):
             window.close()
         if self._width_timer.isActive():

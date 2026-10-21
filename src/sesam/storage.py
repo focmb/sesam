@@ -81,6 +81,14 @@ def _group_colors(value) -> dict[str, str]:
     return {k: v for k, v in value.items() if isinstance(k, str) and k and isinstance(v, str) and v}
 
 
+def _window_size(value) -> list[int]:
+    """[Breite, Höhe] oder leer; ein beschädigter Wert darf den Start nie verhindern."""
+    if (isinstance(value, list) and len(value) == 2 and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
+            and all(300 <= v <= 20000 for v in value)):
+        return [int(value[0]), int(value[1])]
+    return []
+
+
 def _from_data(data: dict) -> Config:
     return Config(
         terminals=[Terminal.from_dict(t) for t in data.get("terminals", [])],
@@ -93,6 +101,8 @@ def _from_data(data: dict) -> Config:
         sync=SyncSettings.from_dict(data.get("sync", {})),
         theme=data.get("theme", "system") if data.get("theme") in ("system", "light", "dark") else "system",
         font_scale=_font_scale(data.get("font_scale")),
+        window_size=_window_size(data.get("window_size")),
+        window_maximized=data.get("window_maximized") is True,
         column_widths=[int(w) for w in data.get("column_widths", []) if isinstance(w, (int, float))],
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
         ssh_keys=[SshKey.from_dict(k) for k in data.get("ssh_keys", []) if isinstance(k, dict)],
