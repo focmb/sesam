@@ -251,6 +251,20 @@ Voraussetzung ist ein Gitea-Runner (`act_runner`, z. B. als Container neben Gite
 etwa `ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04`. Der Windows-Job steht auskommentiert im Workflow, bis ein Windows-Runner
 (Label `windows`, mit Python und Git) existiert; bis dahin wird Windows von Hand gebaut (siehe oben).
 
+## Automatischer Build (GitHub Actions)
+
+Im GitHub-Spiegel (`github.com/focmb/sesam`) baut `.github/workflows/build.yml` mit GitHub-Runnern, eigene Runner sind nicht nötig.
+Der Workflow läuft bei jedem Tag `v*` und auf Knopfdruck (*Actions → Build → Run workflow*):
+
+- **Linux** (Ubuntu 22.04): Tests, dann `sesam-<Version>-linux-x86_64.tar.gz` und `sesam_<Version>_amd64.deb`.
+- **Windows:** `sesam-<Version>-windows-x86_64.zip` mit `sesam\sesam.exe` (die Tests laufen mit, ein Fehlschlag stoppt den Build nicht).
+- **Release:** Bei einem Tag legt der Workflow auf GitHub ein Release mit allen Dateien und `SHA256SUMS` an. Bei „Run workflow“ liegen
+  die Dateien nur als Artefakte (`sesam-linux`, `sesam-windows`) am Lauf.
+
+Ablauf einer neuen Version: Version in `pyproject.toml` und `src/sesam/__init__.py` erhöhen, committen, `git tag -a v<Version> -m "Version <Version>"`
+und `git push origin main --follow-tags`. Der Gitea-Spiegel überträgt Commits und Tag nach GitHub, dort startet der Build.
+Der Workflow in `.gitea/workflows/` bleibt unabhängig davon bestehen.
+
 ## Tests
 
 ```bash
