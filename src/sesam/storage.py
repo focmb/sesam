@@ -75,12 +75,19 @@ def _font_scale(value) -> int:
     return max(FONT_SCALE_MIN, min(FONT_SCALE_MAX, int(value)))
 
 
+def _group_colors(value) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {k: v for k, v in value.items() if isinstance(k, str) and k and isinstance(v, str) and v}
+
+
 def _from_data(data: dict) -> Config:
     return Config(
         terminals=[Terminal.from_dict(t) for t in data.get("terminals", [])],
         connections=[Connection.from_dict(c) for c in data.get("connections", [])],
         default_terminal_id=data.get("default_terminal_id", ""),
         groups=list(data.get("groups", [])),
+        group_colors=_group_colors(data.get("group_colors")),
         # reiner Anzeigezustand: ein beschädigter Wert darf den Start nie verhindern
         collapsed_groups=[g for g in data["collapsed_groups"] if isinstance(g, str)] if isinstance(data.get("collapsed_groups"), list) else [],
         sync=SyncSettings.from_dict(data.get("sync", {})),

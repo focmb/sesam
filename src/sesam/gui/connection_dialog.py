@@ -1,13 +1,42 @@
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QLabel, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
+    QCheckBox, QComboBox, QCompleter, QDialog, QLabel, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
     QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from .. import colors
 from .. import groups as grp
+from .. import tags as tag_util
 from ..models import Config, Connection
 from .identities_dialog import IdentityEditDialog, save_identity
+
+
+def swatch(color: str, size: int = 14) -> QIcon:
+    """Kleiner Farbpunkt für Auswahllisten und Menüs."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(color))
+    painter.drawEllipse(1, 1, size - 2, size - 2)
+    painter.end()
+    return QIcon(pix)
+
+
+class TagCompleter(QCompleter):
+    """Vervollständigt den Tag hinter dem letzten Komma einer Kommaliste."""
+
+    def splitPath(self, path: str) -> list[str]:
+        return [path.rpartition(",")[2].strip()]
+
+    def pathFromIndex(self, index) -> str:
+        completion = super().pathFromIndex(index)
+        head = self.widget().text().rpartition(",")[0].strip()
+        return f"{head}, {completion}" if head else completion
 
 
 class ConnectionDialog(QDialog):
@@ -106,6 +135,18 @@ class ConnectionDialog(QDialog):
         self.group.addItems([""] + grp.all_groups(cfg))
         self.group.setCurrentText(self.conn.group if conn else default_group)
         self.group.setToolTip("Untergruppen mit „/“ trennen, z. B. Kunde A/Produktion")
+        self.color = QComboBox()
+        self.color.addItem("Keine", "")
+        for key, (name, hex_) in colors.PALETTE.items():
+            self.color.addItem(swatch(hex_), name, key)
+        self.color.setCurrentIndex(max(self.color.findData(self.conn.color), 0))
+        self.color.setToolTip("Färbt das Symbol der Verbindung im Baum.")
+        self.tags = QLineEdit(tag_util.format(self.conn.tags))
+        self.tags.setPlaceholderText("mit Komma trennen, z. B. prod, kunde-a")
+        completer = TagCompleter(tag_util.all_tags(cfg), self.tags)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.tags.setCompleter(completer)
+        self.tags.setToolTip("Schlagwörter zum Suchen und Ordnen; die Suche findet auch Tags.")
         self.terminal = QComboBox()
         self.terminal.addItem("Standardterminal", "")
         for t in cfg.terminals:
@@ -137,6 +178,8 @@ class ConnectionDialog(QDialog):
         form.addRow("Shell im Container", self.docker_shell)
         form.addRow("Benutzer im Container", self.docker_user)
         form.addRow("Gruppe", self.group)
+        form.addRow("Farbe", self.color)
+        form.addRow("Tags", self.tags)
         form.addRow("Terminal", self.terminal)
         form.addRow("Notizen", self.notes)
 
@@ -207,6 +250,8 @@ class ConnectionDialog(QDialog):
         c.docker_shell = self.docker_shell.text().strip()
         c.docker_user = self.docker_user.text().strip()
         c.group = grp.normalize(self.group.currentText())
+        c.color = self.color.currentData() or ""
+        c.tags = tag_util.parse(self.tags.text())
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()
         if self.password.text():

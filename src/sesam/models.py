@@ -17,6 +17,20 @@ def _from_dict(cls, data: dict[str, Any]):
 FONT_SCALE_MIN, FONT_SCALE_MAX = 70, 200  # erlaubter Bereich der Schriftgröße in Prozent
 
 
+def _clean_tags(value) -> list[str]:
+    """Beschädigte Werte (kein Listentyp, Nicht-Texte) ergeben eine saubere Liste statt eines Absturzes."""
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in value:
+        tag = " ".join(item.split()) if isinstance(item, str) else ""
+        if tag and tag.casefold() not in seen:
+            seen.add(tag.casefold())
+            out.append(tag)
+    return out
+
+
 @dataclass
 class Terminal:
     """Ein Terminal-Programm, definiert über eine Befehlsvorlage.
@@ -76,10 +90,16 @@ class Connection:
     group: str = ""
     terminal_id: str = ""  # leer = Standardterminal
     notes: str = ""
+    color: str = ""  # Schlüssel aus sesam.colors.PALETTE, leer = keine Farbe
+    tags: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Connection":
-        return _from_dict(cls, data)
+        conn = _from_dict(cls, data)
+        if not isinstance(conn.color, str):
+            conn.color = ""
+        conn.tags = _clean_tags(conn.tags)
+        return conn
 
 
 @dataclass
@@ -110,6 +130,7 @@ class Config:
     font_scale: int = 100  # Schriftgröße der Oberfläche in Prozent (nur lokal, wird nicht synchronisiert)
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
+    group_colors: dict[str, str] = field(default_factory=dict)  # Gruppenpfad -> Farbschlüssel (sesam.colors)
     collapsed_groups: list[str] = field(default_factory=list)  # zugeklappte Gruppen der Hauptansicht (nur lokal, wird nicht synchronisiert)
     version: int = 1
 

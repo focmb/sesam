@@ -167,6 +167,17 @@ def merge_sets(base: set, local: set, remote: set) -> set:
     return (base | (local - base) | (remote - base)) - (base - local) - (base - remote)
 
 
+def merge_map(base: dict, local: dict, remote: dict) -> dict:
+    """Drei-Wege-Zusammenführung je Schlüssel; bei widersprüchlichen Änderungen gewinnt die lokale."""
+    out = {}
+    for k in set(base) | set(local) | set(remote):
+        b, loc, rem = base.get(k), local.get(k), remote.get(k)
+        value = rem if loc == b else loc  # nur eine Seite geändert -> diese; beide -> lokal
+        if value is not None:
+            out[k] = value
+    return out
+
+
 # ---------------------------------------------------------------- Git
 
 class Git:
@@ -213,6 +224,7 @@ class RemoteState:
     key: bytes | None
     branch_exists: bool
     new_meta: bool = False
+    group_colors: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -329,13 +341,18 @@ class SyncEngine:
                 pw = decrypt(key, blob, item_id) if (key and blob) else None
                 items[(kind, item_id)] = Item(kind, item_id, data, pw, blob)
         groups: set = set()
+        colors: dict = {}
         gp = self.repo / "groups.json"
         if gp.exists():
             try:
-                groups = set(json.loads(gp.read_text(encoding="utf-8")).get("groups", []))
+                gdata = json.loads(gp.read_text(encoding="utf-8"))
+                groups = set(gdata.get("groups", []))
+                raw = gdata.get("colors")
+                if isinstance(raw, dict):
+                    colors = {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
             except ValueError:
                 pass
-        return RemoteState(items, groups, meta, key, branch_exists, new_meta)
+        return RemoteState(items, groups, meta, key, branch_exists, new_meta, colors)
 
     # ---- Phase 2: zusammenführen (verändert cfg, Schlüsselbund und Arbeitsverzeichnis) ----
     def _local_items(self, cfg: Config, key: bytes | None) -> dict:
@@ -366,6 +383,7 @@ class SyncEngine:
         base = state.get("items", {})
         base_key = {tuple(k.split(":", 1)): v for k, v in base.items()}
         base_groups = set(state.get("groups", []))
+        base_colors = state.get("group_colors", {}) if isinstance(state.get("group_colors"), dict) else {}
 
         before = copy.deepcopy(asdict(cfg))
         local = self._local_items(cfg, key)
@@ -383,12 +401,14 @@ class SyncEngine:
             report.conflicts.append(loc.data.get("name", loc.id))
 
         merged_groups = merge_sets(base_groups, set(cfg.groups), remote.groups)
+        merged_colors = merge_map(base_colors, cfg.group_colors, remote.group_colors)
 
         self._apply_local(cfg, local, result, key is not None, report)
         cfg.groups = sorted(merged_groups, key=str.lower)
+        cfg.group_colors = merged_colors
         report.local_changed = asdict(cfg) != before
 
-        self._write_repo(result, merged_groups, remote, key)
+        self._write_repo(result, merged_groups, remote, key, merged_colors)
         status = self.git.run("status", "--porcelain")
         if status.strip():
             self.git.run("add", "-A")
@@ -403,6 +423,7 @@ class SyncEngine:
             "mode": mode,
             "items": {f"{k[0]}:{k[1]}": item_hash(it, hkey) for k, it in result.items()},
             "groups": sorted(merged_groups),
+            "group_colors": merged_colors,
         }
         return report
 
@@ -451,7 +472,8 @@ class SyncEngine:
         cfg.connections = sorted(new_conns, key=lambda c: (c.group.lower(), c.name.lower()))
         cfg.identities = sorted(new_idents, key=lambda i: i.name.lower())
 
-    def _write_repo(self, result: dict, groups: set, remote: RemoteState, key: bytes | None) -> None:
+    def _write_repo(self, result: dict, groups: set, remote: RemoteState, key: bytes | None, colors: dict | None = None) -> None:
+        colors = colors or {}
         def dump(obj) -> str:
             return json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -484,7 +506,10 @@ class SyncEngine:
                 for p in d.glob("*.json"):
                     if p not in wanted:
                         p.unlink()
-        write(self.repo / "groups.json", dump({"groups": sorted(groups, key=str.lower)}))
+        content = {"groups": sorted(groups, key=str.lower)}
+        if colors:  # ohne Farben bleibt die Datei im bisherigen Format
+            content["colors"] = dict(sorted(colors.items()))
+        write(self.repo / "groups.json", dump(content))
         if remote.new_meta and remote.meta:
             write(self.repo / "meta.json", dump(remote.meta))
 
