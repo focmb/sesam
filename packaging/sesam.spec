@@ -29,6 +29,8 @@ if not IS_WIN:
         hiddenimports += collect_submodules(pkg)
         datas += copy_metadata(pkg)
 hiddenimports += ["cryptography.hazmat.primitives.ciphers.aead"]
+# paramiko (SFTP-Dateibrowser) wird erst beim Öffnen des Fensters importiert
+hiddenimports += collect_submodules("paramiko")
 
 a = Analysis(
     [str(ROOT / "packaging" / "entry.py")],

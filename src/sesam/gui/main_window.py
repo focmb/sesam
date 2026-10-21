@@ -19,6 +19,7 @@ from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
 from .connection_dialog import ConnectionDialog
 from .identities_dialog import IdentitiesDialog
+from .sftp_window import SftpWindow
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
 from .terminals_dialog import TerminalsDialog
@@ -66,6 +67,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.cfg = cfg
         self.path = path
+        self._sftp_windows: list[SftpWindow] = []  # offene Dateibrowser (SFTP)
         # zugeklappte Gruppen: aus der Konfiguration wiederherstellen, Verwaistes (gelöschte Gruppen) verwerfen
         self.collapsed: set[str] = set(cfg.collapsed_groups) & set(grp.all_groups(cfg))
         self.setWindowTitle("Sesam")
@@ -140,6 +142,7 @@ class MainWindow(QMainWindow):
             return a
 
         self.a_connect = act("Verbinden", self.connect_selected, "Return")
+        self.a_files = act("Dateien (SFTP)", self.open_files, "F4")
         self.a_new = act("Neue Verbindung", self.new_connection, "Ctrl+N")
         self.a_new_group = act("Neue Gruppe …", self.new_group, "Ctrl+Shift+N")
         self.a_edit = act("Bearbeiten", self.edit_selected, "F2")
@@ -199,7 +202,7 @@ class MainWindow(QMainWindow):
     # --- Seitenleiste ---
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
-        ("a_connect", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
+        ("a_connect", "a_files", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
         ("a_sync", "a_identities", "a_terms"),
     )
 
@@ -252,7 +255,7 @@ class MainWindow(QMainWindow):
 
     # --- Icons ---
     ACTION_ICONS = (
-        ("a_connect", "connect"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
+        ("a_connect", "connect"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
         ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_identities", "user"), ("a_terms", "sliders"),
     )
 
@@ -350,6 +353,8 @@ class MainWindow(QMainWindow):
         self.collapsed = {new + c[len(old):] if c == old or c.startswith(old + "/") else c for c in self.collapsed}
 
     def closeEvent(self, event):
+        for window in list(self._sftp_windows):
+            window.close()
         if self._width_timer.isActive():
             self._width_timer.stop()
             self._flush_widths()
@@ -452,6 +457,7 @@ class MainWindow(QMainWindow):
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
+            menu.addAction(self.a_files)
             menu.addSeparator()
             menu.addAction(self.a_edit)
             menu.addAction(self.a_dup)
@@ -472,6 +478,16 @@ class MainWindow(QMainWindow):
             self.connect_selected()
 
     # --- Verbindungen ---
+    def open_files(self):
+        """Öffnet den Dateibrowser (SFTP) für die gewählte Verbindung."""
+        conn = self._selected()
+        if not conn:
+            return
+        window = SftpWindow(self.cfg, conn)
+        self._sftp_windows.append(window)
+        window.closed.connect(lambda w: self._sftp_windows.remove(w) if w in self._sftp_windows else None)
+        window.show()
+
     def connect_selected(self, terminal: Terminal | None = None, sudo: bool = False):
         conn = self._selected()
         if not conn:

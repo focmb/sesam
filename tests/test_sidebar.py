@@ -80,7 +80,7 @@ class SidebarTests(unittest.TestCase):
 
         w = self._window()
         order = [attr for group in w.SIDEBAR_GROUPS for attr in group]
-        self.assertEqual(len(order), 9)
+        self.assertEqual(len(order), 10)
         self.assertEqual(set(w.side_buttons), set(order))
         points = [self._pos(w.side_buttons[attr], w) for attr in order]
         ys = [p.y() for p in points]
@@ -98,7 +98,7 @@ class SidebarTests(unittest.TestCase):
         from PySide6.QtTest import QTest
 
         w = self._window()
-        expected = {"a_connect": "Return", "a_new": "Ctrl+N", "a_new_group": "Ctrl+Shift+N", "a_edit": "F2",
+        expected = {"a_connect": "Return", "a_files": "F4", "a_new": "Ctrl+N", "a_new_group": "Ctrl+Shift+N", "a_edit": "F2",
                     "a_dup": "Ctrl+D", "a_del": "Del", "a_sync": "F5"}
         for attr, keys in expected.items():
             action = getattr(w, attr)
