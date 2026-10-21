@@ -269,6 +269,32 @@ class EngineTests(unittest.TestCase):
         B.run(cfgB)
         self.assertEqual(sorted(cfgB.groups), ["bleibt", "von-a", "von-b"])
 
+    def test_group_colors_connection_colors_and_tags_sync(self):
+        cfgA, A, sA = self.device("A")
+        self.add_conn(cfgA, sA, "web", group="Kunde", color="red", tags=["prod", "web"])
+        cfgA.group_colors = {"Kunde": "blue"}
+        A.run(cfgA)
+        self.assertEqual(json.loads(self.remote_text()["groups.json"])["colors"], {"Kunde": "blue"})
+        cfgB, B, _ = self.device("B")
+        B.run(cfgB)
+        self.assertEqual(cfgB.group_colors, {"Kunde": "blue"})
+        self.assertEqual((cfgB.connections[0].color, cfgB.connections[0].tags), ("red", ["prod", "web"]))
+        # Änderung auf B kommt auf A an, Entfernen ebenfalls
+        cfgB.group_colors = {"Kunde": "green", "Neu": "pink"}
+        B.run(cfgB)
+        A.run(cfgA)
+        self.assertEqual(cfgA.group_colors, {"Kunde": "green", "Neu": "pink"})
+        cfgA.group_colors = {"Neu": "pink"}
+        A.run(cfgA)
+        B.run(cfgB)
+        self.assertEqual(cfgB.group_colors, {"Neu": "pink"})
+
+    def test_groups_file_keeps_old_format_without_colors(self):
+        cfgA, A, sA = self.device("A")
+        cfgA.groups = ["G"]
+        A.run(cfgA)
+        self.assertEqual(json.loads(self.remote_text()["groups.json"]), {"groups": ["G"]})
+
     def test_missing_url_and_unreachable_remote(self):
         cfg = Config()
         eng = SyncEngine(SyncSettings(url=""), Path(self.tmp.name) / "x", None, DictStore())

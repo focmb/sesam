@@ -45,6 +45,20 @@ def _remap(cfg: Config, fn) -> None:
         if g and g not in seen:
             seen.append(g)
     cfg.groups = seen
+    colors: dict[str, str] = {}
+    for old, key in sorted(cfg.group_colors.items(), key=lambda kv: fn(kv[0]) != kv[0]):  # Verschobene zuletzt: sie gewinnen
+        new = fn(old)
+        if new:
+            colors[new] = key
+    cfg.group_colors = colors
+
+
+def set_color(cfg: Config, path: str, key: str) -> None:
+    """Setzt die Farbe einer Gruppe; leerer Schlüssel entfernt sie."""
+    if key:
+        cfg.group_colors[path] = key
+    else:
+        cfg.group_colors.pop(path, None)
 
 
 def add_group(cfg: Config, path: str) -> str:
@@ -82,6 +96,7 @@ def rename_group(cfg: Config, old: str, new: str) -> str:
 def delete_group(cfg: Config, path: str) -> None:
     """Löscht die Gruppe; Verbindungen und Untergruppen rücken in die übergeordnete Gruppe."""
     parent = parent_of(path)
+    cfg.group_colors.pop(path, None)  # die Farbe der gelöschten Gruppe darf nicht auf die übergeordnete übergehen
 
     def fn(g: str) -> str:
         if g == path:

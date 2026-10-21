@@ -14,10 +14,11 @@ from PySide6.QtWidgets import (
 
 from .. import groups as grp
 from . import style, theme
-from .. import docker, launcher, passwords, sftp, storage
+from .. import colors, docker, launcher, passwords, sftp, storage
+from .. import tags as tag_util
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
-from .connection_dialog import ConnectionDialog
+from .connection_dialog import ConnectionDialog, swatch
 from .docker_dialog import DockerConnectDialog
 from .identities_dialog import IdentitiesDialog
 from .jobs import Job
@@ -92,7 +93,7 @@ class MainWindow(QMainWindow):
         self.search.textChanged.connect(self._search_text_changed)
 
         self.tree = ConnectionTree()
-        self.tree.setHeaderLabels(["Name", "Ziel", "Terminal"])
+        self.tree.setHeaderLabels(["Name", "Ziel", "Terminal", "Tags"])
         self.tree.setAlternatingRowColors(False)
         self.tree.setIndentation(22)
         self.tree.setUniformRowHeights(True)
@@ -329,7 +330,7 @@ class MainWindow(QMainWindow):
         base = f"{conn.user}@{conn.host}" if conn.user else conn.host
         return f"{base}:{conn.port}" if conn.port != 22 else base
 
-    DEFAULT_WIDTHS = (250, 230, 150)
+    DEFAULT_WIDTHS = (250, 230, 150, 180)
 
     def _apply_column_widths(self):
         widths = self.cfg.column_widths
@@ -399,7 +400,7 @@ class MainWindow(QMainWindow):
         matches = [
             c
             for c in sorted(self.cfg.connections, key=lambda c: c.name.lower())
-            if not needle or needle in " ".join([c.name, c.host, c.user, c.group]).lower()
+            if not needle or needle in " ".join([c.name, c.host, c.user, c.group, *c.tags]).lower()
         ]
         if needle:
             visible: set[str] = set()
@@ -410,8 +411,9 @@ class MainWindow(QMainWindow):
             group_paths = grp.all_groups(self.cfg)
 
         c = theme.colors()
-        folder_icon = style.icon("folder", c["accent"])
-        server_icon = style.icon("server", c["muted"])
+        def tinted(name: str, key: str, fallback: str):
+            return style.icon(name, colors.hex_of(key) or fallback)
+
         muted = QBrush(QColor(c["muted"]))
         self._rebuilding += 1  # Auf-/Zuklappen während des Aufbaus ist keine Benutzeraktion
         self.tree.clear()
@@ -419,7 +421,7 @@ class MainWindow(QMainWindow):
         for path in group_paths:  # sortiert: Eltern stehen vor Kindern
             item = QTreeWidgetItem([grp.name_of(path)])
             item.setData(0, GROUP_ROLE, path)
-            item.setIcon(0, folder_icon)
+            item.setIcon(0, tinted("folder", self.cfg.group_colors.get(path, ""), c["accent"]))
             font = item.font(0)
             font.setBold(True)
             item.setFont(0, font)
@@ -427,10 +429,11 @@ class MainWindow(QMainWindow):
             (parent or self.tree.invisibleRootItem()).addChild(item)
             nodes[path] = item
         for conn in matches:
-            item = QTreeWidgetItem([conn.name, self._target(conn), self._terminal_name(conn)])
+            item = QTreeWidgetItem([conn.name, self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags)])
             item.setData(0, ID_ROLE, conn.id)
-            item.setIcon(0, server_icon)
+            item.setIcon(0, tinted("server", conn.color, c["muted"]))
             item.setForeground(2, muted)
+            item.setForeground(3, muted)
             if conn.notes:
                 item.setToolTip(0, conn.notes)
             (nodes.get(conn.group) or self.tree.invisibleRootItem()).addChild(item)
@@ -500,6 +503,7 @@ class MainWindow(QMainWindow):
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
             menu.addAction(self.a_files)
+            self._color_menu(menu, conn.color, lambda key: self.set_connection_color(conn, key))
             if conn.docker:
                 menu.addAction("Container aktualisieren").triggered.connect(lambda: self.reload_containers(conn.id))
             menu.addSeparator()
@@ -511,11 +515,36 @@ class MainWindow(QMainWindow):
             menu.addAction("Neue Verbindung hier").triggered.connect(lambda: self.new_connection())
             menu.addAction("Neue Untergruppe …").triggered.connect(lambda: self.new_group(group))
             menu.addAction("Umbenennen / verschieben …").triggered.connect(lambda: self.rename_group(group))
+            self._color_menu(menu, self.cfg.group_colors.get(group, ""), lambda key: self.set_group_color(group, key))
             menu.addAction("Gruppe löschen").triggered.connect(lambda: self.delete_group(group))
             menu.addSeparator()
         menu.addAction(self.a_new)
         menu.addAction("Neue Gruppe (oberste Ebene) …").triggered.connect(lambda: self.new_group(""))
         menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _color_menu(self, menu: QMenu, current: str, pick) -> None:
+        """Untermenü „Farbe“ mit der Palette; ``pick(schluessel)`` wird mit dem Schlüssel („“ = keine) aufgerufen."""
+        sub = menu.addMenu("Farbe")
+        none = sub.addAction("Keine")
+        none.setCheckable(True)
+        none.setChecked(not colors.valid(current))
+        none.triggered.connect(lambda: pick(""))
+        for key, (name, hex_) in colors.PALETTE.items():
+            action = sub.addAction(swatch(hex_), name)
+            action.setCheckable(True)
+            action.setChecked(key == current)
+            action.triggered.connect(lambda _=False, k=key: pick(k))
+
+    def set_connection_color(self, conn: Connection, key: str):
+        conn.color = key
+        self._save()
+        self.refresh()
+        self._select_connection(conn.id)
+
+    def set_group_color(self, path: str, key: str):
+        grp.set_color(self.cfg, path, key)
+        self._save()
+        self.refresh()
 
     def _double_clicked(self, item=None, *_):
         if item is not None and item.data(0, GROUP_ROLE) is not None:
