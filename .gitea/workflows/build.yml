@@ -1,6 +1,6 @@
 name: Build
 
-# Baut Sesam bei jedem Tag "v*" (z. B. v1.0.0) und auf Knopfdruck
+# Baut Sesam bei jedem Tag "v*" (z. B. v1.1.0) und auf Knopfdruck
 # (Gitea: Actions -> Build -> "Run workflow").
 on:
   push:

@@ -223,7 +223,7 @@ Ergebnis in `dist/`: der Ordner `sesam/` und ein Archiv (`sesam-<Version>-linux-
 
 ## Automatischer Build (Gitea Actions)
 
-`.gitea/workflows/build.yml` läuft bei jedem Tag `v*` (z. B. `git tag v1.0.0 && git push --tags`) und auf Knopfdruck
+`.gitea/workflows/build.yml` läuft bei jedem Tag `v*` (z. B. `git tag v1.1.0 && git push --tags`) und auf Knopfdruck
 (*Actions → Build → Run workflow*). Der Linux-Job installiert die Qt-Systembibliotheken, führt die Tests aus und baut mit
 `packaging/build.py` und `packaging/build_deb.py`; `.tar.gz`, `.deb` und `SHA256SUMS` hängen als Artefakt `sesam-linux` am Lauf
 (von dort lassen sie sich herunterladen und als Release anhängen).
