@@ -257,7 +257,7 @@ Im GitHub-Spiegel (`github.com/focmb/sesam`) baut `.github/workflows/build.yml` 
 Der Workflow läuft bei jedem Tag `v*` und auf Knopfdruck (*Actions → Build → Run workflow*):
 
 - **Linux** (Ubuntu 22.04): Tests, dann `sesam-<Version>-linux-x86_64.tar.gz` und `sesam_<Version>_amd64.deb`.
-- **Windows:** `sesam-<Version>-windows-x86_64.zip` mit `sesam\sesam.exe` (die Tests laufen mit, ein Fehlschlag stoppt den Build nicht).
+- **Windows:** `sesam-<Version>-windows-x86_64.zip` mit `sesam\sesam.exe` (mit Tests).
 - **Release:** Bei einem Tag legt der Workflow auf GitHub ein Release mit allen Dateien und `SHA256SUMS` an. Bei „Run workflow“ liegen
   die Dateien nur als Artefakte (`sesam-linux`, `sesam-windows`) am Lauf.
 
