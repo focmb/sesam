@@ -16,6 +16,25 @@ class SidebarViewTests(GuiTestCase):
         self.w = self._window()
         self.addCleanup(self.w.close)
 
+    def test_version_stands_at_the_left_of_the_status_bar(self):
+        from sesam import __version__
+
+        w = self.w
+        label = w.version_label
+        self.assertEqual(label.text(), f"Version {__version__}")
+        self.assertTrue(label.isVisible())
+        bar = w.statusBar()
+        self.assertIs(label.parent(), bar)
+        self.assertLess(label.x(), w.sync_label.x())  # links, der Sync-Status bleibt rechts
+        self.assertLess(label.mapTo(w, label.rect().topLeft()).x(), 40)
+        self.assertGreater(label.mapTo(w, label.rect().topLeft()).y(), w.height() - 60)  # ganz unten
+
+    def test_version_label_is_not_removed_by_sync_status(self):
+        w = self.w
+        w._sync_status("Synchronisiert", False)
+        self.app.processEvents()
+        self.assertTrue(w.version_label.isVisible())
+
     def test_menu_bar_is_gone(self):
         self.assertEqual(self.w.menuBar().actions(), [])
 

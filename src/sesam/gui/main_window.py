@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
 )
 
+from .. import __version__
 from .. import groups as grp
 from . import style, theme
 from .. import colors, docker, launcher, passwords, sftp, storage
@@ -144,6 +145,11 @@ class MainWindow(QMainWindow):
         self.sync.finished.connect(self._sync_finished)
         self.sync_label = QLabel("")
         self.statusBar().addPermanentWidget(self.sync_label)
+        self.version_label = QLabel(f"Version {__version__}")  # ganz links in der Statuszeile
+        self.version_label.setObjectName("versionLabel")
+        self.version_label.setToolTip("Sesam")
+        self.version_label.setContentsMargins(12, 0, 0, 0)  # bündig mit der Verbindungsliste
+        self.statusBar().addWidget(self.version_label)
         self.statusBar().setSizeGripEnabled(False)
 
         self._build_actions()
