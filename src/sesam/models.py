@@ -70,6 +70,9 @@ class Connection:
     sudo_mode: str = ""  # "" = aus, "login" = sudo -i, "shell" = sudo -s
     sudo_user: str = ""  # Zielbenutzer, leer = root
     sudo_use_password: bool = True  # gespeichertes Passwort auch für sudo verwenden
+    docker: bool = False  # laufende Docker-Container des Hosts als Unterelemente im Baum anzeigen
+    docker_shell: str = ""  # Shell im Container, leer = bash, sonst sh
+    docker_user: str = ""  # Benutzer im Container (docker exec -u), leer = Standard des Containers
     group: str = ""
     terminal_id: str = ""  # leer = Standardterminal
     notes: str = ""

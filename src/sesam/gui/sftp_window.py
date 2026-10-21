@@ -4,11 +4,10 @@ from __future__ import annotations
 import json
 import os
 import posixpath
-import threading
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, QSize, Qt, QThread, Signal
+from PySide6.QtCore import QMimeData, QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
@@ -18,10 +17,10 @@ from PySide6.QtWidgets import (
 from .. import sftp
 from ..models import Config, Connection
 from . import style, theme
+from .jobs import Job
 
 MIME = "application/x-sesam-files"
 NAME_ROLE = Qt.ItemDataRole.UserRole
-_ORPHANS: set = set()  # noch laufende Threads geschlossener Fenster: sie dürfen nicht vorzeitig zerstört werden
 
 
 def format_size(size: int) -> str:
@@ -38,27 +37,6 @@ def format_time(timestamp: float) -> str:
         return datetime.fromtimestamp(timestamp).strftime("%d.%m.%Y %H:%M") if timestamp else ""
     except (OverflowError, OSError, ValueError):
         return ""
-
-
-class Job(QThread):
-    """Führt eine blockierende Funktion im Hintergrund aus. ``fn(job)`` darf ``job.progress`` und ``job.cancel_event`` nutzen."""
-
-    result = Signal(object)
-    failed = Signal(object)  # die Ausnahme
-    progress = Signal(int, int, str)
-
-    def __init__(self, fn, parent=None):
-        super().__init__(parent)
-        self._fn = fn
-        self.cancel_event = threading.Event()
-
-    def run(self):
-        try:
-            value = self._fn(self)
-        except BaseException as exc:  # auch Abbruch und unerwartete Fehler dürfen den Thread nicht still beenden
-            self.failed.emit(exc)
-        else:
-            self.result.emit(value)
 
 
 class _Item(QTreeWidgetItem):
@@ -742,10 +720,7 @@ class SftpWindow(QMainWindow):
         for job in list(self._jobs):
             job.cancel_event.set()
         for job in list(self._jobs):
-            if not job.wait(5000):  # hängt noch (z. B. Verbindungsaufbau): im Hintergrund auslaufen lassen
-                _ORPHANS.add(job)
-                job.finished.connect(lambda j=job: _ORPHANS.discard(j))
-                job.setParent(None)
+            job.wait(5000)  # abgebrochene Übertragungen räumen noch auf; Hängendes läuft als Daemon-Thread aus
         if self.session is not None:
             try:
                 self.session.close()

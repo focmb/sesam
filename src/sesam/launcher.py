@@ -93,9 +93,14 @@ def resolve(cfg: Config, conn: Connection) -> tuple[Connection, str]:
     return eff, ident.id
 
 
-def wrapper_args(conn: Connection) -> list[str]:
-    """Befehl, der im Terminal läuft und ssh samt Passwort aus dem Schlüsselbund startet."""
+def wrapper_args(conn: Connection, remote_command: str | None = None) -> list[str]:
+    """Befehl, der im Terminal läuft und ssh samt Passwort aus dem Schlüsselbund startet.
+
+    ``remote_command`` ersetzt den gespeicherten Remote-Befehl (z. B. ``docker exec``) und schaltet sudo des Hosts ab.
+    """
     args = runtime.self_command() + ["--connect", conn.id]
+    if remote_command is not None:
+        args += ["--remote-command", remote_command]
     if conn.sudo_mode:  # auch für einmalige Überschreibungen (Kontextmenü), die nicht gespeichert sind
         args += ["--sudo-mode", conn.sudo_mode, "--sudo-user", conn.sudo_user]
     return args
@@ -135,10 +140,13 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
     return out
 
 
-def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None) -> list[str]:
+def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remote_command: str | None = None) -> list[str]:
+    """Öffnet die Verbindung im Terminal. ``remote_command`` (z. B. ``docker exec …``) gilt nur für diesen Start."""
     conn, _ = resolve(cfg, conn)
+    if remote_command is not None:  # sudo des Hosts passt nicht zu einem Befehl, der direkt in einen Container führt
+        conn = replace(conn, remote_command=remote_command, sudo_mode="", sudo_user="")
     terminal = terminal or resolve_terminal(cfg, conn)
-    cmd = build_terminal_command(terminal, conn, wrapper_args(conn) if conn.use_password else None)
+    cmd = build_terminal_command(terminal, conn, wrapper_args(conn, remote_command) if conn.use_password else None)
     if shutil.which(cmd[0]) is None:
         raise LaunchError(f"Programm „{cmd[0]}“ wurde nicht gefunden (Terminal „{terminal.name}“).")
     kwargs: dict = {}

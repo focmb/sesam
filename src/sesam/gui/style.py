@@ -224,6 +224,7 @@ _ICONS = {
     "sync": '<path d="M20 11A8 8 0 0 0 6 6.8M4 5v4.2h4.2"/><path d="M4 13a8 8 0 0 0 14 4.2M20 19v-4.2h-4.2"/>',
     "user": '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c.6-3.8 3.8-6 7.5-6s6.900 2.200 7.500 6"/>',
     "sliders": '<path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.200"/><circle cx="8" cy="17" r="2.200"/>',
+    "box": '<path d="M12 3l8 4.500v9L12 21l-8-4.500v-9z"/><path d="M4 7.500l8 4.500 8-4.500M12 12v9"/>',
     "server": '<rect x="4" y="4" width="16" height="6.500" rx="2"/><rect x="4" y="13.500" width="16" height="6.500" rx="2"/><path d="M8 7.250h.01M8 16.750h.01"/>',
     "chevron_right": '<path d="M9 6l6 6-6 6"/>',
     "chevron_up": '<path d="M6 15l6-6 6 6"/>',

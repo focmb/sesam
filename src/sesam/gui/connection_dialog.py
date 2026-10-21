@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (
 )
 
 from .. import groups as grp
-from .. import passwords
 from ..models import Config, Connection
 from .identities_dialog import IdentityEditDialog, save_identity
 
@@ -88,6 +87,20 @@ class ConnectionDialog(QDialog):
         _sudo_toggled()
         self.sudo_mode.setToolTip("Nach dem Login per sudo zu root (oder einem anderen Benutzer) wechseln. "
                                   "Ein sudo-Passwort wird im Terminal abgefragt.")
+        self.docker = QCheckBox("Docker-Container dieses Hosts im Verbindungsbaum anzeigen")
+        self.docker.setChecked(self.conn.docker)
+        self.docker.setToolTip("Beim Aufklappen wird der Host per SSH nach laufenden Containern gefragt (docker ps).")
+        self.docker_shell = QLineEdit(self.conn.docker_shell)
+        self.docker_shell.setPlaceholderText("automatisch (bash, sonst sh)")
+        self.docker_user = QLineEdit(self.conn.docker_user)
+        self.docker_user.setPlaceholderText("Standard des Containers")
+
+        def _docker_toggled(*_):
+            self.docker_shell.setEnabled(self.docker.isChecked())
+            self.docker_user.setEnabled(self.docker.isChecked())
+
+        self.docker.toggled.connect(_docker_toggled)
+        _docker_toggled()
         self.group = QComboBox()
         self.group.setEditable(True)
         self.group.addItems([""] + grp.all_groups(cfg))
@@ -120,6 +133,9 @@ class ConnectionDialog(QDialog):
         form.addRow("Mit sudo", self.sudo_mode)
         form.addRow("sudo als Benutzer", self.sudo_user)
         form.addRow("", self.sudo_pw)
+        form.addRow("Docker", self.docker)
+        form.addRow("Shell im Container", self.docker_shell)
+        form.addRow("Benutzer im Container", self.docker_user)
         form.addRow("Gruppe", self.group)
         form.addRow("Terminal", self.terminal)
         form.addRow("Notizen", self.notes)
@@ -187,6 +203,9 @@ class ConnectionDialog(QDialog):
         c.sudo_mode = self.sudo_mode.currentData() or ""
         c.sudo_user = self.sudo_user.text().strip() if c.sudo_mode else ""
         c.sudo_use_password = self.sudo_pw.isChecked()
+        c.docker = self.docker.isChecked()
+        c.docker_shell = self.docker_shell.text().strip()
+        c.docker_user = self.docker_user.text().strip()
         c.group = grp.normalize(self.group.currentText())
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()
