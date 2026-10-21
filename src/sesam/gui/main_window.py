@@ -4,7 +4,7 @@ import copy
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
@@ -14,11 +14,13 @@ from PySide6.QtWidgets import (
 
 from .. import groups as grp
 from . import style, theme
-from .. import launcher, passwords, storage
+from .. import docker, launcher, passwords, sftp, storage
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
 from .connection_dialog import ConnectionDialog
+from .docker_dialog import DockerConnectDialog
 from .identities_dialog import IdentitiesDialog
+from .jobs import Job
 from .sftp_window import SftpWindow
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
@@ -26,6 +28,7 @@ from .terminals_dialog import TerminalsDialog
 
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
 GROUP_ROLE = ID_ROLE + 1  # Gruppenpfad
+CONTAINER_ROLE = ID_ROLE + 2  # „<ID der Host-Verbindung>\x1f<Containername>“
 
 
 class ConnectionTree(QTreeWidget):
@@ -55,6 +58,8 @@ class ConnectionTree(QTreeWidget):
             target_group = target.data(0, GROUP_ROLE)
         else:
             parent = target.parent()
+            while parent is not None and parent.data(0, GROUP_ROLE) is None:  # Container/Verbindung → zur Gruppe darüber
+                parent = parent.parent()
             target_group = parent.data(0, GROUP_ROLE) if parent else ""
         if source.data(0, GROUP_ROLE) is not None:
             self.moved.emit("group", source.data(0, GROUP_ROLE), target_group)
@@ -68,6 +73,14 @@ class MainWindow(QMainWindow):
         self.cfg = cfg
         self.path = path
         self._sftp_windows: list[SftpWindow] = []  # offene Dateibrowser (SFTP)
+        # Docker-Container je Host (nur zur Laufzeit): ID → Liste, Fehlertext oder None (= wird geladen)
+        self._containers: dict[str, list[docker.Container] | str | None] = {}
+        self._docker_gen: dict[str, int] = {}  # Zähler, damit veraltete Antworten verworfen werden
+        self._docker_expanded: set[str] = set()  # aufgeklappte Hosts
+        self._docker_passwords: dict[str, str] = {}  # nachgefragte Passwörter, nur im Speicher
+        self._docker_jobs: set[Job] = set()
+        self._lost_key: tuple | None = None
+        self._rebuilding = 0  # >0, solange der Baum programmatisch umgebaut wird
         # zugeklappte Gruppen: aus der Konfiguration wiederherstellen, Verwaistes (gelöschte Gruppen) verwerfen
         self.collapsed: set[str] = set(cfg.collapsed_groups) & set(grp.all_groups(cfg))
         self.setWindowTitle("Sesam")
@@ -83,6 +96,7 @@ class MainWindow(QMainWindow):
         self.tree.setAlternatingRowColors(False)
         self.tree.setIndentation(22)
         self.tree.setUniformRowHeights(True)
+        self.tree.setExpandsOnDoubleClick(False)  # Doppelklick verbindet; Gruppen klappen wir selbst auf
         self.tree.setIconSize(QSize(18, 18))
         header = self.tree.header()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)  # Breite frei ziehbar
@@ -364,6 +378,16 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _expansion_changed(self, item: QTreeWidgetItem, collapsed: bool):
+        if self._rebuilding:
+            return
+        cid = item.data(0, ID_ROLE)
+        if cid:
+            (self._docker_expanded.discard if collapsed else self._docker_expanded.add)(cid)
+            conn = self.cfg.connection_by_id(cid)
+            if not collapsed and conn and conn.docker:
+                # nicht mitten im Aufklappen am Baum ändern (Qt stürzt sonst ab)
+                QTimer.singleShot(0, lambda: self._load_if_needed(cid))
+            return
         path = item.data(0, GROUP_ROLE)
         if path is None or self.search.text().strip():
             return
@@ -389,7 +413,7 @@ class MainWindow(QMainWindow):
         folder_icon = style.icon("folder", c["accent"])
         server_icon = style.icon("server", c["muted"])
         muted = QBrush(QColor(c["muted"]))
-        self.tree.blockSignals(True)
+        self._rebuilding += 1  # Auf-/Zuklappen während des Aufbaus ist keine Benutzeraktion
         self.tree.clear()
         nodes: dict[str, QTreeWidgetItem] = {}
         for path in group_paths:  # sortiert: Eltern stehen vor Kindern
@@ -410,12 +434,17 @@ class MainWindow(QMainWindow):
             if conn.notes:
                 item.setToolTip(0, conn.notes)
             (nodes.get(conn.group) or self.tree.invisibleRootItem()).addChild(item)
+            if conn.docker:
+                self._fill_containers(item, conn)
+                item.setExpanded(conn.id in self._docker_expanded)
         for path, item in nodes.items():
             item.setExpanded(bool(needle) or path not in self.collapsed)
             count = len(grp.connections_in(self.cfg, path))
             item.setText(1, f"{count} Verbindung(en)" if count else "leer")
             item.setForeground(1, muted)
-        self.tree.blockSignals(False)
+        self._rebuilding -= 1
+        for cid in self._docker_expanded:  # z. B. nach dem Bearbeiten des Hosts: neu laden, sobald der Baum steht
+            QTimer.singleShot(0, lambda cid=cid: self._load_if_needed(cid, retry_errors=False))
 
     def _selected(self) -> Connection | None:
         item = self.tree.currentItem()
@@ -432,6 +461,8 @@ class MainWindow(QMainWindow):
         if group is not None:
             return group
         conn = self._selected()
+        if conn is None and (target := self._selected_container()):
+            conn = target[0]
         return conn.group if conn else ""
 
     def _save(self):
@@ -450,7 +481,18 @@ class MainWindow(QMainWindow):
         conn = self._selected()
         group = self._selected_group()
         menu = QMenu(self)
-        if conn:
+        container = self._selected_container()
+        if container:
+            menu.addAction(self.a_connect)
+            sub = menu.addMenu("Verbinden mit …")
+            for t in self.cfg.terminals:
+                a = sub.addAction(t.name)
+                a.triggered.connect(lambda _=False, term=t: self.connect_container(term))
+            menu.addAction("Verbinden als …").triggered.connect(lambda: self.connect_container(ask=True))
+            menu.addSeparator()
+            menu.addAction("Container aktualisieren").triggered.connect(lambda: self.reload_containers(container[0].id))
+            menu.addSeparator()
+        elif conn:
             menu.addAction(self.a_connect)
             menu.addAction("Als root verbinden (sudo -i)").triggered.connect(lambda: self.connect_selected(sudo=True))
             sub = menu.addMenu("Verbinden mit …")
@@ -458,6 +500,8 @@ class MainWindow(QMainWindow):
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
             menu.addAction(self.a_files)
+            if conn.docker:
+                menu.addAction("Container aktualisieren").triggered.connect(lambda: self.reload_containers(conn.id))
             menu.addSeparator()
             menu.addAction(self.a_edit)
             menu.addAction(self.a_dup)
@@ -473,9 +517,188 @@ class MainWindow(QMainWindow):
         menu.addAction("Neue Gruppe (oberste Ebene) …").triggered.connect(lambda: self.new_group(""))
         menu.exec(self.tree.viewport().mapToGlobal(pos))
 
-    def _double_clicked(self, *_):
-        if self._selected():
+    def _double_clicked(self, item=None, *_):
+        if item is not None and item.data(0, GROUP_ROLE) is not None:
+            item.setExpanded(not item.isExpanded())
+        elif self._selected() or self._selected_container():
             self.connect_selected()
+
+    # --- Docker-Container ---
+    def _find_item(self, conn_id: str) -> QTreeWidgetItem | None:
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            if it.value().data(0, ID_ROLE) == conn_id:
+                return it.value()
+            it += 1
+        return None
+
+    def _selected_container(self) -> tuple[Connection, str] | None:
+        item = self.tree.currentItem()
+        data = item.data(0, CONTAINER_ROLE) if item else None
+        cid, _sep, name = data.partition("\x1f") if data else ("", "", "")
+        conn = self.cfg.connection_by_id(cid) if cid else None
+        return (conn, name) if conn else None
+
+    def _info_item(self, text: str, tooltip: str = "") -> QTreeWidgetItem:
+        item = QTreeWidgetItem([text])
+        item.setForeground(0, QBrush(QColor(theme.colors()["muted"])))
+        font = item.font(0)
+        font.setItalic(True)
+        item.setFont(0, font)
+        if tooltip:
+            item.setToolTip(0, tooltip)
+        return item
+
+    def _fill_containers(self, host_item: QTreeWidgetItem, conn: Connection):
+        """Hängt die Unterelemente eines Docker-Hosts passend zum Ladezustand an (nur an frisch erzeugte Elemente)."""
+        self._add_container_children(host_item, conn)
+
+    def _add_container_children(self, host_item: QTreeWidgetItem, conn: Connection):
+        c = theme.colors()
+        icon = style.icon("box", c["accent"])
+        muted = QBrush(QColor(c["muted"]))
+        state = self._containers.get(conn.id, "")
+        if conn.id not in self._containers:
+            host_item.addChild(self._info_item("…", "Aufklappen, um die Container zu laden"))
+        elif state is None:
+            host_item.addChild(self._info_item("Container werden geladen …"))
+        elif isinstance(state, str):
+            host_item.addChild(self._info_item("⚠ " + state, state))
+        elif not state:
+            host_item.addChild(self._info_item("Keine laufenden Container"))
+        else:
+            for box in state:
+                child = QTreeWidgetItem([box.name, f"{box.image} · {box.status}" if box.status else box.image, ""])
+                child.setData(0, CONTAINER_ROLE, f"{conn.id}\x1f{box.name}")
+                child.setIcon(0, icon)
+                child.setForeground(1, muted)
+                child.setToolTip(0, "\n".join(filter(None, [box.name, box.image, box.status, box.ports])))
+                child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)  # nicht verschiebbar
+                host_item.addChild(child)
+
+    def _current_key(self) -> tuple | None:
+        item = self.tree.currentItem()
+        if item is None:
+            return None
+        if item.data(0, CONTAINER_ROLE):
+            return ("container", item.data(0, CONTAINER_ROLE))
+        if item.data(0, ID_ROLE):
+            return ("conn", item.data(0, ID_ROLE))
+        if item.data(0, GROUP_ROLE) is not None:
+            return ("group", item.data(0, GROUP_ROLE))
+        return None
+
+    def _restore_key(self, key: tuple | None) -> bool:
+        if key is None:
+            return False
+        role = {"container": CONTAINER_ROLE, "conn": ID_ROLE, "group": GROUP_ROLE}[key[0]]
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            if it.value().data(0, role) == key[1]:
+                self.tree.setCurrentItem(it.value())
+                return True
+            it += 1
+        return False
+
+    def _refill(self, conn_id: str):
+        """Zeigt geänderte Container an. Der Baum wird dazu ganz neu aufgebaut (Auswahl und Scrollposition bleiben):
+        einzelne Unterelemente auszutauschen, brachte Qt/PySide nach einem früheren Neuaufbau zum Absturz."""
+        if self._find_item(conn_id) is None:
+            return
+        key, bar = self._current_key() or self._lost_key, self.tree.verticalScrollBar()
+        scroll = bar.value()
+        self.refresh()
+        found = self._restore_key(key)
+        # Ein gewählter Container verschwindet beim Neuladen kurz; die Auswahl kehrt zurück, sobald es ihn wieder gibt.
+        self._lost_key = key if key and key[0] == "container" and not found and self._containers.get(conn_id) is None else None
+        bar.setValue(scroll)
+
+    def _load_containers(self, conn: Connection):
+        gen = self._docker_gen[conn.id] = self._docker_gen.get(conn.id, 0) + 1
+        self._containers[conn.id] = None
+        self._refill(conn.id)
+        snapshot = replace(conn)
+        password = self._docker_passwords.get(conn.id)
+
+        def work(job):
+            try:
+                found = docker.list_containers(self.cfg, snapshot, password=password)
+            except Exception as exc:  # jede Meldung landet als Text im Baum
+                return job, conn.id, gen, None, exc
+            return job, conn.id, gen, found, None
+
+        job = Job(work, self)
+        self._docker_jobs.add(job)
+        job.result.connect(self._containers_loaded)
+        job.start()
+
+    @Slot(object)
+    def _containers_loaded(self, res):
+        job, cid, gen, found, exc = res
+        self._docker_jobs.discard(job)
+        if gen != self._docker_gen.get(cid):
+            return  # inzwischen neu geladen oder Verbindung geändert
+        conn = self.cfg.connection_by_id(cid)
+        if conn is None or not conn.docker:
+            self._containers.pop(cid, None)
+            return
+        if isinstance(exc, sftp.SftpAuthError):
+            typed = self._docker_passwords.pop(cid, None) is not None
+            if not typed:  # kein gespeichertes Passwort / kein Schlüssel hat funktioniert: einmal nachfragen
+                text, ok = QInputDialog.getText(
+                    self, "Anmeldung", f"Passwort für {conn.user + '@' if conn.user else ''}{conn.host}:",
+                    QLineEdit.EchoMode.Password)
+                if ok and text:
+                    self._docker_passwords[cid] = text
+                    self._load_containers(conn)
+                    return
+        if exc is not None:
+            self._containers[cid] = str(exc) or type(exc).__name__
+        else:
+            self._containers[cid] = found
+        self._refill(cid)
+
+    def _docker_forget(self, conn_id: str):
+        self._containers.pop(conn_id, None)
+        self._docker_gen[conn_id] = self._docker_gen.get(conn_id, 0) + 1  # laufende Abfragen verwerfen
+        self._docker_passwords.pop(conn_id, None)
+
+    def _load_if_needed(self, conn_id: str, retry_errors: bool = True):
+        """Lädt die Container eines aufgeklappten Hosts, falls noch nie geladen (oder der letzte Versuch fehlschlug)."""
+        conn = self.cfg.connection_by_id(conn_id)
+        state = self._containers.get(conn_id, "")
+        missing = conn_id not in self._containers or (retry_errors and isinstance(state, str))
+        if conn and conn.docker and conn_id in self._docker_expanded and missing:
+            self._load_containers(conn)
+
+    def reload_containers(self, conn_id: str):
+        conn = self.cfg.connection_by_id(conn_id)
+        item = self._find_item(conn_id)
+        if conn is None or item is None or not conn.docker:
+            return
+        self._docker_expanded.add(conn_id)
+        self._rebuilding += 1
+        item.setExpanded(True)
+        self._rebuilding -= 1
+        self._load_containers(conn)
+
+    def connect_container(self, terminal: Terminal | None = None, ask: bool = False):
+        """Öffnet eine Shell im gewählten Container. ``ask``: Shell und Benutzer vorher abfragen."""
+        target = self._selected_container()
+        if not target:
+            return
+        conn, name = target
+        shell = user = None  # None = Vorgaben der Verbindung
+        if ask:
+            dlg = DockerConnectDialog(name, conn.docker_shell, conn.docker_user, self)
+            if not dlg.exec():
+                return
+            shell, user = dlg.values()
+        try:
+            titled, command = docker.container_target(conn, name, shell, user)
+            launcher.launch(self.cfg, titled, terminal, remote_command=command)
+        except (docker.DockerError, launcher.LaunchError) as exc:
+            QMessageBox.critical(self, "Verbindung konnte nicht geöffnet werden", str(exc))
 
     # --- Verbindungen ---
     def open_files(self):
@@ -491,6 +714,8 @@ class MainWindow(QMainWindow):
     def connect_selected(self, terminal: Terminal | None = None, sudo: bool = False):
         conn = self._selected()
         if not conn:
+            if self._selected_container():
+                self.connect_container(terminal)
             return
         if sudo:  # einmalig, wird nicht gespeichert
             conn = replace(conn, sudo_mode=conn.sudo_mode or "login")
@@ -529,6 +754,7 @@ class MainWindow(QMainWindow):
             dlg.name.selectAll()  # der Name lässt sich sofort überschreiben
         if dlg.exec():
             self._apply_password(conn, dlg.password_change)
+            self._docker_forget(conn.id)  # Zugang oder Docker-Einstellungen können sich geändert haben
             self._save()
             self.refresh()
 
@@ -589,6 +815,8 @@ class MainWindow(QMainWindow):
                 except passwords.PasswordError as exc:
                     QMessageBox.warning(self, "Passwort nicht gelöscht", str(exc))
             self.cfg.connections.remove(conn)
+            self._docker_forget(conn.id)
+            self._docker_expanded.discard(conn.id)
             self._save()
             self.refresh()
 

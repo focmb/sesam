@@ -82,6 +82,77 @@ def _make_host_key_policy(known_hosts: Path):
     return AcceptNew()
 
 
+def open_client(
+    cfg: Config,
+    conn: Connection,
+    password: str | None = None,
+    known_hosts: Path | None = None,
+    timeout: float = CONNECT_TIMEOUT,
+    purpose: str = "die Dateiübertragung",
+):
+    """Baut eine SSH-Verbindung mit den Daten einer Sesam-Verbindung auf (inkl. Identität und gespeichertem Passwort).
+
+    ``password`` überschreibt das gespeicherte Passwort (z. B. nach einer Abfrage im Dialog).
+    ``purpose`` erscheint in der Meldung, wenn die Verbindung einen Jump-Host nutzt (wird hier noch nicht unterstützt).
+    Liefert ``(SSHClient, effektive Verbindung)``; der Aufrufer schließt den Client.
+    """
+    paramiko = _paramiko()
+    eff, password_key = launcher.resolve(cfg, conn)
+    if eff.jump_host.strip():
+        raise SftpError(f"Für Verbindungen mit Jump-Host ist {purpose} noch nicht möglich.")
+    if not eff.host.strip():
+        raise SftpError("Die Verbindung hat keinen Host.")
+    if password is None and eff.use_password:
+        try:
+            password = passwords.get_password(password_key)
+        except passwords.PasswordError as exc:
+            raise SftpError(str(exc)) from exc
+
+    client = paramiko.SSHClient()
+    try:
+        client.load_system_host_keys()
+    except OSError:
+        pass
+    known_hosts = known_hosts or default_known_hosts()
+    if known_hosts.exists():
+        try:
+            client.load_host_keys(str(known_hosts))
+        except OSError:
+            pass
+    client.set_missing_host_key_policy(_make_host_key_policy(known_hosts))
+
+    key_file = os.path.expanduser(eff.identity_file) if eff.identity_file else None
+    try:
+        client.connect(
+            hostname=eff.host.strip(),
+            port=eff.port or 22,
+            username=eff.user or None,
+            password=password or None,
+            key_filename=key_file,
+            timeout=timeout,
+            banner_timeout=timeout,
+            auth_timeout=timeout,
+        )
+        return client, eff
+    except paramiko.BadHostKeyException as exc:
+        client.close()
+        raise SftpError(
+            f"Der Schlüssel von {eff.host} hat sich geändert (möglicher Angriff). "
+            "Prüfe die Datei known_hosts, bevor du erneut verbindest."
+        ) from exc
+    except paramiko.AuthenticationException as exc:
+        client.close()
+        raise SftpAuthError("Anmeldung abgelehnt (Passwort oder Schlüssel stimmen nicht).") from exc
+    except paramiko.PasswordRequiredException as exc:
+        client.close()
+        raise SftpAuthError("Der Schlüssel ist durch eine Passphrase geschützt.") from exc
+    except (paramiko.SSHException, OSError, EOFError) as exc:
+        client.close()
+        if "No authentication methods" in str(exc):  # weder Passwort noch Schlüssel vorhanden
+            raise SftpAuthError("Es ist kein Passwort oder Schlüssel hinterlegt.") from exc
+        raise SftpError(f"Verbindung zu {eff.host} fehlgeschlagen: {exc}") from exc
+
+
 class SftpSession:
     """Eine geöffnete SSH-Verbindung mit einem SFTP-Kanal zum Durchsehen von Ordnern."""
 
@@ -105,60 +176,11 @@ class SftpSession:
 
         ``password`` überschreibt das gespeicherte Passwort (z. B. nach einer Abfrage im Dialog).
         """
-        paramiko = _paramiko()
-        eff, password_key = launcher.resolve(cfg, conn)
-        if eff.jump_host.strip():
-            raise SftpError("Für Verbindungen mit Jump-Host ist die Dateiübertragung noch nicht möglich.")
-        if not eff.host.strip():
-            raise SftpError("Die Verbindung hat keinen Host.")
-        if password is None and eff.use_password:
-            try:
-                password = passwords.get_password(password_key)
-            except passwords.PasswordError as exc:
-                raise SftpError(str(exc)) from exc
-
-        client = paramiko.SSHClient()
+        client, eff = open_client(cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout)
         try:
-            client.load_system_host_keys()
-        except OSError:
-            pass
-        known_hosts = known_hosts or default_known_hosts()
-        if known_hosts.exists():
-            try:
-                client.load_host_keys(str(known_hosts))
-            except OSError:
-                pass
-        client.set_missing_host_key_policy(_make_host_key_policy(known_hosts))
-
-        key_file = os.path.expanduser(eff.identity_file) if eff.identity_file else None
-        try:
-            client.connect(
-                hostname=eff.host.strip(),
-                port=eff.port or 22,
-                username=eff.user or None,
-                password=password or None,
-                key_filename=key_file,
-                timeout=timeout,
-                banner_timeout=timeout,
-                auth_timeout=timeout,
-            )
             return cls(client, eff.name or eff.host)
-        except paramiko.BadHostKeyException as exc:
+        except (_paramiko().SSHException, OSError, EOFError) as exc:  # z. B. SFTP-Subsystem nicht verfügbar
             client.close()
-            raise SftpError(
-                f"Der Schlüssel von {eff.host} hat sich geändert (möglicher Angriff). "
-                "Prüfe die Datei known_hosts, bevor du erneut verbindest."
-            ) from exc
-        except paramiko.AuthenticationException as exc:
-            client.close()
-            raise SftpAuthError("Anmeldung abgelehnt (Passwort oder Schlüssel stimmen nicht).") from exc
-        except paramiko.PasswordRequiredException as exc:
-            client.close()
-            raise SftpAuthError("Der Schlüssel ist durch eine Passphrase geschützt.") from exc
-        except (paramiko.SSHException, OSError, EOFError) as exc:
-            client.close()
-            if "No authentication methods" in str(exc):  # weder Passwort noch Schlüssel vorhanden
-                raise SftpAuthError("Es ist kein Passwort oder Schlüssel hinterlegt.") from exc
             raise SftpError(f"Verbindung zu {eff.host} fehlgeschlagen: {exc}") from exc
 
     def close(self) -> None:

@@ -134,6 +134,19 @@ Beim Verbinden startet das Terminal `ssh` über einen kleinen Wrapper, der das P
   Verknüpfungen auf Ordner werden beim Herunterladen nicht verfolgt (Schutz vor Schleifen), Verknüpfungen auf Dateien als Datei übertragen.
 - Die Übertragung nutzt die Python-Bibliothek *paramiko*, braucht also kein `sftp`/`scp` auf dem Rechner.
 
+## Docker-Container
+
+Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In der Verbindung (*Bearbeiten*) den Haken
+**Docker-Container dieses Hosts im Verbindungsbaum anzeigen** setzen; optional lassen sich Standard-Shell und -Benutzer für die Container festlegen.
+- **Im Baum:** Der Host bekommt einen Pfeil. Beim Aufklappen fragt Sesam den Host per SSH nach seinen *laufenden* Containern (`docker ps`) und zeigt sie als Unterelemente
+  (Name, Image, Status). Erst beim Aufklappen wird verbunden; *Container aktualisieren* (Kontextmenü) lädt neu.
+- **Verbinden:** Doppelklick oder Enter öffnet im Terminal eine Shell im Container (`docker exec -it`). Ohne feste Shell nimmt Sesam `bash`, sonst `sh`.
+  *Verbinden als …* fragt Shell und Benutzer (z. B. `root`) für diesen einen Aufruf ab; *Verbinden mit …* wählt ein anderes Terminal.
+- **Anmeldung:** Passwort und Schlüssel der Verbindung werden wie beim Terminal und bei SFTP verwendet. Ist keins gespeichert, fragt Sesam einmal nach
+  (das Passwort bleibt nur im Speicher). Verbindungen über einen Jump-Host zeigen die Container noch nicht an.
+- Der Docker-Benutzer braucht Zugriff auf den Docker-Socket (Gruppe `docker`); `sudo docker` wird nicht verwendet. Die Einstellungen werden mit synchronisiert,
+  die Container selbst nicht.
+
 ## Synchronisation über Git
 
 *Einstellungen → Synchronisation …* gleicht Verbindungen, Gruppen und Identitäten über ein Git-Repository ab (Terminals und
@@ -199,4 +212,5 @@ PYTHONPATH=src python -m unittest discover -s tests      # oder: python -m pytes
 Die GUI-Tests laufen ohne Bildschirm (`QT_QPA_PLATFORM=offscreen` wird gesetzt) und werden übersprungen, wenn PySide6 oder die
 Qt-Systembibliotheken fehlen. Die Sync-Tests brauchen `git`.
 Die SFTP-Tests (`test_sftp.py`, `test_sftp_gui.py`) starten dafür einen kleinen SSH/SFTP-Server im Testprozess (nur auf `127.0.0.1`, mit
-`paramiko`) und werden übersprungen, wenn `paramiko` fehlt.
+`paramiko`) und werden übersprungen, wenn `paramiko` fehlt. Dasselbe gilt für die Docker-Tests (`test_docker.py`, `test_docker_gui.py`); der Testserver
+antwortet dort auf `docker ps`.

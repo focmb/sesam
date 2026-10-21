@@ -40,11 +40,14 @@ def _fail(message: str) -> int:
 
 
 def parse_overrides(argv: list[str]) -> dict[str, str]:
-    """Liest --sudo-mode/--sudo-user aus den Wrapper-Argumenten."""
+    """Liest --sudo-mode/--sudo-user/--remote-command aus den Wrapper-Argumenten."""
     out: dict[str, str] = {}
-    for key, field in (("--sudo-mode", "sudo_mode"), ("--sudo-user", "sudo_user")):
+    for key, field in (("--sudo-mode", "sudo_mode"), ("--sudo-user", "sudo_user"), ("--remote-command", "remote_command")):
         if key in argv and argv.index(key) + 1 < len(argv):
             out[field] = argv[argv.index(key) + 1]
+    if "remote_command" in out:  # ein ersetzter Befehl (z. B. docker exec) läuft ohne sudo des Hosts
+        out.setdefault("sudo_mode", "")
+        out.setdefault("sudo_user", "")
     return out
 
 
