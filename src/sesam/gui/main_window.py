@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
+    QAbstractItemView, QApplication, QButtonGroup, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QPushButton,
     QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
 )
@@ -176,32 +176,11 @@ class MainWindow(QMainWindow):
         self.a_sync_settings = act("Synchronisation …", self.edit_sync)
         self.a_import = act("Aus ~/.ssh/config importieren", self.import_ssh_config)
 
-        self._build_sidebar()
+        self.a_quit = act("Beenden", self.close, "Ctrl+Q")
+        self.addAction(self.a_quit)  # kein Menü mehr: das Kürzel hängt direkt am Fenster
 
-        menu = self.menuBar().addMenu("&Datei")
-        menu.addAction(self.a_sync)
-        menu.addAction(self.a_import)
-        menu.addSeparator()
-        menu.addAction(act("Beenden", self.close, "Ctrl+Q"))
-        menu = self.menuBar().addMenu("&Einstellungen")
-        menu.addAction(self.a_identities)
-        menu.addAction(self.a_keys)
-        menu.addAction(self.a_terms)
-        menu.addAction(self.a_sync_settings)
-        menu.addSeparator()
-        theme_menu = menu.addMenu("Darstellung")
-        self.theme_actions: dict[str, QAction] = {}
-        group = QActionGroup(self)
-        group.setExclusive(True)
-        for mode in theme.MODES:
-            a = QAction(theme.LABELS[mode], self)
-            a.setCheckable(True)
-            a.setChecked(self.cfg.theme == mode)
-            a.triggered.connect(lambda _=False, m=mode: self.set_theme(m))
-            group.addAction(a)
-            theme_menu.addAction(a)
-            self.theme_actions[mode] = a
-        size_menu = menu.addMenu("Schriftgröße")
+        # Schriftgröße: Auswahlmenü, das als Knopf am Ende der Seitenleiste erscheint (darunter die Umschalter für das Farbschema)
+        self.size_menu = QMenu("Schriftgröße", self)
         self.scale_actions: dict[int, QAction] = {}
         size_group = QActionGroup(self)
         size_group.setExclusive(True)
@@ -210,23 +189,28 @@ class MainWindow(QMainWindow):
             a.setCheckable(True)
             a.triggered.connect(lambda _=False, v=pct: self.set_font_scale(v))
             size_group.addAction(a)
-            size_menu.addAction(a)
+            self.size_menu.addAction(a)
             self.scale_actions[pct] = a
-        size_menu.addSeparator()
+        self.size_menu.addSeparator()
         self.a_font_bigger = act("Größer", lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, +1)), ["Ctrl++", "Ctrl+="])
         self.a_font_smaller = act("Kleiner", lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, -1)), "Ctrl+-")
         self.a_font_reset = act("Zurücksetzen (100 %)", lambda: self.set_font_scale(100), "Ctrl+0")
         for a in (self.a_font_bigger, self.a_font_smaller, self.a_font_reset):
-            size_menu.addAction(a)
+            self.size_menu.addAction(a)
+            self.addAction(a)  # die Kürzel gelten auch, wenn das Menü zu ist
         self._mark_font_scale()
+
+        self._build_sidebar()
         theme.notifier().changed.connect(self._theme_changed)
         self._refresh_icons()
 
     # --- Seitenleiste ---
+    THEME_TIPS = {"light": "Hell", "dark": "Dunkel", "system": "Wie das System"}
+    THEME_ICONS = {"light": "sun", "dark": "moon", "system": "monitor"}
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
         ("a_connect", "a_files", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
-        ("a_sync", "a_identities", "a_keys", "a_terms"),
+        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_terms"),
     )
 
     def _build_sidebar(self):
@@ -259,6 +243,49 @@ class MainWindow(QMainWindow):
                 self._sync_button(button, action)
                 lay.addWidget(button)
                 self.side_buttons[attr] = button
+        line = QFrame()
+        line.setObjectName("sideSep")
+        line.setFixedHeight(1)
+        lay.addSpacing(6)
+        lay.addWidget(line)
+        lay.addSpacing(6)
+        self.side_menu_buttons: dict[str, QPushButton] = {}
+        font_button = QPushButton("Schriftgröße")
+        font_button.setObjectName("side")
+        font_button.setIconSize(QSize(18, 18))
+        font_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        font_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        font_button.setToolTip("Schriftgröße")
+        font_button.clicked.connect(lambda _=False, b=font_button: self.size_menu.popup(b.mapToGlobal(b.rect().bottomLeft())))
+        lay.addWidget(font_button)
+        self.side_menu_buttons["font"] = font_button
+        # Farbschema: drei Umschalter nebeneinander (nur Symbole, damit sie schmal bleiben)
+        seg = QWidget()
+        seg_lay = QHBoxLayout(seg)
+        seg_lay.setContentsMargins(0, 2, 0, 0)
+        seg_lay.setSpacing(0)
+        self.theme_buttons: dict[str, QPushButton] = {}
+        self._theme_group = QButtonGroup(self)
+        self._theme_group.setExclusive(True)
+        modes = ("light", "dark", "system")
+        for i, mode in enumerate(modes):
+            b = QPushButton()
+            b.setObjectName("seg")
+            b.setProperty("pos", "first" if i == 0 else "last" if i == len(modes) - 1 else "middle")
+            b.setCheckable(True)
+            b.setChecked(self.cfg.theme == mode)
+            b.setIconSize(QSize(18, 18))
+            b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setToolTip(self.THEME_TIPS[mode])
+            b.setAccessibleName(self.THEME_TIPS[mode])
+            b.clicked.connect(lambda _=False, m=mode: self.set_theme(m))
+            b.toggled.connect(lambda *_: self._refresh_theme_icons())
+            self._theme_group.addButton(b)
+            seg_lay.addWidget(b, 1)
+            self.theme_buttons[mode] = b
+        lay.addWidget(seg)
+        self.theme_row = seg
         lay.addStretch(1)
         self._outer_layout.addWidget(side)
         self.sidebar = side
@@ -279,7 +306,7 @@ class MainWindow(QMainWindow):
     # --- Icons ---
     ACTION_ICONS = (
         ("a_connect", "connect"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
-        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_identities", "user"), ("a_keys", "key"), ("a_terms", "sliders"),
+        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_terms", "sliders"),
     )
 
     def _refresh_icons(self):
@@ -294,6 +321,8 @@ class MainWindow(QMainWindow):
             else:
                 action.setIcon(style.icon(name, c["text"], c["muted"]))
             action.setIconVisibleInMenu(False)
+        self._refresh_theme_icons()
+        self.side_menu_buttons["font"].setIcon(style.icon("font_size", c["text"], c["muted"]))
         if getattr(self, "_search_action", None) is not None:
             self.search.removeAction(self._search_action)
         self._search_action = self.search.addAction(
@@ -306,6 +335,12 @@ class MainWindow(QMainWindow):
         self._clear_action.setToolTip("Suche leeren")
         self._clear_action.triggered.connect(self.search.clear)
         self._clear_action.setVisible(bool(self.search.text()))
+
+    def _refresh_theme_icons(self):
+        """Das Symbol des aktiven Umschalters steht auf der Akzentfläche und braucht die passende Farbe."""
+        c = theme.colors()
+        for mode, b in self.theme_buttons.items():
+            b.setIcon(style.icon(self.THEME_ICONS[mode], c["accent_text"] if b.isChecked() else c["text"], c["muted"]))
 
     def _search_text_changed(self, text: str):
         action = getattr(self, "_clear_action", None)
@@ -322,10 +357,13 @@ class MainWindow(QMainWindow):
         """Icons und Seitenleiste wachsen mit der Schrift mit, damit nichts abgeschnitten wird."""
         size = max(14, round(18 * theme.scale() / 100))
         self.tree.setIconSize(QSize(size, size))
-        for button in self.side_buttons.values():
+        buttons = [*self.side_buttons.values(), *self.side_menu_buttons.values()]
+        for b in self.theme_buttons.values():
+            b.setIconSize(QSize(size, size))
+        for button in buttons:
             button.setIconSize(QSize(size, size))
             button.ensurePolished()
-        widest = max(b.sizeHint().width() for b in self.side_buttons.values())
+        widest = max(b.sizeHint().width() for b in buttons)
         self.sidebar.setFixedWidth(max(self.SIDEBAR_MIN_WIDTH, widest))
 
     # --- Anzeige ---
@@ -568,6 +606,7 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
         menu.addAction(self.a_new)
         menu.addAction("Neue Gruppe (oberste Ebene) …").triggered.connect(lambda: self.new_group(""))
+        menu.addAction(self.a_import)
         self._popup(menu, pos)
 
     def _popup(self, menu: QMenu, pos):

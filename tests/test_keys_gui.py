@@ -318,15 +318,14 @@ class AssignmentDialogTests(KeyGuiBase):
 
 
 class MainWindowKeyTests(KeyGuiBase):
-    def test_sidebar_action_menu_and_icon(self):
+    def test_sidebar_action_and_icon(self):
         storage.save(Config(), self.path)
         w = self._window()
         self.addCleanup(w.close)
         self.assertEqual(w.a_keys.text(), "Schlüssel …")
         self.assertFalse(w.a_keys.icon().isNull())
         self.assertIn("a_keys", [a for g in w.SIDEBAR_GROUPS for a in g])
-        menus = {m.title(): [a.text() for a in m.actions()] for m in (a.menu() for a in w.menuBar().actions())}
-        self.assertIn("Schlüssel …", menus["&Einstellungen"])
+        self.assertFalse(w.menuBar().isVisible() and w.menuBar().actions())  # kein Menü mehr, alles in der Seitenleiste
 
     def test_opening_dialog_from_window(self):
         from sesam.gui import main_window

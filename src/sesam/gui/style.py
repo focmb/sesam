@@ -102,6 +102,12 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QPushButton#side:pressed { background: @pressed@; }
     QPushButton#side:focus { border-color: @accent@; }
     QPushButton#side:disabled { background: transparent; color: @muted@; border-color: transparent; }
+    QPushButton#seg { background: transparent; border: 1px solid @border@; border-radius: 0; padding: 6px 0; }
+    QPushButton#seg[pos="first"] { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+    QPushButton#seg[pos="last"] { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+    QPushButton#seg:hover { background: @hover@; }
+    QPushButton#seg:checked { background: @accent@; border-color: @accent@; }
+    QPushButton#seg:focus { border-color: @accent@; }
     QPushButton#side[primary="true"] { background: @accent@; color: @accent_text@; font-weight: 600; }
     QPushButton#side[primary="true"]:hover { background: @accent_hover@; }
     QPushButton#side[primary="true"]:disabled { background: @hover@; color: @muted@; }
@@ -216,6 +222,12 @@ def _arrow_files(t: dict[str, str], base: Path | None = None) -> dict[str, str]:
 _ICONS = {
     "connect": '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7.5 9.5l3 2.5-3 2.5M13 15h4"/>',
     "add": '<path d="M12 5v14M5 12h14"/>',
+    "gear": '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+    "sun": '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
+    "moon": '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+    "monitor": '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    "contrast": '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z"/>',
+    "font_size": '<path d="M3.5 19l6-14 6 14M6 14h7M19 6v6M16 9h6"/>',
     "key": '<circle cx="8" cy="15" r="3.5"/><path d="M10.5 12.5L20 3M16 7l3 3M13.5 9.5l2 2"/>',
     "folder": '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>',
     "folder_add": '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M12 11v5M9.5 13.5h5"/>',

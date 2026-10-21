@@ -32,15 +32,15 @@ Die Bilder zeigen Beispieldaten (erfundene Hosts) und wurden mit dem Qt-Plattfor
 
 ## Darstellung
 
-Alle Hauptaktionen (Verbinden, Dateien, Neue Verbindung, Neue Gruppe, Bearbeiten, Duplizieren, Löschen, Synchronisieren, Identitäten, Terminals)
-stehen untereinander in einer Seitenleiste am rechten Rand; die Tastenkürzel (Enter, Strg+N, F2, Entf, Strg+D, F5 …) gelten im ganzen Fenster.
+Es gibt keine Menüleiste: Alle Aktionen (Verbinden, Dateien, Neue Verbindung, Neue Gruppe, Bearbeiten, Duplizieren, Löschen, Synchronisieren, Synchronisation, Identitäten, Schlüssel, Terminals)
+stehen untereinander in einer Seitenleiste am rechten Rand (Strg+Q beendet das Programm, *Aus ~/.ssh/config importieren* steht im Rechtsklick-Menü der Verbindungsliste); die Tastenkürzel (Enter, Strg+N, F2, Entf, Strg+D, F5 …) gelten im ganzen Fenster.
 *Duplizieren* legt eine Kopie an und öffnet sie sofort zum Bearbeiten, der Name ist markiert und lässt sich gleich überschreiben; bricht man ab, bleibt die Kopie bestehen.
 
-*Einstellungen → Darstellung* schaltet zwischen **Systemvorgabe**, **Hell** und **Dunkel** um (wirkt sofort, wird gespeichert).
-Bei *Systemvorgabe* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
+Ganz unten in der Seitenleiste schalten drei Symbole zwischen **Hell** (Sonne), **Dunkel** (Mond) und **Wie das System** (Monitor) um (wirkt sofort, wird gespeichert).
+Bei *Wie das System* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
 andernfalls stellst du es manuell ein.
 
-**Schriftgröße:** *Einstellungen → Schriftgröße* (80 bis 200 % der Systemschrift), oder per Tastatur **Strg + Plus** (größer), **Strg + Minus** (kleiner) und **Strg + 0** (zurück auf 100 %).
+**Schriftgröße:** der Knopf *Schriftgröße* in der Seitenleiste (80 bis 200 % der Systemschrift), oder per Tastatur **Strg + Plus** (größer), **Strg + Minus** (kleiner) und **Strg + 0** (zurück auf 100 %).
 Icons und Seitenleiste wachsen mit. Die Einstellung gilt sofort, wird gespeichert und bleibt lokal (wird nicht per Git synchronisiert).
 
 Das Erscheinungsbild (Farben, Abstände, Icons) kommt aus `src/sesam/gui/style.py`: ein gemeinsames Stylesheet für Hell und Dunkel, das aus einer
@@ -81,7 +81,7 @@ Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z.
 
 ## Terminals konfigurieren
 
-Unter *Einstellungen → Terminals …* legst du Terminals als Befehlsvorlage an und wählst ein Standardterminal.
+Unter *Terminals …* in der Seitenleiste legst du Terminals als Befehlsvorlage an und wählst ein Standardterminal.
 Pro Verbindung kann ein abweichendes Terminal gewählt werden; im Kontextmenü gibt es „Verbinden mit …“.
 
 | Platzhalter | Bedeutung |
@@ -102,14 +102,14 @@ findest du ebenfalls unter *Neu ▾*.
 ## Identitäten
 
 Eine Identität bündelt **Benutzer, Schlüsseldatei und Passwort** und kann von beliebig vielen Verbindungen verwendet werden.
-- Verwalten unter *Einstellungen → Identitäten …* (oder Seitenleiste) oder direkt beim Anlegen einer Verbindung über *Identität → Neu …*.
+- Verwalten unter *Identitäten …* in der Seitenleiste oder direkt beim Anlegen einer Verbindung über *Identität → Neu …*.
 - Wählst du in einer Verbindung eine Identität, ersetzt sie Benutzer, Schlüsseldatei und Passwort der Verbindung (die Felder sind dann gesperrt, die eigenen Werte bleiben erhalten und gelten wieder bei „Keine“).
 - Das Passwort liegt im Schlüsselbund, einmal pro Identität. Ändert sich ein Passwort, wird es nur an einer Stelle angepasst. Das gilt auch für sudo.
 - Eine Identität zu löschen entfernt sie auch aus allen Verbindungen, die sie nutzen (diese brauchen danach wieder eigene Zugangsdaten).
 
 ## SSH-Schlüssel
 
-*Einstellungen → Schlüssel …* (oder Seitenleiste) verwaltet Schlüssel direkt in Sesam – unter Windows und Linux gleich.
+*Schlüssel …* in der Seitenleiste verwaltet Schlüssel direkt in Sesam – unter Windows und Linux gleich.
 - **Erzeugen:** Ed25519 (empfohlen) oder RSA 4096, optional mit Passphrase. Das Format ist das normale OpenSSH-Format, `ssh-keygen` und Terminals verstehen es.
 - **Importieren:** eine vorhandene private Schlüsseldatei einlesen (OpenSSH oder klassisches PEM). Liegt daneben eine `.pub`-Datei, wird sie für geschützte Schlüssel genutzt, sonst fragt Sesam einmal nach der Passphrase.
 - **Ansehen:** Typ, Fingerabdruck (SHA256 wie bei `ssh-keygen -l`), Kommentar, Erstelldatum, öffentlicher Schlüssel und wer den Schlüssel verwendet. *Öffentlichen Schlüssel kopieren* legt die Zeile für `authorized_keys` in die Zwischenablage.
@@ -171,7 +171,7 @@ Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In 
 
 ## Synchronisation über Git
 
-*Einstellungen → Synchronisation …* gleicht Verbindungen, Gruppen, Identitäten und Schlüssel über ein Git-Repository ab (Terminals und
+*Synchronisation …* in der Seitenleiste gleicht Verbindungen, Gruppen, Identitäten und Schlüssel über ein Git-Repository ab (Terminals und
 Fensterbreiten bleiben pro Gerät). Das Tool nutzt das installierte `git`; die Anmeldung läuft also über deine SSH-Schlüssel bzw.
 gespeicherten HTTPS-Zugangsdaten (im Hintergrund ohne Rückfragen, einmal vorher per *Verbindung testen* oder `git ls-remote` anmelden).
 
