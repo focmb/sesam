@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 from .. import __version__
 from .. import groups as grp
 from . import style, theme
-from .. import colors, docker, launcher, passwords, sftp, storage
+from .. import colors, docker, launcher, passwords, sftp, snippets, storage
 from .. import tags as tag_util
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -23,6 +23,7 @@ from .connection_dialog import ConnectionDialog, swatch
 from .docker_dialog import DockerConnectDialog
 from .identities_dialog import IdentitiesDialog
 from .keys_dialog import KeysDialog
+from .snippets_dialog import SnippetsDialog
 from .jobs import Job
 from .sftp_window import SftpWindow
 from .sync_controller import SyncController
@@ -32,6 +33,13 @@ from .terminals_dialog import TerminalsDialog
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
 GROUP_ROLE = ID_ROLE + 1  # Gruppenpfad
 CONTAINER_ROLE = ID_ROLE + 2  # „<ID der Host-Verbindung>\x1f<Containername>“
+
+
+def _submenu(menu: QMenu, title: str) -> QMenu:
+    """Untermenü, das dem Elternmenü gehört (``addMenu(Text)`` lässt Python die Besitzfrage offen und das Menü kann verschwinden)."""
+    sub = QMenu(title, menu)
+    menu.addMenu(sub)
+    return sub
 
 
 class ConnectionTree(QTreeWidget):
@@ -178,6 +186,7 @@ class MainWindow(QMainWindow):
         self.a_terms = act("Terminals …", self.edit_terminals)
         self.a_identities = act("Identitäten …", self.edit_identities)
         self.a_keys = act("Schlüssel …", self.edit_keys)
+        self.a_snippets = act("Snippets …", self.edit_snippets, "Ctrl+Shift+S")
         self.a_sync = act("Jetzt synchronisieren", lambda: self.sync.sync(manual=True), "F5")
         self.a_sync_settings = act("Synchronisation …", self.edit_sync)
         self.a_import = act("Aus ~/.ssh/config importieren", self.import_ssh_config)
@@ -216,7 +225,7 @@ class MainWindow(QMainWindow):
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
         ("a_connect", "a_files", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
-        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_terms"),
+        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_snippets", "a_terms"),
     )
 
     def _build_sidebar(self):
@@ -312,7 +321,7 @@ class MainWindow(QMainWindow):
     # --- Icons ---
     ACTION_ICONS = (
         ("a_connect", "connect"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
-        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_terms", "sliders"),
+        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_snippets", "snippet"), ("a_terms", "sliders"),
     )
 
     def _refresh_icons(self):
@@ -579,7 +588,7 @@ class MainWindow(QMainWindow):
         container = self._selected_container()
         if container:
             menu.addAction(self.a_connect)
-            sub = menu.addMenu("Verbinden mit …")
+            sub = _submenu(menu, "Verbinden mit …")
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_container(term))
@@ -590,11 +599,12 @@ class MainWindow(QMainWindow):
         elif conn:
             menu.addAction(self.a_connect)
             menu.addAction("Als root verbinden (sudo -i)").triggered.connect(lambda: self.connect_selected(sudo=True))
-            sub = menu.addMenu("Verbinden mit …")
+            sub = _submenu(menu, "Verbinden mit …")
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
             menu.addAction(self.a_files)
+            self._snippet_menu(menu, [conn])
             self._color_menu(menu, conn.color, lambda key: self.set_connection_color(conn, key))
             if conn.docker:
                 menu.addAction("Container aktualisieren").triggered.connect(lambda: self.reload_containers(conn.id))
@@ -622,6 +632,7 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         menu.addAction(f"{len(conns)} Verbindungen ausgewählt").setEnabled(False)
         menu.addSeparator()
+        self._snippet_menu(menu, conns)
         shared = conns[0].color if len({c.color for c in conns}) == 1 else ""
         self._color_menu(menu, shared, lambda key: self.set_connections_color(conns, key))
         menu.addSeparator()
@@ -638,7 +649,7 @@ class MainWindow(QMainWindow):
 
     def _color_menu(self, menu: QMenu, current: str, pick) -> None:
         """Untermenü „Farbe“ mit der Palette; ``pick(schluessel)`` wird mit dem Schlüssel („“ = keine) aufgerufen."""
-        sub = menu.addMenu("Farbe")
+        sub = _submenu(menu, "Farbe")
         none = sub.addAction("Keine")
         none.setCheckable(True)
         none.setChecked(not colors.valid(current))
@@ -1123,6 +1134,44 @@ class MainWindow(QMainWindow):
             storage.save(self.cfg, self.path)
         except OSError as exc:
             QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
+
+    def edit_snippets(self):
+        preselect = [c.id for c in self._selected_connections()]
+        SnippetsDialog(self.cfg, self._save, self.run_snippet, preselect, self).exec()
+        self.refresh()
+
+    def run_snippet(self, snippet, conns: list[Connection]):
+        """Führt das Snippet im Terminal aus, je Verbindung ein Fenster. Bei mehreren Zielen wird vorher nachgefragt."""
+        if len(conns) > snippets.MAX_HOSTS_WITHOUT_WARNING:
+            names = "\n".join(f"• {c.name}" for c in conns[:10]) + (f"\n… und {len(conns) - 10} weitere" if len(conns) > 10 else "")
+            text = f"Snippet „{snippet.name}“ auf {len(conns)} Verbindungen ausführen?\nEs öffnen sich {len(conns)} Terminals.\n\n{names}"
+            if QMessageBox.question(self, "Snippet ausführen", text) != QMessageBox.StandardButton.Yes:
+                return
+        report = snippets.run(self.cfg, snippet, conns)
+        if report.errors:
+            lines = "\n".join(f"{name + ': ' if name else ''}{msg}" for name, msg in report.errors)
+            QMessageBox.warning(self, "Snippet", f"Nicht alle Terminals konnten gestartet werden:\n\n{lines}")
+
+    def _snippet_menu(self, menu: QMenu, conns: list[Connection]) -> None:
+        """Untermenü „Snippet ausführen“ mit den Kategorien als Unterordner."""
+        sub = _submenu(menu, "Snippet ausführen")
+        sub.setEnabled(bool(self.cfg.snippets))
+        submenus: dict[str, QMenu] = {"": sub}
+
+        def holder(category: str) -> QMenu:
+            if category not in submenus:
+                submenus[category] = _submenu(holder(grp.parent_of(category)), grp.name_of(category))
+            return submenus[category]
+
+        for cat in snippets.categories(self.cfg):
+            holder(cat)
+        for cat in ["", *snippets.categories(self.cfg)]:
+            for sn in snippets.in_category(self.cfg, cat):
+                action = holder(cat).addAction(sn.name)
+                action.setToolTip(sn.command)
+                action.triggered.connect(lambda _=False, s=sn, c=list(conns): self.run_snippet(s, c))
+        if not self.cfg.snippets:
+            sub.setToolTip("Noch keine Snippets angelegt")
 
     def edit_keys(self):
         KeysDialog(self.cfg, self._save, self).exec()

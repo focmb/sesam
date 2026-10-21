@@ -1,7 +1,7 @@
 """Synchronisation von Verbindungen, Identitäten und Gruppen über ein Git-Repository.
 
 Aufbau des Repositories (ein Eintrag pro Datei, damit Änderungen sauber zusammengeführt werden):
-    connections/<id>.json   identities/<id>.json   groups.json   meta.json
+    connections/<id>.json   identities/<id>.json   ssh_keys/<id>.json   snippets/<id>.json   groups.json   meta.json
 
 Passwörter werden nie im Klartext abgelegt, sondern mit einem Sync-Passwort (scrypt + AES-256-GCM)
 verschlüsselt im jeweiligen Eintrag (``password_enc``). Das lokale Git-Verzeichnis ist nur ein Zwischenspeicher
@@ -30,11 +30,11 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from . import keystore, passwords, runtime, storage
-from .models import Config, Connection, Identity, SshKey, SyncSettings, new_id
+from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings, new_id
 
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
 FORMAT = 1
-KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey)}
+KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey), "s": ("snippets", Snippet)}
 VOLATILE = {"use_password"}  # lokal abgeleitet, nicht Teil des Vergleichs
 
 
@@ -363,7 +363,7 @@ class SyncEngine:
 
     def _local_items(self, cfg: Config, key: bytes | None) -> dict:
         items: dict = {}
-        for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys)):
+        for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys), ("s", cfg.snippets)):
             for o in objs:
                 pw = None
                 if key is not None and o.use_password:
@@ -434,11 +434,12 @@ class SyncEngine:
         return report
 
     def _apply_local(self, cfg: Config, local: dict, result: dict, pw_on: bool, report: SyncReport) -> None:
-        old = {k: o for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys))
+        old = {k: o for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys), ("s", cfg.snippets))
                for o in objs for k in [(kind, o.id)]}
         new_conns: list[Connection] = []
         new_idents: list[Identity] = []
         new_keys: list[SshKey] = []
+        new_snippets: list[Snippet] = []
         for k, item in result.items():
             _folder, cls = KINDS[k[0]]
             obj = cls.from_dict(dict(item.data, id=item.id))
@@ -464,7 +465,7 @@ class SyncEngine:
                 for f in fields(obj):  # in place, damit offene Dialoge gültige Objekte behalten
                     setattr(existing, f.name, getattr(obj, f.name))
                 obj = existing
-            {"c": new_conns, "i": new_idents, "k": new_keys}[k[0]].append(obj)
+            {"c": new_conns, "i": new_idents, "k": new_keys, "s": new_snippets}[k[0]].append(obj)
         for k, o in old.items():
             if k not in result:
                 report.removed += 1
@@ -484,6 +485,7 @@ class SyncEngine:
         cfg.connections = sorted(new_conns, key=lambda c: (c.group.lower(), c.name.lower()))
         cfg.identities = sorted(new_idents, key=lambda i: i.name.lower())
         cfg.ssh_keys = sorted(new_keys, key=lambda k: k.name.lower())
+        cfg.snippets = sorted(new_snippets, key=lambda sn: (sn.category.lower(), sn.name.lower()))
 
     def _write_repo(self, result: dict, groups: set, remote: RemoteState, key: bytes | None, colors: dict | None = None) -> None:
         colors = colors or {}

@@ -95,6 +95,35 @@ class SshKey:
         return f"{self.public_key} {self.comment}".strip()
 
 
+SNIPPET_AFTER = ("shell", "wait", "close")  # nach dem Befehl: Shell offen lassen / auf Taste warten / Terminal schließen
+
+
+@dataclass
+class Snippet:
+    """Ein gespeicherter Befehl, der auf einem oder mehreren Hosts im Terminal ausgeführt wird."""
+
+    name: str
+    id: str = field(default_factory=new_id)
+    command: str = ""  # Shell-Befehl (auch mehrzeilig) für das Zielsystem
+    category: str = ""  # Ordnerpfad mit „/“, leer = ohne Kategorie
+    sudo: bool = False  # mit sudo ausführen (Benutzer und Passwort-Verhalten wie bei der Verbindung)
+    after: str = "shell"
+    notes: str = ""
+    use_password: bool = False  # ohne Bedeutung, nur damit der Abgleich Snippets wie andere Einträge behandeln kann
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Snippet":
+        s = _from_dict(cls, data)
+        if s.after not in SNIPPET_AFTER:
+            s.after = "shell"
+        for name in ("name", "command", "category", "notes"):
+            if not isinstance(getattr(s, name), str):
+                setattr(s, name, "")
+        s.sudo = s.sudo is True
+        s.use_password = False
+        return s
+
+
 @dataclass
 class Connection:
     name: str
@@ -153,6 +182,7 @@ class Config:
     connections: list[Connection] = field(default_factory=list)
     identities: list[Identity] = field(default_factory=list)
     ssh_keys: list[SshKey] = field(default_factory=list)
+    snippets: list[Snippet] = field(default_factory=list)
     default_terminal_id: str = ""
     sync: SyncSettings = field(default_factory=SyncSettings)
     theme: str = "system"  # "system", "light" oder "dark"
@@ -167,6 +197,9 @@ class Config:
 
     def terminal_by_id(self, terminal_id: str) -> Terminal | None:
         return next((t for t in self.terminals if t.id == terminal_id), None)
+
+    def snippet_by_id(self, snippet_id: str) -> Snippet | None:
+        return next((s for s in self.snippets if s.id == snippet_id), None)
 
     def identity_by_id(self, identity_id: str) -> Identity | None:
         return next((i for i in self.identities if i.id == identity_id), None)

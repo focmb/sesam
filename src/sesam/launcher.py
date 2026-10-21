@@ -162,12 +162,16 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
     return out
 
 
-def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remote_command: str | None = None) -> list[str]:
-    """Öffnet die Verbindung im Terminal. ``remote_command`` (z. B. ``docker exec …``) gilt nur für diesen Start."""
+def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remote_command: str | None = None,
+           sudo: bool = False) -> list[str]:
+    """Öffnet die Verbindung im Terminal. ``remote_command`` (z. B. ``docker exec …``) gilt nur für diesen Start.
+
+    Mit ``sudo`` läuft der Befehl per ``sudo -i`` (Zielbenutzer der Verbindung bzw. root) statt ohne sudo."""
     conn, _ = resolve(cfg, conn)
     check_key(cfg, conn)
     if remote_command is not None:  # sudo des Hosts passt nicht zu einem Befehl, der direkt in einen Container führt
-        conn = replace(conn, remote_command=remote_command, sudo_mode="", sudo_user="")
+        conn = replace(conn, remote_command=remote_command, sudo_mode="login" if sudo else "",
+                       sudo_user=conn.sudo_user if sudo else "")
     terminal = terminal or resolve_terminal(cfg, conn)
     cmd = build_terminal_command(terminal, conn, wrapper_args(conn, remote_command) if conn.use_password else None)
     if shutil.which(cmd[0]) is None:
