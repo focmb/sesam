@@ -45,6 +45,7 @@ class ConnectionTree(QTreeWidget):
         self.setDropIndicatorShown(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)  # Strg/Umschalt für Mehrfachauswahl
 
     def dropEvent(self, event):
         source = self.currentItem()
@@ -66,7 +67,11 @@ class ConnectionTree(QTreeWidget):
         if source.data(0, GROUP_ROLE) is not None:
             self.moved.emit("group", source.data(0, GROUP_ROLE), target_group)
         elif source.data(0, ID_ROLE):
-            self.moved.emit("conn", source.data(0, ID_ROLE), target_group)
+            ids = [i.data(0, ID_ROLE) for i in self.selectedItems() if i.data(0, ID_ROLE) and i.data(0, GROUP_ROLE) is None]
+            if source.data(0, ID_ROLE) not in ids:
+                ids = [source.data(0, ID_ROLE)]
+            for cid in ids:  # alle ausgewählten Verbindungen zusammen verschieben
+                self.moved.emit("conn", cid, target_group)
 
 
 class MainWindow(QMainWindow):
@@ -483,6 +488,16 @@ class MainWindow(QMainWindow):
         cid = item.data(0, ID_ROLE) if item else None
         return self.cfg.connection_by_id(cid) if cid else None
 
+    def _selected_connections(self) -> list[Connection]:
+        """Alle ausgewählten Verbindungen (Gruppen und Container zählen nicht), in Baumreihenfolge ohne Doppelte."""
+        found: list[Connection] = []
+        for item in self.tree.selectedItems():
+            cid = item.data(0, ID_ROLE)
+            conn = self.cfg.connection_by_id(cid) if cid and not item.data(0, CONTAINER_ROLE) else None
+            if conn is not None and conn not in found:
+                found.append(conn)
+        return found
+
     def _selected_group(self) -> str | None:
         item = self.tree.currentItem()
         return item.data(0, GROUP_ROLE) if item else None
@@ -508,8 +523,12 @@ class MainWindow(QMainWindow):
 
     def _context_menu(self, pos):
         item = self.tree.itemAt(pos)
-        if item is not None:
+        if item is not None and not item.isSelected():  # Rechtsklick in eine Auswahl behält sie
             self.tree.setCurrentItem(item)
+        multi = self._selected_connections()
+        if len(multi) > 1:
+            self._multi_context_menu(multi, pos)
+            return
         conn = self._selected()
         group = self._selected_group()
         menu = QMenu(self)
@@ -549,7 +568,28 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
         menu.addAction(self.a_new)
         menu.addAction("Neue Gruppe (oberste Ebene) …").triggered.connect(lambda: self.new_group(""))
+        self._popup(menu, pos)
+
+    def _popup(self, menu: QMenu, pos):
         menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _multi_context_menu(self, conns: list[Connection], pos):
+        menu = QMenu(self)
+        menu.addAction(f"{len(conns)} Verbindungen ausgewählt").setEnabled(False)
+        menu.addSeparator()
+        shared = conns[0].color if len({c.color for c in conns}) == 1 else ""
+        self._color_menu(menu, shared, lambda key: self.set_connections_color(conns, key))
+        menu.addSeparator()
+        menu.addAction(f"{len(conns)} Verbindungen löschen").triggered.connect(lambda: self.delete_connections(conns))
+        self._popup(menu, pos)
+
+    def set_connections_color(self, conns: list[Connection], key: str):
+        for conn in conns:
+            conn.color = key
+        self._save()
+        self.refresh()
+        for conn in conns:  # die Auswahl bleibt für weitere Schritte erhalten
+            self._select_connection(conn.id, add=True)
 
     def _color_menu(self, menu: QMenu, current: str, pick) -> None:
         """Untermenü „Farbe“ mit der Palette; ``pick(schluessel)`` wird mit dem Schlüssel („“ = keine) aufgerufen."""
@@ -841,7 +881,7 @@ class MainWindow(QMainWindow):
             self.edit_selected(select_name=True)
             self._select_connection(clone.id)  # das Speichern baut den Baum neu auf und verliert die Auswahl
 
-    def _select_connection(self, conn_id: str) -> bool:
+    def _select_connection(self, conn_id: str, add: bool = False) -> bool:
         """Wählt die Verbindung im Baum aus (klappt übergeordnete Gruppen auf). Liefert False, wenn sie nicht sichtbar ist."""
         it = QTreeWidgetItemIterator(self.tree)
         while it.value():
@@ -851,8 +891,11 @@ class MainWindow(QMainWindow):
                 while parent is not None:
                     parent.setExpanded(True)
                     parent = parent.parent()
-                self.tree.setCurrentItem(item)
-                self.tree.scrollToItem(item)
+                if add:
+                    item.setSelected(True)
+                else:
+                    self.tree.setCurrentItem(item)
+                    self.tree.scrollToItem(item)
                 return True
             it += 1
         return False
@@ -862,21 +905,37 @@ class MainWindow(QMainWindow):
         if group is not None:
             self.delete_group(group)
             return
-        conn = self._selected()
-        if not conn:
+        conns = self._selected_connections() if len(self.tree.selectedItems()) > 1 else []
+        if not conns:
+            conn = self._selected()
+            conns = [conn] if conn else []
+        if conns:
+            self.delete_connections(conns)
+
+    def delete_connections(self, conns: list[Connection]):
+        if len(conns) == 1:
+            text = f"Verbindung „{conns[0].name}“ wirklich löschen?"
+        else:
+            names = "\n".join(f"• {c.name}" for c in conns[:10])
+            more = f"\n… und {len(conns) - 10} weitere" if len(conns) > 10 else ""
+            text = f"{len(conns)} Verbindungen wirklich löschen?\n\n{names}{more}"
+        if QMessageBox.question(self, "Löschen", text) != QMessageBox.StandardButton.Yes:
             return
-        answer = QMessageBox.question(self, "Löschen", f"Verbindung „{conn.name}“ wirklich löschen?")
-        if answer == QMessageBox.StandardButton.Yes:
+        failed: list[str] = []
+        for conn in conns:
             if conn.use_password:
                 try:
                     passwords.delete_password(conn.id)
                 except passwords.PasswordError as exc:
-                    QMessageBox.warning(self, "Passwort nicht gelöscht", str(exc))
-            self.cfg.connections.remove(conn)
+                    failed.append(f"{conn.name}: {exc}")
+            if conn in self.cfg.connections:
+                self.cfg.connections.remove(conn)
             self._docker_forget(conn.id)
             self._docker_expanded.discard(conn.id)
-            self._save()
-            self.refresh()
+        self._save()
+        self.refresh()
+        if failed:
+            QMessageBox.warning(self, "Passwort nicht gelöscht", "\n".join(failed))
 
     # --- Gruppen ---
     def new_group(self, parent: str | None = None):

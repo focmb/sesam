@@ -65,6 +65,7 @@ Der Befehl `sesam` liegt in `~/.local/bin` (bei manchen Distributionen muss der 
 Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z. B. `Kunde A/Produktion`).
 - *Neue Gruppe …* (Strg+Umschalt+N, Seitenleiste oder Kontextmenü) legt auch leere Gruppen an; im Kontextmenü einer Gruppe: Untergruppe, Umbenennen/Verschieben, Löschen.
 - Per **Drag & Drop** verschiebst du Verbindungen und ganze Gruppen; Ablegen auf freier Fläche = oberste Ebene.
+- **Mehrfachauswahl:** Mit Strg- bzw. Umschalt-Klick (oder Strg+A) wählst du mehrere Verbindungen. Im Kontextmenü (Rechtsklick in die Auswahl) setzt du allen gemeinsam eine *Farbe* oder löschst sie auf einmal; mit *Entf* geht das Löschen ebenfalls. Per Drag & Drop wandern alle ausgewählten Verbindungen zusammen in die Zielgruppe. Gruppen in der Auswahl bleiben bei diesen Aktionen unberührt; Verbinden, Bearbeiten und Duplizieren wirken weiterhin auf den zuletzt angeklickten Eintrag.
 - Eine Gruppe zu löschen entfernt keine Verbindungen, sie rücken in die übergeordnete Gruppe.
 - Neue Verbindungen landen in der aktuell ausgewählten Gruppe. Das Suchfeld filtert auch nach Gruppen.
 - Auf- und Zugeklapptes merkt sich Sesam: Beim nächsten Start sind genau die Gruppen zu, die beim Beenden zu waren. Dieser Zustand (wie die Spaltenbreiten und die Fenstergröße, auch maximiert) bleibt lokal und wird nicht per Git synchronisiert.
