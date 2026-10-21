@@ -92,17 +92,26 @@ def next_scale(percent: int, direction: int) -> int:
     return next((s for s in reversed(steps) if s < percent), steps[0])
 
 
+def scaled(font: QFont) -> QFont:
+    """Kopie einer Schrift in der aktuellen Skalierung.
+
+    Für Schriften, die ein Fenster selbst setzt (z. B. die Festschrift im Snippet-Editor): Sie erbt die
+    Skalierung nicht von der Anwendungsschrift und muss deshalb mitgezogen werden.
+    """
+    out = QFont(font)
+    if font.pointSizeF() > 0:
+        out.setPointSizeF(font.pointSizeF() * _scale / 100)
+    elif font.pixelSize() > 0:
+        out.setPixelSize(max(1, round(font.pixelSize() * _scale / 100)))
+    return out
+
+
 def apply_scale(app, percent: int) -> int:
     """Skaliert die Schrift der ganzen Oberfläche (Prozent der Systemschrift) und liefert den angewandten Wert."""
     global _scale, _base_font
     _scale = clamp_scale(percent)
     if _base_font is None:
         _base_font = QFont(app.font())
-    font = QFont(_base_font)
-    if _base_font.pointSizeF() > 0:
-        font.setPointSizeF(_base_font.pointSizeF() * _scale / 100)
-    elif _base_font.pixelSize() > 0:
-        font.setPixelSize(max(1, round(_base_font.pixelSize() * _scale / 100)))
-    app.setFont(font)
+    app.setFont(scaled(_base_font))
     notifier().changed.emit()
     return _scale

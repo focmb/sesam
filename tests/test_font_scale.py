@@ -98,6 +98,31 @@ class FontScaleTests(GuiTestCase):
         self.app.processEvents()
         self.assertLess(w.sidebar.maximumWidth(), wide)  # und schrumpft mit der Schrift wieder
 
+    def test_dialog_monospace_fields_follow_the_scale(self):
+        """Eigene Festschriften (Snippet-Editor) müssen mitwachsen, nicht bei 100 % hängen bleiben."""
+        from PySide6.QtGui import QFontDatabase
+
+        from sesam.gui.snippets_dialog import SnippetEditDialog, SnippetsDialog
+
+        fixed = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        size = lambda f: f.pointSizeF() if f.pointSizeF() > 0 else f.pixelSize()  # noqa: E731
+        w = self._window()
+        w.set_font_scale(150)
+        edit = SnippetEditDialog(w.cfg, parent=w)
+        view = SnippetsDialog(w.cfg, lambda: None, lambda *_: None, None, w)
+        for field in (edit.command, view.detail):
+            self.assertAlmostEqual(size(field.font()), size(fixed) * 1.5, delta=1)
+            self.assertEqual(field.font().family(), fixed.family())
+        # Änderung bei geöffnetem Fenster wird nachgezogen
+        w.set_font_scale(200)
+        self.app.processEvents()
+        for field in (edit.command, view.detail):
+            self.assertAlmostEqual(size(field.font()), size(fixed) * 2, delta=1)
+        edit.deleteLater()
+        view.deleteLater()
+        self.app.processEvents()
+        w.set_font_scale(100)  # nach dem Schließen darf die Änderung nichts mehr treffen (kein Zugriff auf gelöschte Objekte)
+
     def test_shortcuts(self):
         from PySide6.QtGui import QKeySequence
 

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from .. import groups as grp
 from .. import snippets
+from . import theme
 from ..models import SNIPPET_AFTER, Config, Connection, Snippet, new_id
 
 AFTER_LABELS = {
@@ -24,7 +25,8 @@ SNIPPET_ROLE = int(Qt.ItemDataRole.UserRole)
 
 
 def monospace() -> QFont:
-    return QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+    """Festschrift des Systems in der aktuellen Schriftgröße der Oberfläche."""
+    return theme.scaled(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
 
 
 class SnippetEditDialog(QDialog):
@@ -44,6 +46,7 @@ class SnippetEditDialog(QDialog):
         self.category.lineEdit().setPlaceholderText("optional, Unterordner mit „/“ (z. B. Docker/Logs)")
         self.command = QPlainTextEdit(self.snippet.command)
         self.command.setFont(monospace())
+        theme.notifier().changed.connect(self._refresh_fonts)  # Methode eines QObject: wird beim Schließen getrennt
         self.command.setPlaceholderText("df -h && free -m")
         self.command.setMinimumHeight(110)
         self.command.setTabChangesFocus(True)
@@ -72,6 +75,9 @@ class SnippetEditDialog(QDialog):
         layout.setSpacing(12)
         layout.addLayout(form)
         layout.addWidget(buttons)
+
+    def _refresh_fonts(self):
+        self.command.setFont(monospace())
 
     def _accept(self):
         if not self.name.text().strip() or not self.command.toPlainText().strip():
@@ -109,6 +115,7 @@ class SnippetsDialog(QDialog):
         self.detail = QPlainTextEdit()
         self.detail.setReadOnly(True)
         self.detail.setFont(monospace())
+        theme.notifier().changed.connect(self._refresh_fonts)
         self.info = QLabel()
         self.info.setWordWrap(True)
         self.targets = QListWidget()
@@ -220,6 +227,9 @@ class SnippetsDialog(QDialog):
         item = self.tree.currentItem()
         sid = item.data(0, SNIPPET_ROLE) if item else None
         return self.cfg.snippet_by_id(sid) if sid else None
+
+    def _refresh_fonts(self):
+        self.detail.setFont(monospace())
 
     def _show(self):
         sn = self._current()
