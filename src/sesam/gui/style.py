@@ -162,6 +162,14 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QTabBar::tab:selected { color: @text@; border-bottom: 2px solid @accent@; }
     QTabBar::tab:hover:!selected { color: @text@; }
 
+    /* Werkzeugknöpfe (Dateibrowser) und Fortschrittsbalken */
+    QToolButton { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 5px; }
+    QToolButton:hover { background: @hover@; }
+    QToolButton:pressed { background: @pressed@; }
+    QToolButton:disabled { color: @muted@; }
+    QProgressBar { background: @surface@; color: @text@; border: 1px solid @border@; border-radius: 8px; text-align: center; min-height: 18px; }
+    QProgressBar::chunk { background: @accent_soft@; border-radius: 7px; }
+
     /* Statuszeile */
     QStatusBar { background: transparent; color: @muted@; }
     QStatusBar::item { border: none; }
@@ -221,6 +229,10 @@ _ICONS = {
     "chevron_up": '<path d="M6 15l6-6 6 6"/>',
     "chevron_down": '<path d="M6 9l6 6 6-6"/>',
     "close": '<path d="M7 7l10 10M17 7L7 17"/>',
+    "file": '<path d="M7 3.500h7l4.500 4.500v12A1.500 1.500 0 0 1 17 21.500H7A1.500 1.500 0 0 1 5.500 20V5A1.500 1.500 0 0 1 7 3.500z"/><path d="M14 3.500V8h4.500"/>',
+    "arrow_up": '<path d="M12 19V6M6 11.5l6-6 6 6"/>',
+    "home": '<path d="M4 11l8-6.5 8 6.5M6.5 9.5V19h11V9.5"/>',
+    "transfer": '<path d="M8 20V6M4.500 9.500L8 6l3.500 3.500"/><path d="M16 4v14M12.500 14.500L16 18l3.500-3.500"/>',
     "search": '<circle cx="11" cy="11" r="6.500"/><path d="M16 16l4 4"/>',
 }
 
