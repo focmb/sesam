@@ -4,23 +4,23 @@ pkgver=1.2.1
 pkgrel=1
 pkgdesc="SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen"
 arch=('any')
-url="https://gitea.meowclown.de/focmb/sesam"
+url="https://github.com/focmb/sesam"
 license=('MIT')
 depends=('python' 'pyside6' 'python-keyring' 'python-cryptography'
-         'python-paramiko' 'openssh')
+         'python-paramiko' 'openssh' 'hicolor-icon-theme')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
 optdepends=('gnome-keyring: Passwörter im Schlüsselbund speichern'
             'kwallet: Passwörter im Schlüsselbund speichern')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')  # nach dem Push des Tags: updpkgsums
+sha256sums=('cdf27b3f892e9b853369b658a25ca35c57399492fdec1f283a42a8b86aaade8f')
 
 build() {
-  cd "$srcdir/$pkgname"
+  cd "$srcdir/$pkgname-$pkgver"
   python -m build --wheel --no-isolation
 }
 
 package() {
-  cd "$srcdir/$pkgname"
+  cd "$srcdir/$pkgname-$pkgver"
   python -m installer --destdir="$pkgdir" dist/*.whl
 
   install -Dm644 packaging/linux/sesam.svg \
