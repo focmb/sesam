@@ -80,7 +80,7 @@ class SidebarTests(unittest.TestCase):
 
         w = self._window()
         order = [attr for group in w.SIDEBAR_GROUPS for attr in group]
-        self.assertEqual(len(order), 10)
+        self.assertEqual(len(order), 11)
         self.assertEqual(set(w.side_buttons), set(order))
         points = [self._pos(w.side_buttons[attr], w) for attr in order]
         ys = [p.y() for p in points]

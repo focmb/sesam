@@ -21,6 +21,7 @@ from ..ssh_config import parse_ssh_config
 from .connection_dialog import ConnectionDialog, swatch
 from .docker_dialog import DockerConnectDialog
 from .identities_dialog import IdentitiesDialog
+from .keys_dialog import KeysDialog
 from .jobs import Job
 from .sftp_window import SftpWindow
 from .sync_controller import SyncController
@@ -165,6 +166,7 @@ class MainWindow(QMainWindow):
         self.a_del = act("Löschen", self.delete_selected, "Del")
         self.a_terms = act("Terminals …", self.edit_terminals)
         self.a_identities = act("Identitäten …", self.edit_identities)
+        self.a_keys = act("Schlüssel …", self.edit_keys)
         self.a_sync = act("Jetzt synchronisieren", lambda: self.sync.sync(manual=True), "F5")
         self.a_sync_settings = act("Synchronisation …", self.edit_sync)
         self.a_import = act("Aus ~/.ssh/config importieren", self.import_ssh_config)
@@ -178,6 +180,7 @@ class MainWindow(QMainWindow):
         menu.addAction(act("Beenden", self.close, "Ctrl+Q"))
         menu = self.menuBar().addMenu("&Einstellungen")
         menu.addAction(self.a_identities)
+        menu.addAction(self.a_keys)
         menu.addAction(self.a_terms)
         menu.addAction(self.a_sync_settings)
         menu.addSeparator()
@@ -218,7 +221,7 @@ class MainWindow(QMainWindow):
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
         ("a_connect", "a_files", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
-        ("a_sync", "a_identities", "a_terms"),
+        ("a_sync", "a_identities", "a_keys", "a_terms"),
     )
 
     def _build_sidebar(self):
@@ -271,7 +274,7 @@ class MainWindow(QMainWindow):
     # --- Icons ---
     ACTION_ICONS = (
         ("a_connect", "connect"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
-        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_identities", "user"), ("a_terms", "sliders"),
+        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_identities", "user"), ("a_keys", "key"), ("a_terms", "sliders"),
     )
 
     def _refresh_icons(self):
@@ -990,6 +993,10 @@ class MainWindow(QMainWindow):
             storage.save(self.cfg, self.path)
         except OSError as exc:
             QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
+
+    def edit_keys(self):
+        KeysDialog(self.cfg, self._save, self).exec()
+        self.refresh()
 
     def edit_identities(self):
         IdentitiesDialog(self.cfg, self._save, self).exec()

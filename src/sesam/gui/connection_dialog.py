@@ -12,6 +12,7 @@ from .. import groups as grp
 from .. import tags as tag_util
 from ..models import Config, Connection
 from .identities_dialog import IdentityEditDialog, save_identity
+from .keys_dialog import fill_key_combo
 
 
 def swatch(color: str, size: int = 14) -> QIcon:
@@ -55,6 +56,9 @@ class ConnectionDialog(QDialog):
         self.port.setRange(1, 65535)
         self.port.setValue(self.conn.port or 22)
         self.identity = QLineEdit(self.conn.identity_file)
+        self.key_combo = QComboBox()
+        fill_key_combo(self.key_combo, self.cfg, self.conn.key_id)
+        self.key_combo.currentIndexChanged.connect(self._identity_changed)
         browse = QPushButton("…")
         self._browse_btn = browse
         browse.setFixedWidth(40)
@@ -165,6 +169,7 @@ class ConnectionDialog(QDialog):
         form.addRow("", self.identity_info)
         form.addRow("Benutzer", self.user)
         form.addRow("Port", self.port)
+        form.addRow("Gespeicherter Schlüssel", self.key_combo)
         form.addRow("Schlüsseldatei", identity_row)
         form.addRow("Passwort", self.password)
         form.addRow("", self.clear_password)
@@ -205,18 +210,24 @@ class ConnectionDialog(QDialog):
     def _identity_changed(self, *_):
         ident = self.cfg.identity_by_id(self.identity_combo.currentData() or "")
         own = ident is None
-        for w in (self.user, self.identity, self._browse_btn, self.password, self.clear_password):
+        for w in (self.user, self.key_combo, self.password, self.clear_password):
             w.setEnabled(own)
+        for w in (self.identity, self._browse_btn):
+            w.setEnabled(own and not self.key_combo.currentData())
         if ident is None:
             self.identity_info.setText("")
         else:
             self.identity_info.setText(
-                f"Benutzer: {ident.user or '—'} · Schlüssel: {ident.identity_file or '—'} · "
+                f"Benutzer: {ident.user or '—'} · Schlüssel: {self._identity_key_label(ident)} · "
                 f"Passwort: {'gespeichert' if ident.use_password else '—'}"
             )
 
+    def _identity_key_label(self, ident) -> str:
+        stored = self.cfg.ssh_key_by_id(ident.key_id) if ident.key_id else None
+        return stored.name if stored else (ident.identity_file or "—")
+
     def _new_identity(self):
-        dlg = IdentityEditDialog(parent=self)
+        dlg = IdentityEditDialog(parent=self, cfg=self.cfg)
         if dlg.exec():
             save_identity(self, dlg.ident, dlg.password_change)
             self.cfg.identities.append(dlg.ident)
@@ -239,7 +250,8 @@ class ConnectionDialog(QDialog):
         c.identity_id = self.identity_combo.currentData() or ""
         c.user = self.user.text().strip()
         c.port = self.port.value()
-        c.identity_file = self.identity.text().strip()
+        c.key_id = self.key_combo.currentData() or ""
+        c.identity_file = "" if c.key_id else self.identity.text().strip()
         c.jump_host = self.jump.text().strip()
         c.extra_args = self.extra.text().strip()
         c.remote_command = self.remote.text().strip()

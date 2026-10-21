@@ -98,6 +98,10 @@ def open_client(
     """
     paramiko = _paramiko()
     eff, password_key = launcher.resolve(cfg, conn)
+    try:
+        launcher.check_key(cfg, eff)
+    except launcher.LaunchError as exc:
+        raise SftpError(str(exc)) from exc
     if eff.jump_host.strip():
         raise SftpError(f"Für Verbindungen mit Jump-Host ist {purpose} noch nicht möglich.")
     if not eff.host.strip():
