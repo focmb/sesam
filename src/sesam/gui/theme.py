@@ -1,8 +1,9 @@
 """Darstellung: Systemvorgabe, Hell oder Dunkel."""
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication
 
 from ..models import FONT_SCALE_MAX, FONT_SCALE_MIN
 from . import style
@@ -16,6 +17,9 @@ _effective = "light"
 _connected = False
 _scale = 100
 _base_font: QFont | None = None  # Schrift des Systems vor jeder Skalierung
+_expected_font: QFont | None = None  # Anwendungsschrift, die wir zuletzt selbst gesetzt haben
+_setting_font = False
+_font_guard_connected = False
 SCALE_STEPS = (80, 90, 100, 110, 125, 150, 175, 200)
 
 
@@ -106,12 +110,44 @@ def scaled(font: QFont) -> QFont:
     return out
 
 
+def _same_font(a: QFont, b: QFont) -> bool:
+    return a.family() == b.family() and abs(a.pointSizeF() - b.pointSizeF()) < 0.01 and a.pixelSize() == b.pixelSize()
+
+
+def _on_app_font_changed(font: QFont) -> None:
+    """Das System hat die Anwendungsschrift selbst gesetzt (z. B. Wayland/GNOME melden ihr Theme kurz nach dem Start)."""
+    if _setting_font or _expected_font is None or _same_font(font, _expected_font):
+        return
+    QTimer.singleShot(0, _reapply_after_system_change)  # nicht mitten in der Änderung erneut setzen
+
+
+def _reapply_after_system_change() -> None:
+    global _base_font
+    app = QApplication.instance()
+    if app is None or _expected_font is None or _same_font(app.font(), _expected_font):
+        return
+    _base_font = QFont(app.font())  # die neue Systemschrift ist die neue Basis (auch bei geänderter Systemschrift)
+    apply_scale(app, _scale)
+
+
 def apply_scale(app, percent: int) -> int:
-    """Skaliert die Schrift der ganzen Oberfläche (Prozent der Systemschrift) und liefert den angewandten Wert."""
-    global _scale, _base_font
+    """Skaliert die Schrift der ganzen Oberfläche (Prozent der Systemschrift) und liefert den angewandten Wert.
+
+    Setzt das System die Anwendungsschrift später selbst zurück, wird die Skalierung automatisch erneut angewandt.
+    """
+    global _scale, _base_font, _expected_font, _setting_font, _font_guard_connected
     _scale = clamp_scale(percent)
     if _base_font is None:
         _base_font = QFont(app.font())
-    app.setFont(scaled(_base_font))
+    font = scaled(_base_font)
+    _setting_font = True
+    try:
+        app.setFont(font)
+    finally:
+        _setting_font = False
+    _expected_font = QFont(app.font())
+    if not _font_guard_connected and hasattr(app, "fontChanged"):
+        app.fontChanged.connect(_on_app_font_changed)
+        _font_guard_connected = True
     notifier().changed.emit()
     return _scale

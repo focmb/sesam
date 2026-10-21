@@ -98,6 +98,35 @@ class FontScaleTests(GuiTestCase):
         self.app.processEvents()
         self.assertLess(w.sidebar.maximumWidth(), wide)  # und schrumpft mit der Schrift wieder
 
+    def test_system_resetting_the_app_font_does_not_undo_the_scale(self):
+        """Wayland/GNOME setzen die Anwendungsschrift nach dem Start selbst zurück; die Skalierung muss das überstehen."""
+        from PySide6.QtWidgets import QLabel
+
+        w = self._window()
+        base = self._size()
+        w.set_font_scale(150)
+        self.assertAlmostEqual(self._size(), base * 1.5, delta=1)
+        self.app.setFont(self._orig)  # das System setzt seine Schrift (wie vor dem Skalieren)
+        self.app.processEvents()
+        self.app.processEvents()
+        self.assertAlmostEqual(self._size(), base * 1.5, delta=1)
+        self.assertAlmostEqual(QLabel("neu").font().pointSizeF() if self._orig.pointSizeF() > 0 else self._size(),
+                               base * 1.5, delta=1)
+        w.set_font_scale(100)
+        self.assertAlmostEqual(self._size(), base, delta=1)  # und nach dem Zurücksetzen ist wieder 100 %
+
+    def test_system_font_change_becomes_the_new_base(self):
+        from PySide6.QtGui import QFont
+
+        w = self._window()
+        w.set_font_scale(125)
+        system = QFont(self._orig)
+        system.setPointSizeF(max(self._orig.pointSizeF(), 8) + 4)  # Nutzer ändert die Systemschrift
+        self.app.setFont(system)
+        self.app.processEvents()
+        self.app.processEvents()
+        self.assertAlmostEqual(self._size(), system.pointSizeF() * 1.25, delta=1)
+
     def test_dialog_monospace_fields_follow_the_scale(self):
         """Eigene Festschriften (Snippet-Editor) müssen mitwachsen, nicht bei 100 % hängen bleiben."""
         from PySide6.QtGui import QFontDatabase
