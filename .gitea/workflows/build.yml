@@ -39,10 +39,19 @@ jobs:
       - name: Programm bauen
         run: python packaging/build.py
 
+      - name: Debian-Paket und Prüfsummen
+        run: |
+          python packaging/build_deb.py
+          cd dist && sha256sum *.tar.gz *.deb > SHA256SUMS && cat SHA256SUMS
+
+      # Die Dateien lassen sich im Lauf herunterladen und als Release anhängen
       - uses: actions/upload-artifact@v3
         with:
           name: sesam-linux
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/SHA256SUMS
 
   # Windows-Build: erst einschalten, wenn ein Windows-Runner mit dem Label
   # "windows" registriert ist (act_runner register ... --labels windows:host;
