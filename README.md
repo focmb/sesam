@@ -228,6 +228,11 @@ Ergebnis in `dist/`: der Ordner `sesam/` und ein Archiv (`sesam-<Version>-linux-
   für das Anwendungsmenü; `apt` zieht die nötigen Qt-Bibliotheken, `openssh-client` und `git` nach. Entfernen mit `sudo apt remove sesam`
   (die Konfiguration in `~/.config/sesam` bleibt). Das Paket entsteht auf Debian/Ubuntu (braucht `dpkg-deb`); für möglichst viele Systeme
   auf Ubuntu 22.04 bauen.
+- **Arch Linux / Manjaro:** `packaging/aur/PKGBUILD` baut Sesam als Pacman-Paket aus dem Quelltext-Tarball des Tags (GitHub-Spiegel
+  `github.com/focmb/sesam`). Bauen und installieren mit `cd packaging/aur && makepkg -si`; `-s` holt fehlende Abhängigkeiten
+  (`pyside6`, `python-paramiko` usw.), `-i` installiert das Paket. Entfernen mit `sudo pacman -R sesam` (die Konfiguration in
+  `~/.config/sesam` bleibt). Das Paket ist bewusst nicht im AUR veröffentlicht. Bei einer neuen Version: Tag setzen und pushen,
+  in `PKGBUILD` `pkgver` anpassen, `updpkgsums` ausführen und `makepkg --printsrcinfo > .SRCINFO` erneuern.
 - **Release-Dateien:** Prüfsummen für den Release: `cd dist && sha256sum *.tar.gz *.deb > SHA256SUMS`.
 - **Windows:** `sesam\sesam.exe` starten (Fenster ohne Konsole). Der Ordner enthält zusätzlich `sesam-cli.exe`; der ssh-Wrapper (Passwort/sudo)
   braucht eine Konsole und nutzt diese Variante automatisch. Voraussetzungen: OpenSSH-Client (Windows-Feature) und Git. Unsignierte Programme
