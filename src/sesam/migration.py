@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Callable
 
 from . import passwords, storage
-from .syncing import PASSPHRASE_KEY
+from .syncing import GIT_PASSWORD_KEY, PASSPHRASE_KEY
 
 LEGACY_NAME = "ssh_verwaltung"
 LEGACY_SERVICE = "ssh_verwaltung"
@@ -49,7 +49,7 @@ def migrate_passwords(cfg, old=None, new=None) -> int:
     old = old or ServiceStore(LEGACY_SERVICE)
     new = new or ServiceStore(passwords.SERVICE)
     keys = [o.id for o in list(cfg.connections) + list(cfg.identities) if o.use_password]
-    keys.append(PASSPHRASE_KEY)
+    keys.extend([PASSPHRASE_KEY, GIT_PASSWORD_KEY])
     moved = 0
     for key in keys:
         value = old.get(key)

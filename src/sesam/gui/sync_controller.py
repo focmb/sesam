@@ -71,7 +71,7 @@ class SyncController(QObject):
                 phrase = passwords.get_password(syncing.PASSPHRASE_KEY)
             except passwords.PasswordError as exc:
                 raise SyncError(str(exc)) from exc
-        return SyncEngine(s, syncing.work_dir(), phrase)
+        return SyncEngine(s, syncing.work_dir(), phrase, credentials=syncing.load_credentials(s))
 
     # ---- Auslöser ----
     def schedule(self) -> None:

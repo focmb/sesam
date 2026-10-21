@@ -33,6 +33,7 @@ from . import keystore, passwords, runtime, storage
 from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings, new_id
 
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
+GIT_PASSWORD_KEY = "sync:git-password"  # Schlüssel im Schlüsselbund für das Repository-Passwort bzw. den Token
 FORMAT = 1
 KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey), "s": ("snippets", Snippet)}
 VOLATILE = {"use_password"}  # lokal abgeleitet, nicht Teil des Vergleichs
@@ -180,20 +181,51 @@ def merge_map(base: dict, local: dict, remote: dict) -> dict:
 
 # ---------------------------------------------------------------- Git
 
+# Credential-Helper für HTTPS: antwortet nur auf „get“ und liest Benutzer und Passwort aus der Umgebung des
+# git-Prozesses. So tauchen die Zugangsdaten weder in der Befehlszeile noch in der URL oder in .git/config auf.
+CREDENTIAL_HELPER = '!f() { test "$1" = get && printf "username=%s\\npassword=%s\\n" "$SESAM_GIT_USER" "$SESAM_GIT_PASSWORD"; }; f'
+
+
+def credential_config(credentials: tuple[str, str] | None) -> tuple[list[str], dict[str, str]]:
+    """git-Optionen und Umgebungsvariablen, mit denen git die Zugangsdaten für HTTPS-Repositories bekommt."""
+    if not credentials:
+        return [], {}
+    user, password = credentials
+    args = ["-c", "credential.helper=", "-c", f"credential.helper={CREDENTIAL_HELPER}"]  # erste Zeile leert vorhandene Helfer
+    return args, {"SESAM_GIT_USER": user, "SESAM_GIT_PASSWORD": password}
+
+
+def load_credentials(settings: SyncSettings) -> tuple[str, str] | None:
+    """Benutzername aus den Einstellungen, Passwort bzw. Token aus dem Schlüsselbund. None ohne Benutzernamen."""
+    user = settings.username.strip()
+    if not user:
+        return None
+    password = ""
+    if settings.git_password_saved:
+        try:
+            password = passwords.get_password(GIT_PASSWORD_KEY) or ""
+        except passwords.PasswordError as exc:
+            raise SyncError(str(exc)) from exc
+    return (user, password)
+
+
 class Git:
-    def __init__(self, repo: Path):
+    def __init__(self, repo: Path, credentials: tuple[str, str] | None = None):
         self.repo = repo
+        self.credentials = credentials
 
     def run(self, *args: str, check: bool = True, timeout: int = 120) -> str:
         env = runtime.clean_env()
         env.setdefault("GIT_TERMINAL_PROMPT", "0")
         env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+        cred_args, cred_env = credential_config(self.credentials)
+        env.update(cred_env)
         kwargs = {}
         if sys.platform.startswith("win"):
             kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
         try:
             proc = subprocess.run(
-                ["git", *args], cwd=self.repo, env=env, capture_output=True, text=True, timeout=timeout,
+                ["git", *cred_args, *args], cwd=self.repo, env=env, capture_output=True, text=True, timeout=timeout,
                 encoding="utf-8", errors="replace", **kwargs,
             )
         except FileNotFoundError as exc:
@@ -207,9 +239,9 @@ class Git:
         return proc.stdout
 
 
-def check_remote(url: str) -> str:
+def check_remote(url: str, credentials: tuple[str, str] | None = None) -> str:
     """Prüft, ob das Repository erreichbar ist. Liefert eine kurze Beschreibung."""
-    out = Git(Path.cwd()).run("ls-remote", "--heads", url, timeout=60)
+    out = Git(Path.cwd(), credentials).run("ls-remote", "--heads", url, timeout=60)
     n = len(out.strip().splitlines())
     return "Repository erreichbar (leer)." if n == 0 else f"Repository erreichbar ({n} Branch(es))."
 
@@ -257,6 +289,7 @@ class SyncEngine:
         store: PasswordStore | None = None,
         device: str | None = None,
         key_store: PasswordStore | None = None,
+        credentials: tuple[str, str] | None = None,
     ):
         self.s = settings
         self.work = Path(work_dir)
@@ -267,7 +300,7 @@ class SyncEngine:
         # private SSH-Schlüssel: eigene Dateien statt Schlüsselbund (außer ein Test gibt nur einen gemeinsamen Speicher vor)
         self.key_store = key_store or (keystore.FileStore() if store is None else store)
         self.device = device or socket.gethostname()
-        self.git = Git(self.repo)
+        self.git = Git(self.repo, credentials)
         self._remote: RemoteState | None = None
         self._next_state: dict | None = None
         self._dirty_commit = False

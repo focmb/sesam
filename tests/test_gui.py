@@ -419,6 +419,41 @@ class GuiTests(unittest.TestCase):
         d2._accept()
         self.assertTrue(cfg2.sync.enabled and not cfg2.sync.passwords)
 
+    def test_sync_dialog_repository_credentials(self):
+        from sesam import syncing
+        from sesam.gui.sync_dialog import SyncDialog
+
+        w = self._window()
+        cfg = w.cfg
+        dlg = SyncDialog(cfg)
+        dlg.enabled.setChecked(True)
+        dlg.url.setText("https://git.example/r.git")
+        dlg.passwords.setChecked(False)
+        with mock.patch("sesam.gui.sync_dialog.QMessageBox.warning") as warn:
+            dlg.git_pw.setText("tok123")
+            dlg._accept()                                 # Passwort ohne Benutzername
+        self.assertEqual(warn.call_count, 1)
+        self.assertFalse(cfg.sync.enabled)
+        dlg.user.setText(" anna ")
+        dlg._accept()
+        self.assertTrue(cfg.sync.enabled and cfg.sync.git_password_saved)
+        self.assertEqual(cfg.sync.username, "anna")
+        self.assertEqual(self.store[syncing.GIT_PASSWORD_KEY], "tok123")
+        # Erneutes Öffnen: Passwort bleibt, wenn das Feld leer bleibt; „Testen“ nutzt das gespeicherte
+        d2 = SyncDialog(cfg)
+        self.assertEqual(d2.user.text(), "anna")
+        self.assertEqual(d2.git_pw.text(), "")
+        self.assertEqual(d2._credentials(), ("anna", "tok123"))
+        d2._accept()
+        self.assertEqual(self.store[syncing.GIT_PASSWORD_KEY], "tok123")
+        # Benutzername entfernen löscht das gespeicherte Passwort
+        d3 = SyncDialog(cfg)
+        d3.user.setText("")
+        d3._accept()
+        self.assertEqual(cfg.sync.username, "")
+        self.assertFalse(cfg.sync.git_password_saved)
+        self.assertNotIn(syncing.GIT_PASSWORD_KEY, self.store)
+
 
 if __name__ == "__main__":
     unittest.main()

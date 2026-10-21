@@ -306,5 +306,52 @@ class EngineTests(unittest.TestCase):
             eng.run(cfg)
 
 
+class CredentialTests(unittest.TestCase):
+    def fill(self, creds):
+        """Fragt git (wie bei einem HTTPS-Zugriff) über den Credential-Helper nach den Zugangsdaten."""
+        import os
+        args, env = syncing.credential_config(creds)
+        proc = subprocess.run(
+            ["git", *args, "credential", "fill"], input="protocol=https\nhost=example.com\n\n",
+            capture_output=True, text=True, encoding="utf-8", env={**os.environ, **env, "GIT_TERMINAL_PROMPT": "0"},
+        )
+        return proc.returncode, dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line)
+
+    def test_helper_returns_user_and_password_even_with_special_characters(self):
+        for pw in ("geheim", 'p w$"\'`!\\n%s&;ß', ""):
+            code, out = self.fill(("benutzer@mail.de", pw))
+            self.assertEqual(code, 0)
+            self.assertEqual(out["username"], "benutzer@mail.de")
+            self.assertEqual(out["password"], pw)
+
+    def test_no_credentials_means_no_extra_options(self):
+        self.assertEqual(syncing.credential_config(None), ([], {}))
+
+    def test_credentials_never_appear_in_the_command_line(self):
+        calls = []
+
+        def fake(cmd, **kw):
+            calls.append((cmd, kw["env"]))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with mock.patch("sesam.syncing.subprocess.run", fake):
+            syncing.Git(Path("."), ("anna", "topsecret")).run("ls-remote", "origin")
+            syncing.Git(Path(".")).run("ls-remote", "origin")
+        (cmd, env), (cmd2, env2) = calls
+        self.assertNotIn("topsecret", " ".join(cmd))
+        self.assertNotIn("anna", " ".join(cmd))
+        self.assertEqual((env["SESAM_GIT_USER"], env["SESAM_GIT_PASSWORD"]), ("anna", "topsecret"))
+        self.assertNotIn("credential.helper", " ".join(cmd2))
+        self.assertNotIn("SESAM_GIT_PASSWORD", env2)
+
+    def test_load_credentials(self):
+        store = {}
+        with mock.patch("sesam.syncing.passwords.get_password", lambda k: store.get(k)):
+            self.assertIsNone(syncing.load_credentials(SyncSettings(username="")))
+            self.assertEqual(syncing.load_credentials(SyncSettings(username=" anna ")), ("anna", ""))
+            store[syncing.GIT_PASSWORD_KEY] = "tok"
+            self.assertEqual(syncing.load_credentials(SyncSettings(username="anna", git_password_saved=True)), ("anna", "tok"))
+
+
 if __name__ == "__main__":
     unittest.main()

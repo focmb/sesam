@@ -169,6 +169,8 @@ class SyncSettings:
     auto: bool = True  # beim Start abgleichen und nach jeder Änderung
     passwords: bool = True  # Passwörter verschlüsselt mitsynchronisieren
     passphrase_saved: bool = False  # Sync-Passwort liegt im Schlüsselbund
+    username: str = ""  # Benutzername für HTTPS-Repositories (leer: SSH-Schlüssel bzw. vorhandene Git-Zugangsdaten)
+    git_password_saved: bool = False  # Passwort bzw. Token für das Repository liegt im Schlüsselbund
     last_sync: str = ""
 
     @classmethod

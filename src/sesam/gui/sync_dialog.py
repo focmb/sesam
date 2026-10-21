@@ -13,8 +13,9 @@ from ..models import Config
 HELP = (
     "Verbindungen, Gruppen und Identitäten werden in einem Git-Repository abgeglichen (eine Datei pro Eintrag). "
     "Passwörter werden nur <b>verschlüsselt</b> abgelegt. Das Sync-Passwort muss auf allen Geräten gleich sein und "
-    "<b>kann nicht wiederhergestellt werden</b>. Die Anmeldung am Repository läuft über Git (SSH-Schlüssel oder "
-    "gespeicherte Zugangsdaten)."
+    "<b>kann nicht wiederhergestellt werden</b>. Die Anmeldung am Repository läuft über Git: mit SSH-Schlüssel, "
+    "mit bereits gespeicherten Git-Zugangsdaten oder (bei https://-Adressen) mit Benutzername und Passwort bzw. Token, "
+    "die Sesam im Schlüsselbund des Systems ablegt."
 )
 
 
@@ -31,6 +32,13 @@ class SyncDialog(QDialog):
         self.url = QLineEdit(s.url)
         self.url.setPlaceholderText("git@server:gruppe/sesam.git oder https://…")
         self.branch = QLineEdit(s.branch or "main")
+        self.user = QLineEdit(s.username)
+        self.user.setPlaceholderText("nur bei https:// nötig – leer: SSH-Schlüssel bzw. vorhandene Git-Zugangsdaten")
+        self.git_pw = QLineEdit()
+        self.git_pw.setEchoMode(QLineEdit.EchoMode.Password)
+        self.git_pw.setPlaceholderText(
+            "gespeichert – leer lassen zum Beibehalten" if s.git_password_saved else "Passwort oder Zugriffstoken"
+        )
         self.auto = QCheckBox("Automatisch abgleichen (beim Start und nach jeder Änderung)")
         self.auto.setChecked(s.auto)
         self.passwords = QCheckBox("Passwörter verschlüsselt mitsynchronisieren")
@@ -52,6 +60,8 @@ class SyncDialog(QDialog):
         form.setVerticalSpacing(8)
         form.addRow("Repository-URL", self.url)
         form.addRow("Branch", self.branch)
+        form.addRow("Benutzername", self.user)
+        form.addRow("Passwort / Token", self.git_pw)
         form.addRow("", self.auto)
         form.addRow("", self.passwords)
         form.addRow("Sync-Passwort", self.phrase)
@@ -84,7 +94,7 @@ class SyncDialog(QDialog):
 
     def _update(self, *_):
         on = self.enabled.isChecked()
-        for w in (self.url, self.branch, self.auto, self.passwords):
+        for w in (self.url, self.branch, self.user, self.git_pw, self.auto, self.passwords):
             w.setEnabled(on)
         pw = on and self.passwords.isChecked()
         self.phrase.setEnabled(pw)
@@ -97,11 +107,21 @@ class SyncDialog(QDialog):
             return
         QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            self.test_result.setText(syncing.check_remote(url))
-        except syncing.SyncError as exc:
+            self.test_result.setText(syncing.check_remote(url, self._credentials()))
+        except (syncing.SyncError, passwords.PasswordError) as exc:
             self.test_result.setText(str(exc))
         finally:
             QGuiApplication.restoreOverrideCursor()
+
+    def _credentials(self) -> tuple[str, str] | None:
+        """Eingetragene Zugangsdaten; ohne neues Passwort das gespeicherte (für „Verbindung testen“)."""
+        user = self.user.text().strip()
+        if not user:
+            return None
+        password = self.git_pw.text()
+        if not password and self.cfg.sync.git_password_saved:
+            password = passwords.get_password(syncing.GIT_PASSWORD_KEY) or ""
+        return (user, password)
 
     def _accept(self):
         s = self.cfg.sync
@@ -110,6 +130,9 @@ class SyncDialog(QDialog):
         if on:
             if not self.url.text().strip():
                 QMessageBox.warning(self, "Synchronisation", "Bitte eine Repository-URL eintragen.")
+                return
+            if self.git_pw.text() and not self.user.text().strip():
+                QMessageBox.warning(self, "Synchronisation", "Zum Passwort fehlt der Benutzername.")
                 return
             if self.passwords.isChecked():
                 if new_phrase:
@@ -129,6 +152,19 @@ class SyncDialog(QDialog):
             except passwords.PasswordError as exc:
                 QMessageBox.critical(self, "Sync-Passwort", str(exc))
                 return
+        if on:
+            user = self.user.text().strip()
+            try:
+                if user and self.git_pw.text():
+                    passwords.set_password(syncing.GIT_PASSWORD_KEY, self.git_pw.text())
+                    s.git_password_saved = True
+                elif not user and s.git_password_saved:  # Benutzername entfernt: gespeichertes Passwort löschen
+                    passwords.delete_password(syncing.GIT_PASSWORD_KEY)
+                    s.git_password_saved = False
+            except passwords.PasswordError as exc:
+                QMessageBox.critical(self, "Repository-Passwort", str(exc))
+                return
+            s.username = user
         s.enabled = on
         s.url = self.url.text().strip()
         s.branch = self.branch.text().strip() or "main"

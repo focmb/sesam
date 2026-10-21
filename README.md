@@ -186,8 +186,12 @@ Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In 
 ## Synchronisation über Git
 
 *Synchronisation …* in der Seitenleiste gleicht Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets über ein Git-Repository ab (Terminals und
-Fensterbreiten bleiben pro Gerät). Das Tool nutzt das installierte `git`; die Anmeldung läuft also über deine SSH-Schlüssel bzw.
-gespeicherten HTTPS-Zugangsdaten (im Hintergrund ohne Rückfragen, einmal vorher per *Verbindung testen* oder `git ls-remote` anmelden).
+Fensterbreiten bleiben pro Gerät). Das Tool nutzt das installierte `git`. Die Anmeldung läuft im Hintergrund ohne Rückfragen:
+- **SSH-Schlüssel** (`git@server:…`): wie sonst auch mit `git`.
+- **Benutzername und Passwort bzw. Token** (`https://…`): im Dialog unter *Benutzername* und *Passwort / Token* eintragen. Das Passwort liegt im Schlüsselbund
+  des Systems (nicht in der Konfigurationsdatei) und wird git nur über die Umgebung des Prozesses übergeben, nie in der Befehlszeile oder in der URL.
+  Bei GitHub, GitLab und Gitea ist statt des Kontopassworts meist ein Zugriffstoken nötig. Löschst du den Benutzernamen, entfernt Sesam auch das gespeicherte Passwort.
+- **Bereits gespeicherte Git-Zugangsdaten:** bleibt der Benutzername leer, gelten die Einstellungen von `git` (z. B. `git credential`-Helfer; einmal vorher per *Verbindung testen* oder `git ls-remote` anmelden).
 
 - **Automatisch:** beim Start und kurz nach jeder Änderung. *F5* bzw. *Jetzt synchronisieren* löst den Abgleich manuell aus; der Status steht rechts unten.
 - **Repository-Aufbau:** eine JSON-Datei pro Eintrag (`connections/`, `identities/`, `ssh_keys/`, `snippets/`), `groups.json`, `meta.json`. Das Repository darf privat sein, ist aber für Klartext-Daten wie Hostnamen und Benutzer sichtbar.
