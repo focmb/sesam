@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from .models import FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SyncSettings, Terminal
+from .models import FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, SyncSettings, Terminal
 from .terminals import default_terminals
 
 
@@ -95,6 +95,7 @@ def _from_data(data: dict) -> Config:
         font_scale=_font_scale(data.get("font_scale")),
         column_widths=[int(w) for w in data.get("column_widths", []) if isinstance(w, (int, float))],
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
+        ssh_keys=[SshKey.from_dict(k) for k in data.get("ssh_keys", []) if isinstance(k, dict)],
         version=data.get("version", 1),
     )
 

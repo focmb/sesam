@@ -62,10 +62,37 @@ class Identity:
     identity_file: str = ""
     use_password: bool = False  # Passwort liegt im Schlüsselbund unter der Identitäts-ID
     notes: str = ""
+    key_id: str = ""  # gespeicherter SSH-Schlüssel (SshKey); ersetzt dann die Schlüsseldatei
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Identity":
         return _from_dict(cls, data)
+
+
+@dataclass
+class SshKey:
+    """Ein von Sesam verwalteter SSH-Schlüssel. Der private Teil liegt in einer Datei im Sesam-Ordner (nicht in der Konfiguration)
+    und wird bei eingeschaltetem Passwort-Abgleich verschlüsselt mit synchronisiert."""
+
+    name: str
+    id: str = field(default_factory=new_id)
+    type: str = ""  # "ed25519", "rsa", "ecdsa", ...
+    public_key: str = ""  # eine Zeile im authorized_keys-Format, ohne Kommentar
+    comment: str = ""
+    fingerprint: str = ""  # SHA256:…
+    encrypted: bool = False  # privater Schlüssel ist durch eine Passphrase geschützt
+    created: str = ""  # Datum der Erzeugung bzw. des Imports (JJJJ-MM-TT)
+    notes: str = ""
+    use_password: bool = False  # der private Schlüssel liegt auf diesem Gerät (lokal abgeleitet, nicht Teil des Abgleichs)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SshKey":
+        return _from_dict(cls, data)
+
+    @property
+    def authorized_line(self) -> str:
+        """Zeile für authorized_keys (öffentlicher Schlüssel samt Kommentar)."""
+        return f"{self.public_key} {self.comment}".strip()
 
 
 @dataclass
@@ -84,6 +111,7 @@ class Connection:
     sudo_mode: str = ""  # "" = aus, "login" = sudo -i, "shell" = sudo -s
     sudo_user: str = ""  # Zielbenutzer, leer = root
     sudo_use_password: bool = True  # gespeichertes Passwort auch für sudo verwenden
+    key_id: str = ""  # gespeicherter SSH-Schlüssel (SshKey); ersetzt dann die Schlüsseldatei
     docker: bool = False  # laufende Docker-Container des Hosts als Unterelemente im Baum anzeigen
     docker_shell: str = ""  # Shell im Container, leer = bash, sonst sh
     docker_user: str = ""  # Benutzer im Container (docker exec -u), leer = Standard des Containers
@@ -124,6 +152,7 @@ class Config:
     terminals: list[Terminal] = field(default_factory=list)
     connections: list[Connection] = field(default_factory=list)
     identities: list[Identity] = field(default_factory=list)
+    ssh_keys: list[SshKey] = field(default_factory=list)
     default_terminal_id: str = ""
     sync: SyncSettings = field(default_factory=SyncSettings)
     theme: str = "system"  # "system", "light" oder "dark"
@@ -139,6 +168,9 @@ class Config:
 
     def identity_by_id(self, identity_id: str) -> Identity | None:
         return next((i for i in self.identities if i.id == identity_id), None)
+
+    def ssh_key_by_id(self, key_id: str) -> SshKey | None:
+        return next((k for k in self.ssh_keys if k.id == key_id), None)
 
     def connection_by_id(self, connection_id: str) -> Connection | None:
         return next((c for c in self.connections if c.id == connection_id), None)

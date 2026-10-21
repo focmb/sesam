@@ -8,7 +8,7 @@ import sys
 
 from dataclasses import replace
 
-from . import runtime
+from . import keystore, passwords, runtime
 from .models import Config, Connection, Terminal
 from .terminals import current_platform
 
@@ -88,9 +88,31 @@ def resolve(cfg: Config, conn: Connection) -> tuple[Connection, str]:
     """Wendet die gewählte Identität an. Liefert die wirksame Verbindung und den Schlüsselbund-Schlüssel des Passworts."""
     ident = cfg.identity_by_id(conn.identity_id) if conn.identity_id else None
     if ident is None:
-        return conn, conn.id
-    eff = replace(conn, user=ident.user, identity_file=ident.identity_file, use_password=ident.use_password)
-    return eff, ident.id
+        eff, secret_id = conn, conn.id
+    else:
+        eff = replace(conn, user=ident.user, identity_file=ident.identity_file, use_password=ident.use_password,
+                      key_id=ident.key_id)
+        secret_id = ident.id
+    if eff.key_id:  # ein von Sesam verwalteter Schlüssel ersetzt die Schlüsseldatei
+        try:
+            eff = replace(eff, identity_file=str(keystore.path_of(eff.key_id)))
+        except passwords.PasswordError:
+            pass
+    return eff, secret_id
+
+
+def check_key(cfg: Config, eff: Connection) -> None:
+    """Stellt sicher, dass ein zugewiesener Sesam-Schlüssel auf diesem Gerät vorhanden ist (``eff`` stammt aus ``resolve``)."""
+    if not eff.key_id:
+        return
+    key = cfg.ssh_key_by_id(eff.key_id)
+    if key is None:
+        raise LaunchError("Der zugewiesene SSH-Schlüssel existiert nicht mehr. Bitte in der Verbindung einen anderen wählen.")
+    if not keystore.FileStore().exists(eff.key_id):
+        raise LaunchError(
+            f"Der private Schlüssel „{key.name}“ ist auf diesem Gerät nicht vorhanden. Mit eingeschaltetem Passwort-Abgleich "
+            "kommt er per Synchronisation; sonst den Schlüssel hier neu importieren."
+        )
 
 
 def wrapper_args(conn: Connection, remote_command: str | None = None) -> list[str]:
@@ -143,6 +165,7 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
 def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remote_command: str | None = None) -> list[str]:
     """Öffnet die Verbindung im Terminal. ``remote_command`` (z. B. ``docker exec …``) gilt nur für diesen Start."""
     conn, _ = resolve(cfg, conn)
+    check_key(cfg, conn)
     if remote_command is not None:  # sudo des Hosts passt nicht zu einem Befehl, der direkt in einen Container führt
         conn = replace(conn, remote_command=remote_command, sudo_mode="", sudo_user="")
     terminal = terminal or resolve_terminal(cfg, conn)

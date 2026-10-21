@@ -3,19 +3,21 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLineEdit,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLineEdit,
     QListWidget, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget,
 )
 
 from .. import passwords
 from ..models import Config, Identity
+from .keys_dialog import fill_key_combo
 
 
 class IdentityEditDialog(QDialog):
     """Eine Identität anlegen oder bearbeiten."""
 
-    def __init__(self, ident: Identity | None = None, parent=None):
+    def __init__(self, ident: Identity | None = None, parent=None, cfg: Config | None = None):
         super().__init__(parent)
+        self.cfg = cfg or Config()
         self.ident = ident or Identity(name="")
         self.password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
         self.setWindowTitle("Identität bearbeiten" if ident else "Neue Identität")
@@ -25,7 +27,11 @@ class IdentityEditDialog(QDialog):
         self.name.setPlaceholderText("z. B. root@Kunde A")
         self.user = QLineEdit(self.ident.user)
         self.key = QLineEdit(self.ident.identity_file)
+        self.key_combo = QComboBox()
+        fill_key_combo(self.key_combo, self.cfg, self.ident.key_id)
+        self.key_combo.currentIndexChanged.connect(self._key_changed)
         browse = QPushButton("…")
+        self._browse_btn = browse
         browse.setFixedWidth(40)
         browse.clicked.connect(self._browse)
         key_row = QWidget()
@@ -47,6 +53,7 @@ class IdentityEditDialog(QDialog):
         form.setVerticalSpacing(8)
         form.addRow("Name*", self.name)
         form.addRow("Benutzer", self.user)
+        form.addRow("Gespeicherter Schlüssel", self.key_combo)
         form.addRow("Schlüsseldatei", key_row)
         form.addRow("Passwort", self.password)
         form.addRow("", self.clear_password)
@@ -59,6 +66,12 @@ class IdentityEditDialog(QDialog):
         layout.setSpacing(12)
         layout.addLayout(form)
         layout.addWidget(buttons)
+        self._key_changed()
+
+    def _key_changed(self, *_):
+        own = not self.key_combo.currentData()
+        self.key.setEnabled(own)
+        self._browse_btn.setEnabled(own)
 
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(self, "Schlüsseldatei wählen")
@@ -72,7 +85,8 @@ class IdentityEditDialog(QDialog):
         i = self.ident
         i.name = self.name.text().strip()
         i.user = self.user.text().strip()
-        i.identity_file = self.key.text().strip()
+        i.key_id = self.key_combo.currentData() or ""
+        i.identity_file = "" if i.key_id else self.key.text().strip()
         i.notes = self.notes.toPlainText().strip()
         if self.password.text():
             self.password_change = self.password.text()
@@ -128,7 +142,7 @@ class IdentitiesDialog(QDialog):
         self.list.clear()
         for ident in sorted(self.cfg.identities, key=lambda i: i.name.lower()):
             parts = [ident.user or "—"]
-            if ident.identity_file:
+            if ident.identity_file or ident.key_id:
                 parts.append("Schlüssel")
             if ident.use_password:
                 parts.append("Passwort")
@@ -142,7 +156,7 @@ class IdentitiesDialog(QDialog):
         return self.cfg.identity_by_id(item.data(256)) if item else None
 
     def _new(self):
-        dlg = IdentityEditDialog(parent=self)
+        dlg = IdentityEditDialog(parent=self, cfg=self.cfg)
         if dlg.exec():
             save_identity(self, dlg.ident, dlg.password_change)
             self.cfg.identities.append(dlg.ident)
@@ -153,7 +167,7 @@ class IdentitiesDialog(QDialog):
         ident = self._current()
         if not ident:
             return
-        dlg = IdentityEditDialog(ident, self)
+        dlg = IdentityEditDialog(ident, self, cfg=self.cfg)
         if dlg.exec():
             save_identity(self, ident, dlg.password_change)
             self.save_callback()

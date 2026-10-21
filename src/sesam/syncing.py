@@ -29,12 +29,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
 
-from . import passwords, runtime, storage
-from .models import Config, Connection, Identity, SyncSettings, new_id
+from . import keystore, passwords, runtime, storage
+from .models import Config, Connection, Identity, SshKey, SyncSettings, new_id
 
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
 FORMAT = 1
-KINDS = {"c": ("connections", Connection), "i": ("identities", Identity)}
+KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey)}
 VOLATILE = {"use_password"}  # lokal abgeleitet, nicht Teil des Vergleichs
 
 
@@ -112,7 +112,7 @@ def decrypt(key: bytes, blob: dict, aad: str) -> str:
 
 @dataclass
 class Item:
-    kind: str  # "c" Verbindung, "i" Identität
+    kind: str  # "c" Verbindung, "i" Identität, "k" SSH-Schlüssel
     id: str
     data: dict  # ohne use_password
     pw: str | None = None
@@ -256,6 +256,7 @@ class SyncEngine:
         passphrase: str | None = None,
         store: PasswordStore | None = None,
         device: str | None = None,
+        key_store: PasswordStore | None = None,
     ):
         self.s = settings
         self.work = Path(work_dir)
@@ -263,6 +264,8 @@ class SyncEngine:
         self.state_path = self.work / "state.json"
         self.passphrase = passphrase
         self.store = store or KeyringStore()
+        # private SSH-Schlüssel: eigene Dateien statt Schlüsselbund (außer ein Test gibt nur einen gemeinsamen Speicher vor)
+        self.key_store = key_store or (keystore.FileStore() if store is None else store)
         self.device = device or socket.gethostname()
         self.git = Git(self.repo)
         self._remote: RemoteState | None = None
@@ -355,14 +358,17 @@ class SyncEngine:
         return RemoteState(items, groups, meta, key, branch_exists, new_meta, colors)
 
     # ---- Phase 2: zusammenführen (verändert cfg, Schlüsselbund und Arbeitsverzeichnis) ----
+    def _store_for(self, kind: str) -> PasswordStore:
+        return self.key_store if kind == "k" else self.store
+
     def _local_items(self, cfg: Config, key: bytes | None) -> dict:
         items: dict = {}
-        for kind, objs in (("c", cfg.connections), ("i", cfg.identities)):
+        for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys)):
             for o in objs:
                 pw = None
                 if key is not None and o.use_password:
                     try:
-                        pw = self.store.get(o.id)
+                        pw = self._store_for(kind).get(o.id)
                     except passwords.PasswordError as exc:
                         raise SyncError(str(exc)) from exc
                 item = item_from_obj(kind, o, pw)
@@ -428,9 +434,11 @@ class SyncEngine:
         return report
 
     def _apply_local(self, cfg: Config, local: dict, result: dict, pw_on: bool, report: SyncReport) -> None:
-        old = {k: o for kind, objs in (("c", cfg.connections), ("i", cfg.identities)) for o in objs for k in [(kind, o.id)]}
+        old = {k: o for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys))
+               for o in objs for k in [(kind, o.id)]}
         new_conns: list[Connection] = []
         new_idents: list[Identity] = []
+        new_keys: list[SshKey] = []
         for k, item in result.items():
             _folder, cls = KINDS[k[0]]
             obj = cls.from_dict(dict(item.data, id=item.id))
@@ -440,9 +448,9 @@ class SyncEngine:
                 if item.pw != local_pw or (k in local and local[k].pw_missing and item.pw is not None):
                     try:
                         if item.pw is None:
-                            self.store.delete(item.id)
+                            self._store_for(k[0]).delete(item.id)
                         else:
-                            self.store.set(item.id, item.pw)
+                            self._store_for(k[0]).set(item.id, item.pw)
                     except passwords.PasswordError as exc:
                         raise SyncError(str(exc)) from exc
                 obj.use_password = item.pw is not None
@@ -456,21 +464,26 @@ class SyncEngine:
                 for f in fields(obj):  # in place, damit offene Dialoge gültige Objekte behalten
                     setattr(existing, f.name, getattr(obj, f.name))
                 obj = existing
-            (new_conns if k[0] == "c" else new_idents).append(obj)
+            {"c": new_conns, "i": new_idents, "k": new_keys}[k[0]].append(obj)
         for k, o in old.items():
             if k not in result:
                 report.removed += 1
                 if pw_on and o.use_password:
                     try:
-                        self.store.delete(o.id)
+                        self._store_for(k[0]).delete(o.id)
                     except passwords.PasswordError as exc:
                         raise SyncError(str(exc)) from exc
         ident_ids = {i.id for i in new_idents}
+        key_ids = {k.id for k in new_keys}
         for c in new_conns:
             if c.identity_id and c.identity_id not in ident_ids:
                 c.identity_id = ""
+        for o in (*new_conns, *new_idents):
+            if o.key_id and o.key_id not in key_ids:
+                o.key_id = ""
         cfg.connections = sorted(new_conns, key=lambda c: (c.group.lower(), c.name.lower()))
         cfg.identities = sorted(new_idents, key=lambda i: i.name.lower())
+        cfg.ssh_keys = sorted(new_keys, key=lambda k: k.name.lower())
 
     def _write_repo(self, result: dict, groups: set, remote: RemoteState, key: bytes | None, colors: dict | None = None) -> None:
         colors = colors or {}
