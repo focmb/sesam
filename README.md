@@ -2,6 +2,8 @@
 
 # Sesam
 
+[![Build](https://github.com/focmb/sesam/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/focmb/sesam/actions/workflows/build.yml)
+
 *[English version: README.en.md](README.en.md)*
 
 Desktop-Tool (Windows und Linux, Python + PySide6) zum Verwalten von SSH-Verbindungen.
@@ -266,7 +268,7 @@ etwa `ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04`. Der Windows-Job steh
 ## Automatischer Build (GitHub Actions)
 
 Im GitHub-Spiegel (`github.com/focmb/sesam`) baut `.github/workflows/build.yml` mit GitHub-Runnern, eigene Runner sind nicht nötig.
-Der Workflow läuft bei jedem Tag `v*` und auf Knopfdruck (*Actions → Build → Run workflow*):
+Der Workflow läuft bei jedem Push auf `main`, bei jedem Tag `v*` und auf Knopfdruck (*Actions → Build → Run workflow*):
 
 - **Linux** (Ubuntu 22.04): Tests, dann `sesam-<Version>-linux-x86_64.tar.gz` und `sesam_<Version>_amd64.deb`.
 - **Windows:** `sesam-<Version>-windows-x86_64.zip` mit `sesam\sesam.exe` (mit Tests).
