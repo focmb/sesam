@@ -197,6 +197,16 @@ Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In 
 - Der Docker-Benutzer braucht Zugriff auf den Docker-Socket (Gruppe `docker`); `sudo docker` wird nicht verwendet. Die Einstellungen werden mit synchronisiert,
   die Container selbst nicht.
 
+## Proxmox
+
+Ist ein Host ein Proxmox-VE-Server, zeigt Sesam seine Gäste im Baum. In der Verbindung (*Bearbeiten*) den Haken
+**Proxmox-Gäste (VMs und LXC) dieses Hosts im Verbindungsbaum anzeigen** setzen (ersetzt die Docker-Anzeige); optional den Benutzer für VMs eintragen (Standard `root`).
+- **Im Baum:** Beim Aufklappen fragt Sesam den Host per SSH als `root` mit `pvesh` nach allen VMs und LXC-Containern (auch anderer Cluster-Knoten). Laufende Gäste sind farbig, gestoppte grau; Vorlagen werden ausgeblendet.
+- **LXC-Container:** Doppelklick öffnet im Terminal `pct enter <ID>` über den Host (bei Gästen anderer Knoten per SSH über diesen Knoten).
+- **VMs:** Sesam erfragt die IP-Adresse über den QEMU-Gast-Agent und verbindet vom Proxmox-Host aus per SSH in die VM. Dafür muss der Agent in der VM laufen.
+- **Ein-/Ausschalten:** Rechtsklick → *Starten*, *Herunterfahren*, *Stoppen (hart)*, *Neustarten*. Stoppen und Neustarten fragen vorher nach; danach lädt Sesam den Status neu.
+- Dateibrowser und Jump-Hosts funktionieren wie bei Docker nur für den Host selbst. Die Einstellungen werden mit synchronisiert, die Gäste selbst nicht.
+
 ## Synchronisation über Git
 
 *Synchronisation …* in der Seitenleiste gleicht Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets über ein Git-Repository ab (Terminals und
@@ -294,4 +304,4 @@ Qt-Systembibliotheken fehlen. Die Sync-Tests brauchen `git`.
 Die Paket-Tests (`test_packaging.py`) brauchen `dpkg-deb` und werden sonst übersprungen.
 Die SFTP-Tests (`test_sftp.py`, `test_sftp_gui.py`) starten dafür einen kleinen SSH/SFTP-Server im Testprozess (nur auf `127.0.0.1`, mit
 `paramiko`) und werden übersprungen, wenn `paramiko` fehlt. Dasselbe gilt für die Docker-Tests (`test_docker.py`, `test_docker_gui.py`); der Testserver
-antwortet dort auf `docker ps`.
+antwortet dort auf `docker ps`. Ebenso `test_proxmox.py` (antwortet auf `pvesh`).

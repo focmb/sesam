@@ -17,7 +17,7 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import style, theme
-from .. import colors, docker, launcher, passwords, sftp, snippets, storage
+from .. import colors, docker, launcher, passwords, proxmox, sftp, snippets, storage
 from .. import tags as tag_util
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -35,7 +35,12 @@ from .terminals_dialog import TerminalsDialog
 
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
 GROUP_ROLE = ID_ROLE + 1  # Gruppenpfad
-CONTAINER_ROLE = ID_ROLE + 2  # „<ID der Host-Verbindung>\x1f<Containername>“
+CONTAINER_ROLE = ID_ROLE + 2  # „<ID der Host-Verbindung>\x1f<Containername bzw. Proxmox-VMID>“
+
+
+def _has_children(conn: Connection) -> bool:
+    """Der Host zeigt Docker-Container oder Proxmox-Gäste als Unterelemente."""
+    return conn.docker or conn.proxmox
 
 
 def _submenu(menu: QMenu, title: str) -> QMenu:
@@ -464,7 +469,7 @@ class MainWindow(QMainWindow):
         if cid:
             (self._docker_expanded.discard if collapsed else self._docker_expanded.add)(cid)
             conn = self.cfg.connection_by_id(cid)
-            if not collapsed and conn and conn.docker:
+            if not collapsed and conn and _has_children(conn):
                 # nicht mitten im Aufklappen am Baum ändern (Qt stürzt sonst ab)
                 QTimer.singleShot(0, lambda: self._load_if_needed(cid))
             return
@@ -516,7 +521,7 @@ class MainWindow(QMainWindow):
             if conn.notes:
                 item.setToolTip(0, conn.notes)
             (nodes.get(conn.group) or self.tree.invisibleRootItem()).addChild(item)
-            if conn.docker:
+            if _has_children(conn):
                 self._fill_containers(item, conn)
                 item.setExpanded(conn.id in self._docker_expanded)
         for path, item in nodes.items():
@@ -578,15 +583,24 @@ class MainWindow(QMainWindow):
         group = self._selected_group()
         menu = QMenu(self)
         container = self._selected_container()
+        guest = self._selected_guest() if container else None
         if container:
             menu.addAction(self.a_connect)
             sub = _submenu(menu, tr("Verbinden mit …"))
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_container(term))
-            menu.addAction(tr("Verbinden als …")).triggered.connect(lambda: self.connect_container(ask=True))
+            if guest is None:
+                menu.addAction(tr("Verbinden als …")).triggered.connect(lambda: self.connect_container(ask=True))
+            else:
+                menu.addSeparator()
+                labels = {"start": tr("Starten"), "shutdown": tr("Herunterfahren"), "stop": tr("Stoppen (hart)"), "reboot": tr("Neustarten")}
+                for action in proxmox.ACTIONS:
+                    a = menu.addAction(labels[action])
+                    a.setEnabled(guest[1].running != (action == "start"))
+                    a.triggered.connect(lambda _=False, act=action: self.power_guest(act))
             menu.addSeparator()
-            menu.addAction(tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(container[0].id))
+            menu.addAction(tr("Gäste aktualisieren") if guest is not None else tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(container[0].id))
             menu.addSeparator()
         elif conn:
             menu.addAction(self.a_connect)
@@ -598,8 +612,8 @@ class MainWindow(QMainWindow):
             menu.addAction(self.a_files)
             self._snippet_menu(menu, [conn])
             self._color_menu(menu, conn.color, lambda key: self.set_connection_color(conn, key))
-            if conn.docker:
-                menu.addAction(tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(conn.id))
+            if _has_children(conn):
+                menu.addAction(tr("Gäste aktualisieren") if conn.proxmox else tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(conn.id))
             menu.addSeparator()
             menu.addAction(self.a_edit)
             menu.addAction(self.a_dup)
@@ -686,6 +700,17 @@ class MainWindow(QMainWindow):
         conn = self.cfg.connection_by_id(cid) if cid else None
         return (conn, name) if conn else None
 
+    def _selected_guest(self) -> tuple[Connection, proxmox.Guest] | None:
+        target = self._selected_container()
+        if not target or not target[0].proxmox:
+            return None
+        conn, vmid = target
+        state = self._containers.get(conn.id)
+        for guest in state if isinstance(state, list) else []:
+            if str(guest.vmid) == vmid:
+                return conn, guest
+        return None
+
     def _info_item(self, text: str, tooltip: str = "") -> QTreeWidgetItem:
         item = QTreeWidgetItem([text])
         item.setForeground(0, QBrush(QColor(theme.colors()["muted"])))
@@ -705,14 +730,28 @@ class MainWindow(QMainWindow):
         icon = style.icon("box", c["accent"])
         muted = QBrush(QColor(c["muted"]))
         state = self._containers.get(conn.id, "")
+        guests = conn.proxmox
         if conn.id not in self._containers:
-            host_item.addChild(self._info_item("…", tr("Aufklappen, um die Container zu laden")))
+            host_item.addChild(self._info_item("…", tr("Aufklappen, um die Gäste zu laden") if guests else tr("Aufklappen, um die Container zu laden")))
         elif state is None:
-            host_item.addChild(self._info_item(tr("Container werden geladen …")))
+            host_item.addChild(self._info_item(tr("Gäste werden geladen …") if guests else tr("Container werden geladen …")))
         elif isinstance(state, str):
             host_item.addChild(self._info_item("⚠ " + state, state))
         elif not state:
-            host_item.addChild(self._info_item(tr("Keine laufenden Container")))
+            host_item.addChild(self._info_item(tr("Keine Gäste") if guests else tr("Keine laufenden Container")))
+        elif guests:
+            for guest in state:
+                kind = tr("Container") if guest.is_container else tr("VM")
+                status = tr("läuft") if guest.running else tr("gestoppt")
+                child = QTreeWidgetItem([guest.title, f"{kind} · {status}", ""])
+                child.setData(0, CONTAINER_ROLE, f"{conn.id}\x1f{guest.vmid}")
+                child.setIcon(0, style.icon("box" if guest.is_container else "server", c["accent"] if guest.running else c["muted"]))
+                child.setForeground(1, muted)
+                if not guest.running:
+                    child.setForeground(0, muted)
+                child.setToolTip(0, "\n".join(filter(None, [guest.title, f"{kind} · {status}", guest.node])))
+                child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                host_item.addChild(child)
         else:
             for box in state:
                 child = QTreeWidgetItem([box.name, f"{box.image} · {box.status}" if box.status else box.image, ""])
@@ -769,7 +808,8 @@ class MainWindow(QMainWindow):
 
         def work(job):
             try:
-                found = docker.list_containers(self.cfg, snapshot, password=password)
+                lister = proxmox.list_guests if snapshot.proxmox else docker.list_containers
+                found = lister(self.cfg, snapshot, password=password)
             except Exception as exc:  # jede Meldung landet als Text im Baum
                 return job, conn.id, gen, None, exc
             return job, conn.id, gen, found, None
@@ -786,7 +826,7 @@ class MainWindow(QMainWindow):
         if gen != self._docker_gen.get(cid):
             return  # inzwischen neu geladen oder Verbindung geändert
         conn = self.cfg.connection_by_id(cid)
-        if conn is None or not conn.docker:
+        if conn is None or not _has_children(conn):
             self._containers.pop(cid, None)
             return
         if isinstance(exc, sftp.SftpAuthError):
@@ -815,13 +855,13 @@ class MainWindow(QMainWindow):
         conn = self.cfg.connection_by_id(conn_id)
         state = self._containers.get(conn_id, "")
         missing = conn_id not in self._containers or (retry_errors and isinstance(state, str))
-        if conn and conn.docker and conn_id in self._docker_expanded and missing:
+        if conn and _has_children(conn) and conn_id in self._docker_expanded and missing:
             self._load_containers(conn)
 
     def reload_containers(self, conn_id: str):
         conn = self.cfg.connection_by_id(conn_id)
         item = self._find_item(conn_id)
-        if conn is None or item is None or not conn.docker:
+        if conn is None or item is None or not _has_children(conn):
             return
         self._docker_expanded.add(conn_id)
         self._rebuilding += 1
@@ -835,6 +875,9 @@ class MainWindow(QMainWindow):
         if not target:
             return
         conn, name = target
+        if conn.proxmox:
+            self._connect_guest(terminal)
+            return
         shell = user = None  # None = Vorgaben der Verbindung
         if ask:
             dlg = DockerConnectDialog(name, conn.docker_shell, conn.docker_user, self)
@@ -846,6 +889,90 @@ class MainWindow(QMainWindow):
             launcher.launch(self.cfg, titled, terminal, remote_command=command)
         except (docker.DockerError, launcher.LaunchError) as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
+
+    def _connect_guest(self, terminal: Terminal | None = None):
+        """LXC: ``pct enter`` über den Host. VM: Adresse per Gast-Agent erfragen, dann SSH vom Host aus in die VM."""
+        target = self._selected_guest()
+        if not target:
+            return
+        conn, guest = target
+        try:
+            if guest.is_container:
+                titled, command = proxmox.guest_target(conn, guest, proxmox.shell_command(guest))
+                launcher.launch(self.cfg, titled, terminal, remote_command=command)
+                return
+        except (proxmox.ProxmoxError, launcher.LaunchError) as exc:
+            QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
+            return
+        if not guest.running:
+            QMessageBox.information(self, tr("Verbindung konnte nicht geöffnet werden"),
+                                    tr("Die VM „{name}“ läuft nicht.", name=guest.title))
+            return
+        snapshot, password = replace(conn), self._docker_passwords.get(conn.id)
+
+        def work(job):
+            try:
+                return job, conn, guest, terminal, proxmox.vm_address(self.cfg, snapshot, guest, password=password), None
+            except Exception as exc:
+                return job, conn, guest, terminal, "", exc
+
+        job = Job(work, self)
+        self._docker_jobs.add(job)
+        job.result.connect(self._vm_address_found)
+        job.start()
+
+    @Slot(object)
+    def _vm_address_found(self, res):
+        job, conn, guest, terminal, address, exc = res
+        self._docker_jobs.discard(job)
+        try:
+            if exc is not None:
+                raise exc
+            titled, command = proxmox.guest_target(conn, guest, proxmox.vm_command(address, conn.proxmox_vm_user))
+            launcher.launch(self.cfg, titled, terminal, remote_command=command)
+        except (proxmox.ProxmoxError, sftp.SftpError, launcher.LaunchError) as exc:
+            QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
+
+    def power_guest(self, action: str):
+        """Startet/stoppt den gewählten Gast. Herunterfahren und Neustart laufen sanft; Stoppen und Neustart fragen vorher nach."""
+        target = self._selected_guest()
+        if not target or action not in proxmox.ACTIONS:
+            return
+        conn, guest = target
+        if action in ("stop", "reboot"):
+            question = (tr("„{name}“ hart stoppen? Ungespeicherte Daten gehen verloren.", name=guest.title) if action == "stop"
+                        else tr("„{name}“ neu starten?", name=guest.title))
+            if QMessageBox.question(self, tr("Bestätigen"), question) != QMessageBox.StandardButton.Yes:
+                return
+        snapshot, password = replace(conn), self._docker_passwords.get(conn.id)
+
+        def work(job):
+            try:
+                proxmox.power(self.cfg, snapshot, guest, action, password=password)
+            except Exception as exc:
+                return job, conn.id, exc
+            return job, conn.id, None
+
+        job = Job(work, self)
+        self._docker_jobs.add(job)
+        job.result.connect(self._power_done)
+        job.start()
+
+    @Slot(object)
+    def _power_done(self, res):
+        job, cid, exc = res
+        self._docker_jobs.discard(job)
+        if exc is not None:
+            QMessageBox.critical(self, tr("Proxmox"), str(exc))
+            return
+        conn = self.cfg.connection_by_id(cid)
+        if conn is not None and conn.proxmox:  # Proxmox schaltet im Hintergrund: nach kurzer Pause den neuen Status holen
+            QTimer.singleShot(3000, lambda: self._reload_if_current(cid))
+
+    def _reload_if_current(self, cid: str):
+        conn = self.cfg.connection_by_id(cid)
+        if conn is not None and conn.proxmox:
+            self.reload_containers(cid)
 
     # --- Verbindungen ---
     def open_files(self):

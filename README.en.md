@@ -199,6 +199,16 @@ If Docker runs on a host, you can connect straight into a container. In the conn
 - The Docker user needs access to the Docker socket (group `docker`); `sudo docker` is not used. The settings are synchronized,
   the containers themselves are not.
 
+## Proxmox
+
+If a host is a Proxmox VE server, Sesam shows its guests in the tree. In the connection (*Edit*) tick
+**Show this host’s Proxmox guests (VMs and LXC) in the connection tree** (replaces the Docker view); optionally enter the user for VMs (default `root`).
+- **In the tree:** on expanding, Sesam asks the host over SSH as `root` with `pvesh` for all VMs and LXC containers (including other cluster nodes). Running guests are coloured, stopped ones grey; templates are hidden.
+- **LXC containers:** double-click opens `pct enter <ID>` in the terminal through the host (for guests on other nodes via SSH through that node).
+- **VMs:** Sesam asks for the IP address through the QEMU guest agent and connects over SSH from the Proxmox host into the VM. The agent must be running in the VM.
+- **Power:** right-click → *Start*, *Shut down*, *Stop (forced)*, *Restart*. Stop and restart ask for confirmation first; afterwards Sesam reloads the status.
+- As with Docker, the file browser and jump hosts only work for the host itself. The settings are synchronized, the guests themselves are not.
+
 ## Synchronization via Git
 
 *Synchronization …* in the sidebar syncs connections, groups, identities, keys and snippets through a Git repository (terminals and
@@ -296,4 +306,4 @@ Qt system libraries are missing. The sync tests need `git`.
 The package tests (`test_packaging.py`) need `dpkg-deb` and are skipped otherwise.
 The SFTP tests (`test_sftp.py`, `test_sftp_gui.py`) start a small SSH/SFTP server inside the test process (only on `127.0.0.1`, using
 `paramiko`) and are skipped if `paramiko` is missing. The same applies to the Docker tests (`test_docker.py`, `test_docker_gui.py`); the test server
-answers `docker ps` there.
+answers `docker ps` there. Likewise `test_proxmox.py` (answers `pvesh`).

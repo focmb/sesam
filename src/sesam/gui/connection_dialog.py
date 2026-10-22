@@ -135,6 +135,22 @@ class ConnectionDialog(QDialog):
 
         self.docker.toggled.connect(_docker_toggled)
         _docker_toggled()
+        self.proxmox = QCheckBox(tr("Proxmox-Gäste (VMs und LXC) dieses Hosts im Verbindungsbaum anzeigen"))
+        self.proxmox.setChecked(self.conn.proxmox)
+        self.proxmox.setToolTip(tr("Beim Aufklappen wird der Proxmox-Host per SSH nach seinen Gästen gefragt (pvesh). "
+                                   "Dafür ist der Benutzer root nötig. Ersetzt die Docker-Anzeige."))
+        self.proxmox_vm_user = QLineEdit(self.conn.proxmox_vm_user)
+        self.proxmox_vm_user.setPlaceholderText(tr("root"))
+
+        def _proxmox_toggled(*_):
+            on = self.proxmox.isChecked()
+            self.proxmox_vm_user.setEnabled(on)
+            self.docker.setEnabled(not on)
+            if on:
+                self.docker.setChecked(False)
+
+        self.proxmox.toggled.connect(_proxmox_toggled)
+        _proxmox_toggled()
         self.group = QComboBox()
         self.group.setEditable(True)
         self.group.addItems([""] + grp.all_groups(cfg))
@@ -184,6 +200,8 @@ class ConnectionDialog(QDialog):
         form.addRow(tr("Docker"), self.docker)
         form.addRow(tr("Shell im Container"), self.docker_shell)
         form.addRow(tr("Benutzer im Container"), self.docker_user)
+        form.addRow(tr("Proxmox"), self.proxmox)
+        form.addRow(tr("Benutzer in VMs"), self.proxmox_vm_user)
         form.addRow(tr("Gruppe"), self.group)
         form.addRow(tr("Farbe"), self.color)
         form.addRow(tr("Tags"), self.tags)
@@ -263,6 +281,8 @@ class ConnectionDialog(QDialog):
         c.docker = self.docker.isChecked()
         c.docker_shell = self.docker_shell.text().strip()
         c.docker_user = self.docker_user.text().strip()
+        c.proxmox = self.proxmox.isChecked()
+        c.proxmox_vm_user = self.proxmox_vm_user.text().strip()
         c.group = grp.normalize(self.group.currentText())
         c.color = self.color.currentData() or ""
         c.tags = tag_util.parse(self.tags.text())

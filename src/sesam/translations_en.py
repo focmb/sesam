@@ -479,4 +479,42 @@ EN: dict[str, str] = {
     "Terminal-Test fehlgeschlagen": "Terminal test failed",
     "Eigenes Terminal (leer)": "Custom terminal (empty)",
     "Vorlage: {name}": "Template: {name}",
+    # proxmox
+    "Abfrage von Proxmox fehlgeschlagen: {exc}": "Querying Proxmox failed: {exc}",
+    "Aufklappen, um die Gäste zu laden": "Expand to load the guests",
+    "Beim Aufklappen wird der Proxmox-Host per SSH nach seinen Gästen gefragt (pvesh). Dafür ist der Benutzer root nötig. Ersetzt die Docker-Anzeige.":
+        "When expanded, the Proxmox host is asked over SSH for its guests (pvesh). This requires the root user. Replaces the Docker view.",
+    "Benutzer in VMs": "User in VMs",
+    "Bestätigen": "Confirm",
+    "Container": "Container",
+    "Der Host ist kein Proxmox-Server (Befehl „pvesh“ nicht gefunden).":
+        "The host is not a Proxmox server (command “pvesh” not found).",
+    "Der Knotenname „{node}“ ist ungültig.": "The node name “{node}” is invalid.",
+    "Die Adresse der VM „{name}“ ist nicht abfragbar (läuft der QEMU-Gast-Agent?): {exc}":
+        "The address of VM “{name}” cannot be queried (is the QEMU guest agent running?): {exc}",
+    "Die Antwort von Proxmox ist nicht lesbar.": "The response from Proxmox cannot be read.",
+    "Die VM „{name}“ läuft nicht.": "The VM “{name}” is not running.",
+    "Die VM „{name}“ meldet keine IP-Adresse (läuft der QEMU-Gast-Agent?).":
+        "The VM “{name}” reports no IP address (is the QEMU guest agent running?).",
+    "Gäste aktualisieren": "Refresh guests",
+    "Gäste werden geladen …": "Loading guests …",
+    "Herunterfahren": "Shut down",
+    "Kein Zugriff auf Proxmox: Die Abfrage braucht den Benutzer root (oder entsprechende Rechte).":
+        "No access to Proxmox: the query needs the root user (or equivalent permissions).",
+    "Keine Gäste": "No guests",
+    "Neustarten": "Restart",
+    "Nur LXC-Container haben eine Shell über den Host; VMs werden per SSH erreicht.":
+        "Only LXC containers have a shell through the host; VMs are reached over SSH.",
+    "Proxmox meldet: {first}": "Proxmox reports: {first}",
+    "Proxmox-Gäste (VMs und LXC) dieses Hosts im Verbindungsbaum anzeigen":
+        "Show this host's Proxmox guests (VMs and LXC) in the connection tree",
+    "Starten": "Start",
+    "Stoppen (hart)": "Stop (forced)",
+    "Unbekannte Aktion „{action}“.": "Unknown action “{action}”.",
+    "die Proxmox-Anzeige": "the Proxmox view",
+    "die Proxmox-Steuerung": "Proxmox control",
+    "gestoppt": "stopped",
+    "läuft": "running",
+    "„{name}“ hart stoppen? Ungespeicherte Daten gehen verloren.": "Force-stop “{name}”? Unsaved data will be lost.",
+    "„{name}“ neu starten?": "Restart “{name}”?",
 }
