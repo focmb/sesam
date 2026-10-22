@@ -85,6 +85,36 @@ class SftpTests(unittest.TestCase):
         self.server.close()  # beendet auch die laufenden Transporte
         s2.close()  # darf nicht werfen
 
+    def test_password_login_does_not_try_agent_or_default_keys(self):
+        # Switches trennen nach wenigen Fehlversuchen: nur das Passwort versuchen, nicht erst alle Schlüssel aus ~/.ssh
+        seen = {}
+        real = paramiko.SSHClient.connect
+
+        def spy(client, *args, **kwargs):
+            seen.update(kwargs)
+            return real(client, *args, **kwargs)
+
+        with mock.patch.object(paramiko.SSHClient, "connect", spy):
+            self.connect()
+        self.assertEqual((seen["look_for_keys"], seen["allow_agent"]), (False, False))
+
+    def test_key_login_keeps_agent_and_default_keys(self):
+        seen = {}
+
+        def fake(client, *args, **kwargs):
+            seen.update(kwargs)
+            raise paramiko.AuthenticationException("x")
+
+        with mock.patch.object(paramiko.SSHClient, "connect", fake), self.assertRaises(sftp.SftpAuthError):
+            self.connect(password=None)
+        self.assertEqual((seen["look_for_keys"], seen["allow_agent"]), (True, True))
+
+    def test_hangup_during_login_gets_a_readable_message(self):
+        with mock.patch.object(paramiko.SSHClient, "connect", side_effect=paramiko.SSHException("No existing session")):
+            with self.assertRaises(sftp.SftpError) as ctx:
+                self.connect()
+        self.assertIn("während der Anmeldung getrennt", str(ctx.exception))
+
     def test_jump_host_is_not_supported(self):
         conn = Connection(name="J", host="127.0.0.1", port=self.server.port, user="tester", jump_host="a@b")
         with self.assertRaises(sftp.SftpError) as ctx:

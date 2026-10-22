@@ -129,8 +129,13 @@ def open_client(
     client.set_missing_host_key_policy(_make_host_key_policy(known_hosts))
 
     key_file = os.path.expanduser(eff.identity_file) if eff.identity_file else None
+    # Mit Passwort und ohne Schlüsseldatei nur das Passwort versuchen: Jeder weitere Schlüssel aus ~/.ssh oder dem Agent zählt als
+    # Anmeldeversuch, und Switches (Cisco: 3 Versuche) trennen die Verbindung dann, bevor das Passwort drankommt.
+    password_only = bool(password) and not key_file
     try:
         client.connect(
+            look_for_keys=not password_only,
+            allow_agent=not password_only,
             hostname=eff.host.strip(),
             port=eff.port or 22,
             username=eff.user or None,
@@ -156,6 +161,9 @@ def open_client(
         client.close()
         if "No authentication methods" in str(exc):  # weder Passwort noch Schlüssel vorhanden
             raise SftpAuthError(tr("Es ist kein Passwort oder Schlüssel hinterlegt.")) from exc
+        if "No existing session" in str(exc):  # die Gegenseite hat während der Anmeldung aufgelegt
+            raise SftpError(tr("Verbindung zu {host} fehlgeschlagen: Das Gerät hat die Verbindung während der Anmeldung getrennt "
+                               "(zu viele Anmeldeversuche oder nicht unterstützte Verfahren).", host=eff.host)) from exc
         raise SftpError(tr("Verbindung zu {host} fehlgeschlagen: {exc}", host=eff.host, exc=exc)) from exc
 
 

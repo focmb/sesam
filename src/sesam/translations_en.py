@@ -550,4 +550,6 @@ EN: dict[str, str] = {
     "Keine Ports": "No ports",
     "aus": "off",
     "verbunden": "connected",
+    "Verbindung zu {host} fehlgeschlagen: Das Gerät hat die Verbindung während der Anmeldung getrennt (zu viele Anmeldeversuche oder nicht unterstützte Verfahren).":
+        "Connection to {host} failed: the device closed the connection during login (too many login attempts or unsupported methods).",
 }
