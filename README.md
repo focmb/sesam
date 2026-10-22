@@ -2,6 +2,8 @@
 
 # Sesam
 
+*[English version: README.en.md](README.en.md)*
+
 Desktop-Tool (Windows und Linux, Python + PySide6) zum Verwalten von SSH-Verbindungen.
 Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 
