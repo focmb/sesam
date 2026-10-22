@@ -12,6 +12,10 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Standardmäßig nur lesen; der Release-Job bekommt unten ausdrücklich Schreibrechte.
+permissions:
+  contents: read
+
 jobs:
   linux:
     # Ubuntu 22.04 = glibc 2.35: das Programm läuft auf allen neueren Linux-Distributionen.
