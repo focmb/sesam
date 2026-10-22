@@ -17,7 +17,7 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import style, theme
-from .. import colors, docker, launcher, passwords, proxmox, sftp, snippets, storage
+from .. import colors, docker, cisco, launcher, passwords, proxmox, sftp, snippets, storage
 from .. import tags as tag_util
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -39,8 +39,8 @@ CONTAINER_ROLE = ID_ROLE + 2  # „<ID der Host-Verbindung>\x1f<Containername bz
 
 
 def _has_children(conn: Connection) -> bool:
-    """Der Host zeigt Docker-Container oder Proxmox-Gäste als Unterelemente."""
-    return conn.docker or conn.proxmox
+    """Der Host zeigt Docker-Container, Proxmox-Gäste oder Cisco-Ports als Unterelemente."""
+    return conn.docker or conn.proxmox or conn.cisco
 
 
 def _submenu(menu: QMenu, title: str) -> QMenu:
@@ -584,7 +584,18 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         container = self._selected_container()
         guest = self._selected_guest() if container else None
-        if container:
+        port = self._selected_port() if container else None
+        if port is not None:
+            menu.addAction(self.a_connect)
+            menu.addSeparator()
+            menu.addAction(tr("Port einschalten") if port[1].disabled else tr("Port ausschalten")).triggered.connect(
+                lambda: self.port_shutdown(not port[1].disabled))
+            menu.addAction(tr("Beschreibung ändern …")).triggered.connect(self.port_description)
+            menu.addAction(tr("Konfiguration speichern")).triggered.connect(lambda: self.save_device(port[0]))
+            menu.addSeparator()
+            menu.addAction(tr("Ports aktualisieren")).triggered.connect(lambda: self.reload_containers(port[0].id))
+            menu.addSeparator()
+        elif container:
             menu.addAction(self.a_connect)
             sub = _submenu(menu, tr("Verbinden mit …"))
             for t in self.cfg.terminals:
@@ -612,8 +623,10 @@ class MainWindow(QMainWindow):
             menu.addAction(self.a_files)
             self._snippet_menu(menu, [conn])
             self._color_menu(menu, conn.color, lambda key: self.set_connection_color(conn, key))
+            if conn.cisco:
+                menu.addAction(tr("Konfiguration speichern")).triggered.connect(lambda: self.save_device(conn))
             if _has_children(conn):
-                menu.addAction(tr("Gäste aktualisieren") if conn.proxmox else tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(conn.id))
+                menu.addAction(tr("Ports aktualisieren") if conn.cisco else tr("Gäste aktualisieren") if conn.proxmox else tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(conn.id))
             menu.addSeparator()
             menu.addAction(self.a_edit)
             menu.addAction(self.a_dup)
@@ -711,6 +724,17 @@ class MainWindow(QMainWindow):
                 return conn, guest
         return None
 
+    def _selected_port(self) -> tuple[Connection, cisco.Port] | None:
+        target = self._selected_container()
+        if not target or not target[0].cisco:
+            return None
+        conn, name = target
+        state = self._containers.get(conn.id)
+        for port in state if isinstance(state, list) else []:
+            if port.name == name:
+                return conn, port
+        return None
+
     def _info_item(self, text: str, tooltip: str = "") -> QTreeWidgetItem:
         item = QTreeWidgetItem([text])
         item.setForeground(0, QBrush(QColor(theme.colors()["muted"])))
@@ -731,14 +755,29 @@ class MainWindow(QMainWindow):
         muted = QBrush(QColor(c["muted"]))
         state = self._containers.get(conn.id, "")
         guests = conn.proxmox
+        ports = conn.cisco
         if conn.id not in self._containers:
-            host_item.addChild(self._info_item("…", tr("Aufklappen, um die Gäste zu laden") if guests else tr("Aufklappen, um die Container zu laden")))
+            host_item.addChild(self._info_item("…", tr("Aufklappen, um die Ports zu laden") if ports else tr("Aufklappen, um die Gäste zu laden") if guests else tr("Aufklappen, um die Container zu laden")))
         elif state is None:
-            host_item.addChild(self._info_item(tr("Gäste werden geladen …") if guests else tr("Container werden geladen …")))
+            host_item.addChild(self._info_item(tr("Ports werden geladen …") if ports else tr("Gäste werden geladen …") if guests else tr("Container werden geladen …")))
         elif isinstance(state, str):
             host_item.addChild(self._info_item("⚠ " + state, state))
         elif not state:
-            host_item.addChild(self._info_item(tr("Keine Gäste") if guests else tr("Keine laufenden Container")))
+            host_item.addChild(self._info_item(tr("Keine Ports") if ports else tr("Keine Gäste") if guests else tr("Keine laufenden Container")))
+        elif ports:
+            for port in state:
+                label = tr("aus") if port.disabled else tr("verbunden") if port.up else port.status or "?"
+                details = " · ".join(filter(None, [label, port.description, f"VLAN {port.vlan}" if port.vlan and port.vlan != "--" else "", port.speed]))
+                child = QTreeWidgetItem([port.name, details, ""])
+                child.setData(0, CONTAINER_ROLE, f"{conn.id}\x1f{port.name}")
+                color = c["accent"] if port.up else c["muted"]
+                child.setIcon(0, style.icon("server", color))
+                child.setForeground(1, muted)
+                if not port.up:
+                    child.setForeground(0, muted)
+                child.setToolTip(0, "\n".join(filter(None, [port.name, port.description, port.status, port.type])))
+                child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                host_item.addChild(child)
         elif guests:
             for guest in state:
                 kind = tr("Container") if guest.is_container else tr("VM")
@@ -808,7 +847,7 @@ class MainWindow(QMainWindow):
 
         def work(job):
             try:
-                lister = proxmox.list_guests if snapshot.proxmox else docker.list_containers
+                lister = (proxmox.list_guests if snapshot.proxmox else cisco.list_ports if snapshot.cisco else docker.list_containers)
                 found = lister(self.cfg, snapshot, password=password)
             except Exception as exc:  # jede Meldung landet als Text im Baum
                 return job, conn.id, gen, None, exc
@@ -875,6 +914,12 @@ class MainWindow(QMainWindow):
         if not target:
             return
         conn, name = target
+        if conn.cisco:  # Ports haben keine eigene Verbindung: Doppelklick öffnet das Gerät
+            try:
+                launcher.launch(self.cfg, conn, terminal)
+            except launcher.LaunchError as exc:
+                QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
+            return
         if conn.proxmox:
             self._connect_guest(terminal)
             return
@@ -957,6 +1002,65 @@ class MainWindow(QMainWindow):
         self._docker_jobs.add(job)
         job.result.connect(self._power_done)
         job.start()
+
+    def _device_job(self, conn: Connection, fn, done_text: str | None = None):
+        """Führt ``fn(snapshot, password)`` am Cisco-Gerät im Hintergrund aus, meldet Fehler und lädt danach die Ports neu."""
+        snapshot, password = replace(conn), self._docker_passwords.get(conn.id)
+
+        def work(job):
+            try:
+                fn(snapshot, password)
+            except Exception as exc:
+                return job, conn.id, exc
+            return job, conn.id, None
+
+        job = Job(work, self)
+        self._docker_jobs.add(job)
+        job.result.connect(self._device_done)
+        job.start()
+
+    @Slot(object)
+    def _device_done(self, res):
+        job, cid, exc = res
+        self._docker_jobs.discard(job)
+        if exc is not None:
+            QMessageBox.critical(self, tr("Cisco"), str(exc))
+            return
+        conn = self.cfg.connection_by_id(cid)
+        if conn is not None and conn.cisco:
+            self.reload_containers(cid)
+
+    def port_shutdown(self, shutdown: bool):
+        """Schaltet den gewählten Port aus (``shutdown``) bzw. ein (``no shutdown``); Ausschalten fragt vorher nach."""
+        target = self._selected_port()
+        if not target:
+            return
+        conn, port = target
+        if shutdown and QMessageBox.question(
+                self, tr("Bestätigen"), tr("Port „{name}“ ausschalten? Geräte an diesem Port verlieren die Verbindung.", name=port.name)
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._device_job(conn, lambda c, pw: cisco.set_shutdown(self.cfg, c, port.name, shutdown, password=pw))
+
+    def port_description(self):
+        target = self._selected_port()
+        if not target:
+            return
+        conn, port = target
+        text, ok = QInputDialog.getText(self, tr("Beschreibung"), tr("Beschreibung für {name}:", name=port.name),
+                                        QLineEdit.EchoMode.Normal, port.description)
+        if not ok:
+            return
+        try:
+            cisco.check_description(text)
+        except cisco.CiscoError as exc:
+            QMessageBox.warning(self, tr("Beschreibung"), str(exc))
+            return
+        self._device_job(conn, lambda c, pw: cisco.set_description(self.cfg, c, port.name, text, password=pw))
+
+    def save_device(self, conn: Connection):
+        """Speichert die laufende Konfiguration des Geräts dauerhaft (write memory)."""
+        self._device_job(conn, lambda c, pw: cisco.save_config(self.cfg, c, password=pw))
 
     @Slot(object)
     def _power_done(self, res):

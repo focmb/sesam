@@ -209,6 +209,16 @@ If a host is a Proxmox VE server, Sesam shows its guests in the tree. In the con
 - **Power:** right-click → *Start*, *Shut down*, *Stop (forced)*, *Restart*. Stop and restart ask for confirmation first; afterwards Sesam reloads the status.
 - As with Docker, the file browser and jump hosts only work for the host itself. The settings are synchronized, the guests themselves are not.
 
+## Cisco devices
+
+For switches running Cisco IOS, IOS-XE or NX-OS, Sesam shows the ports in the tree. In the connection (*Edit*) tick
+**Show this Cisco device’s ports … in the connection tree** (replaces the Docker and Proxmox views). The user needs privilege level 15.
+- **In the tree:** on expanding, Sesam opens an SSH shell on the device and reads `show interfaces status`. Each port shows its state (*connected*, *notconnect*, *off*, *err-disabled* …), description, VLAN and speed.
+- **Switch on/off:** right-click → *Shut down port* (`shutdown`, with confirmation) or *Enable port* (`no shutdown`).
+- **Description:** right-click → *Change description …* sets `description`; empty removes it.
+- **Save:** *Save configuration* (on the device or on a port) writes the running configuration permanently (`write memory`, on NX-OS `copy running-config startup-config`). Port changes take effect immediately, but without saving they only last until the device restarts.
+- Double-clicking a port opens the device in the terminal. As with Docker and Proxmox, the file browser and jump hosts only work for the device itself.
+
 ## Synchronization via Git
 
 *Synchronization …* in the sidebar syncs connections, groups, identities, keys and snippets through a Git repository (terminals and
@@ -306,4 +316,4 @@ Qt system libraries are missing. The sync tests need `git`.
 The package tests (`test_packaging.py`) need `dpkg-deb` and are skipped otherwise.
 The SFTP tests (`test_sftp.py`, `test_sftp_gui.py`) start a small SSH/SFTP server inside the test process (only on `127.0.0.1`, using
 `paramiko`) and are skipped if `paramiko` is missing. The same applies to the Docker tests (`test_docker.py`, `test_docker_gui.py`); the test server
-answers `docker ps` there. Likewise `test_proxmox.py` (answers `pvesh`).
+answers `docker ps` there. Likewise `test_proxmox.py` (answers `pvesh`) and `test_cisco.py` (simulated switch with a shell).

@@ -15,8 +15,9 @@ logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)  # Abbrüche 
 
 
 class _Auth(paramiko.ServerInterface):
-    def __init__(self, user: str, password: str, exec_handler=None):
+    def __init__(self, user: str, password: str, exec_handler=None, shell_handler=None):
         self.user, self.password, self.exec_handler = user, password, exec_handler
+        self.shell_handler = shell_handler
 
     def check_auth_password(self, username, password):
         return AUTH_SUCCESSFUL if (username, password) == (self.user, self.password) else AUTH_FAILED
@@ -26,6 +27,24 @@ class _Auth(paramiko.ServerInterface):
 
     def check_channel_request(self, kind, chanid):
         return OPEN_SUCCEEDED
+
+    def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
+        return self.shell_handler is not None
+
+    def check_channel_shell_request(self, channel):
+        """Startet ``shell_handler(channel)`` in einem Thread (für Geräte wie Switches mit interaktiver Shell)."""
+        if self.shell_handler is None:
+            return False
+
+        def run():
+            time.sleep(0.05)
+            try:
+                self.shell_handler(channel)
+            finally:
+                channel.close()
+
+        threading.Thread(target=run, daemon=True).start()
+        return True
 
     def check_channel_exec_request(self, channel, command):
         """Beantwortet ``exec`` mit ``exec_handler(befehl) -> (stdout: bytes, stderr: bytes, status: int)``."""
@@ -128,8 +147,9 @@ class _Files(SFTPServerInterface):
 
 
 class SftpTestServer:
-    def __init__(self, root: str, user: str = "tester", password: str = "geheim", host_key=None, exec_handler=None):
+    def __init__(self, root: str, user: str = "tester", password: str = "geheim", host_key=None, exec_handler=None, shell_handler=None):
         self.user, self.password = user, password
+        self._shell_handler = shell_handler
         self.commands: list[str] = []  # alle per exec ausgeführten Befehle (für Prüfungen in Tests)
         self._exec_handler = exec_handler
         self.host_key = host_key or paramiko.RSAKey.generate(2048)
@@ -152,7 +172,7 @@ class SftpTestServer:
             transport.add_server_key(self.host_key)
             transport.set_subsystem_handler("sftp", SFTPServer, sftp_si=self._files)
             try:
-                transport.start_server(server=_Auth(self.user, self.password, self._exec if self._exec_handler else None))
+                transport.start_server(server=_Auth(self.user, self.password, self._exec if self._exec_handler else None, self._shell_handler))
             except (paramiko.SSHException, EOFError, OSError):
                 continue
             self._transports.append(transport)

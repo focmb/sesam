@@ -207,6 +207,16 @@ Ist ein Host ein Proxmox-VE-Server, zeigt Sesam seine Gäste im Baum. In der Ver
 - **Ein-/Ausschalten:** Rechtsklick → *Starten*, *Herunterfahren*, *Stoppen (hart)*, *Neustarten*. Stoppen und Neustarten fragen vorher nach; danach lädt Sesam den Status neu.
 - Dateibrowser und Jump-Hosts funktionieren wie bei Docker nur für den Host selbst. Die Einstellungen werden mit synchronisiert, die Gäste selbst nicht.
 
+## Cisco-Geräte
+
+Für Switches mit Cisco IOS, IOS-XE oder NX-OS zeigt Sesam die Ports im Baum. In der Verbindung (*Bearbeiten*) den Haken
+**Ports dieses Cisco-Geräts … im Verbindungsbaum anzeigen** setzen (ersetzt die Docker- und Proxmox-Anzeige). Der Benutzer braucht Privilegstufe 15.
+- **Im Baum:** Beim Aufklappen öffnet Sesam per SSH eine Shell auf dem Gerät und liest `show interfaces status`. Jeder Port zeigt Zustand (*verbunden*, *notconnect*, *aus*, *err-disabled* …), Beschreibung, VLAN und Geschwindigkeit.
+- **Ein-/Ausschalten:** Rechtsklick → *Port ausschalten* (`shutdown`, mit Rückfrage) bzw. *Port einschalten* (`no shutdown`).
+- **Beschreibung:** Rechtsklick → *Beschreibung ändern …* setzt `description`; leer entfernt sie.
+- **Speichern:** *Konfiguration speichern* (am Gerät oder an einem Port) schreibt die laufende Konfiguration dauerhaft (`write memory`, auf NX-OS `copy running-config startup-config`). Änderungen an Ports wirken sofort, bleiben aber ohne Speichern nur bis zum Neustart des Geräts.
+- Doppelklick auf einen Port öffnet das Gerät im Terminal. Wie bei Docker und Proxmox gehen Dateibrowser und Jump-Hosts nur für das Gerät selbst.
+
 ## Synchronisation über Git
 
 *Synchronisation …* in der Seitenleiste gleicht Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets über ein Git-Repository ab (Terminals und
@@ -304,4 +314,4 @@ Qt-Systembibliotheken fehlen. Die Sync-Tests brauchen `git`.
 Die Paket-Tests (`test_packaging.py`) brauchen `dpkg-deb` und werden sonst übersprungen.
 Die SFTP-Tests (`test_sftp.py`, `test_sftp_gui.py`) starten dafür einen kleinen SSH/SFTP-Server im Testprozess (nur auf `127.0.0.1`, mit
 `paramiko`) und werden übersprungen, wenn `paramiko` fehlt. Dasselbe gilt für die Docker-Tests (`test_docker.py`, `test_docker_gui.py`); der Testserver
-antwortet dort auf `docker ps`. Ebenso `test_proxmox.py` (antwortet auf `pvesh`).
+antwortet dort auf `docker ps`. Ebenso `test_proxmox.py` (antwortet auf `pvesh`) und `test_cisco.py` (simulierter Switch mit Shell).

@@ -145,6 +145,7 @@ class Connection:
     docker_shell: str = ""  # Shell im Container, leer = bash, sonst sh
     docker_user: str = ""  # Benutzer im Container (docker exec -u), leer = Standard des Containers
     proxmox: bool = False  # Gäste (VMs, LXC) des Proxmox-Hosts als Unterelemente im Baum anzeigen (ersetzt Docker)
+    cisco: bool = False  # Ports eines Cisco-Geräts (IOS, IOS-XE, NX-OS) als Unterelemente im Baum anzeigen (ersetzt Docker/Proxmox)
     proxmox_vm_user: str = ""  # Benutzer für den SSH-Sprung in eine VM, leer = root
     group: str = ""
     terminal_id: str = ""  # leer = Standardterminal

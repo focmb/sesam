@@ -17,7 +17,7 @@ from sesam.translations_en import EN
 
 SRC = Path(__file__).resolve().parent.parent / "src" / "sesam"
 # im Englischen gleich geschrieben: bewusst nicht im Katalog
-SAME_IN_ENGLISH = {"Name*", "Host*", "Port", "Jump-Host", "Docker", "Proxmox", "root", "VM", "Tags", "Terminal", "Shell", "Branch", "Orange"}
+SAME_IN_ENGLISH = {"Name*", "Host*", "Port", "Jump-Host", "Docker", "Proxmox", "Cisco", "root", "VM", "Tags", "Terminal", "Shell", "Branch", "Orange"}
 
 
 def _fields(text: str) -> set[str]:

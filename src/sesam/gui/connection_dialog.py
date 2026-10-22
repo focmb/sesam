@@ -142,15 +142,24 @@ class ConnectionDialog(QDialog):
         self.proxmox_vm_user = QLineEdit(self.conn.proxmox_vm_user)
         self.proxmox_vm_user.setPlaceholderText(tr("root"))
 
-        def _proxmox_toggled(*_):
-            on = self.proxmox.isChecked()
-            self.proxmox_vm_user.setEnabled(on)
-            self.docker.setEnabled(not on)
-            if on:
-                self.docker.setChecked(False)
+        self.cisco = QCheckBox(tr("Ports dieses Cisco-Geräts (IOS, IOS-XE, NX-OS) im Verbindungsbaum anzeigen"))
+        self.cisco.setChecked(self.conn.cisco)
+        self.cisco.setToolTip(tr("Beim Aufklappen werden die Ports per SSH abgefragt (show interfaces status). Ports lassen sich ein-/ausschalten "
+                                 "und beschriften. Der Benutzer braucht Privilegstufe 15. Ersetzt die Docker- und Proxmox-Anzeige."))
 
-        self.proxmox.toggled.connect(_proxmox_toggled)
-        _proxmox_toggled()
+        boxes = (self.docker, self.proxmox, self.cisco)
+
+        def _exclusive(box, checked):
+            # Docker, Proxmox und Cisco teilen sich die Unterelemente im Baum: nur eines gleichzeitig
+            if checked:
+                for other in boxes:
+                    if other is not box and other.isChecked():
+                        other.setChecked(False)
+            self.proxmox_vm_user.setEnabled(self.proxmox.isChecked())
+
+        for box in boxes:
+            box.toggled.connect(lambda checked, b=box: _exclusive(b, checked))
+        self.proxmox_vm_user.setEnabled(self.proxmox.isChecked())
         self.group = QComboBox()
         self.group.setEditable(True)
         self.group.addItems([""] + grp.all_groups(cfg))
@@ -202,6 +211,7 @@ class ConnectionDialog(QDialog):
         form.addRow(tr("Benutzer im Container"), self.docker_user)
         form.addRow(tr("Proxmox"), self.proxmox)
         form.addRow(tr("Benutzer in VMs"), self.proxmox_vm_user)
+        form.addRow(tr("Cisco"), self.cisco)
         form.addRow(tr("Gruppe"), self.group)
         form.addRow(tr("Farbe"), self.color)
         form.addRow(tr("Tags"), self.tags)
@@ -282,6 +292,7 @@ class ConnectionDialog(QDialog):
         c.docker_shell = self.docker_shell.text().strip()
         c.docker_user = self.docker_user.text().strip()
         c.proxmox = self.proxmox.isChecked()
+        c.cisco = self.cisco.isChecked()
         c.proxmox_vm_user = self.proxmox_vm_user.text().strip()
         c.group = grp.normalize(self.group.currentText())
         c.color = self.color.currentData() or ""

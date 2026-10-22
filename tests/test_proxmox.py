@@ -254,7 +254,6 @@ class TreeTests(GuiTestCase):
         self.assertTrue(dlg.docker.isChecked())
         dlg.proxmox.setChecked(True)
         self.assertFalse(dlg.docker.isChecked())
-        self.assertFalse(dlg.docker.isEnabled())
         dlg.name.setText("x")
         dlg.host.setText("h")
         dlg._accept()

@@ -517,4 +517,37 @@ EN: dict[str, str] = {
     "läuft": "running",
     "„{name}“ hart stoppen? Ungespeicherte Daten gehen verloren.": "Force-stop “{name}”? Unsaved data will be lost.",
     "„{name}“ neu starten?": "Restart “{name}”?",
+    # cisco
+    "die Port-Anzeige": "the port view",
+    "die Port-Verwaltung": "port management",
+    "Die Portliste des Geräts ist nicht lesbar (kein „show interfaces status“?).":
+        "The device's port list cannot be read (no “show interfaces status”?).",
+    "Der Portname „{name}“ ist ungültig.": "The port name “{name}” is invalid.",
+    "Die Beschreibung darf kein „?“ enthalten.": "The description must not contain a “?”.",
+    "Die Beschreibung ist zu lang (höchstens {n} Zeichen).": "The description is too long (at most {n} characters).",
+    "Das Gerät meldet nur die Benutzerebene (Prompt „{prompt}“). Bitte einen Benutzer mit Privilegstufe 15 verwenden.":
+        "The device only offers the user EXEC level (prompt “{prompt}”). Please use a user with privilege level 15.",
+    "Das Gerät meldet: {error}": "The device reports: {error}",
+    "Auf dem Gerät lässt sich keine Shell öffnen: {exc}": "Cannot open a shell on the device: {exc}",
+    "Zeitüberschreitung: Das Gerät hat nicht rechtzeitig geantwortet.": "Timeout: the device did not answer in time.",
+    "Die Verbindung zum Gerät wurde vom Gerät beendet.": "The device closed the connection.",
+    "Die Verbindung zum Gerät wurde getrennt: {exc}": "The connection to the device was lost: {exc}",
+    "Ports dieses Cisco-Geräts (IOS, IOS-XE, NX-OS) im Verbindungsbaum anzeigen":
+        "Show this Cisco device's ports (IOS, IOS-XE, NX-OS) in the connection tree",
+    "Beim Aufklappen werden die Ports per SSH abgefragt (show interfaces status). Ports lassen sich ein-/ausschalten und beschriften. Der Benutzer braucht Privilegstufe 15. Ersetzt die Docker- und Proxmox-Anzeige.":
+        "When expanded, the ports are queried over SSH (show interfaces status). Ports can be switched on/off and labelled. The user needs privilege level 15. Replaces the Docker and Proxmox views.",
+    "Beschreibung": "Description",
+    "Beschreibung für {name}:": "Description for {name}:",
+    "Port „{name}“ ausschalten? Geräte an diesem Port verlieren die Verbindung.":
+        "Shut down port “{name}”? Devices on this port will lose connectivity.",
+    "Aufklappen, um die Ports zu laden": "Expand to load the ports",
+    "Beschreibung ändern …": "Change description …",
+    "Konfiguration speichern": "Save configuration",
+    "Ports aktualisieren": "Refresh ports",
+    "Ports werden geladen …": "Loading ports …",
+    "Port einschalten": "Enable port",
+    "Port ausschalten": "Shut down port",
+    "Keine Ports": "No ports",
+    "aus": "off",
+    "verbunden": "connected",
 }
