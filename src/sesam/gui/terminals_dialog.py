@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from .. import launcher
 from ..terminals import template_terminals
 from ..models import Config, Connection, Terminal
+from ..i18n import tr
 
 HELP = (
     "<b>Platzhalter:</b><br>"
@@ -27,7 +28,7 @@ class TerminalsDialog(QDialog):
 
     def __init__(self, cfg: Config, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Terminals konfigurieren")
+        self.setWindowTitle(tr("Terminals konfigurieren"))
         self.resize(720, 460)
         self.terminals: list[Terminal] = copy.deepcopy(cfg.terminals)
         self.default_id = cfg.default_terminal_id
@@ -35,16 +36,16 @@ class TerminalsDialog(QDialog):
 
         self.list = QListWidget()
         self.list.currentRowChanged.connect(self._select)
-        add = QPushButton("Neu ▾")
+        add = QPushButton(tr("Neu ▾"))
         add_menu = QMenu(add)
-        add_menu.addAction("Eigenes Terminal (leer)").triggered.connect(lambda: self._add())
+        add_menu.addAction(tr("Eigenes Terminal (leer)")).triggered.connect(lambda: self._add())
         add_menu.addSeparator()
         for tpl in template_terminals():
-            add_menu.addAction(f"Vorlage: {tpl.name}").triggered.connect(lambda _=False, t=tpl: self._add(t))
+            add_menu.addAction(tr("Vorlage: {name}", name=tpl.name)).triggered.connect(lambda _=False, t=tpl: self._add(t))
         add.setMenu(add_menu)
-        remove = QPushButton("Löschen")
+        remove = QPushButton(tr("Löschen"))
         remove.clicked.connect(self._remove)
-        make_default = QPushButton("Als Standard")
+        make_default = QPushButton(tr("Als Standard"))
         make_default.clicked.connect(self._make_default)
         left_buttons = QHBoxLayout()
         for b in (add, remove):
@@ -56,29 +57,30 @@ class TerminalsDialog(QDialog):
 
         self.name = QLineEdit()
         self.command = QLineEdit()
-        self.command.setPlaceholderText("z. B. /opt/ghostty/ghostty --title={title} -e {ssh_args}")
-        pick = QPushButton("Programm wählen …")
+        self.command.setPlaceholderText(tr("z. B. /opt/ghostty/ghostty --title={title} -e {ssh_args}"))
+        pick = QPushButton(tr("Programm wählen …"))
         pick.clicked.connect(self._pick_program)
         self.platform = QComboBox()
         for label, value in PLATFORMS:
+            label = tr(label)
             self.platform.addItem(label, value)
-        self.new_console = QCheckBox("Eigenes Konsolenfenster öffnen (Windows: cmd, PowerShell)")
+        self.new_console = QCheckBox(tr("Eigenes Konsolenfenster öffnen (Windows: cmd, PowerShell)"))
         for w in (self.name, self.command):
             w.textEdited.connect(self._store)
         self.platform.currentIndexChanged.connect(self._store)
         self.new_console.toggled.connect(self._store)
-        test = QPushButton("Testen (öffnet Terminal mit ssh localhost)")
+        test = QPushButton(tr("Testen (öffnet Terminal mit ssh localhost)"))
         test.clicked.connect(self._test)
 
         form = QFormLayout()
 
         form.setVerticalSpacing(8)
-        form.addRow("Name", self.name)
-        form.addRow("Befehlsvorlage", self.command)
+        form.addRow(tr("Name"), self.name)
+        form.addRow(tr("Befehlsvorlage"), self.command)
         form.addRow("", pick)
-        form.addRow("Plattform", self.platform)
+        form.addRow(tr("Plattform"), self.platform)
         form.addRow("", self.new_console)
-        help_label = QLabel(HELP)
+        help_label = QLabel(tr(HELP))
         help_label.setWordWrap(True)
         help_label.setTextFormat(Qt.TextFormat.RichText)
         right = QVBoxLayout()
@@ -107,7 +109,7 @@ class TerminalsDialog(QDialog):
 
     # --- Liste ---
     def _label(self, t: Terminal) -> str:
-        return f"{t.name} (Standard)" if t.id == self.default_id else t.name
+        return tr("{name} (Standard)", name=t.name) if t.id == self.default_id else t.name
 
     def _reload_list(self, keep_row: int | None = None):
         row = self.list.currentRow() if keep_row is None else keep_row
@@ -148,7 +150,7 @@ class TerminalsDialog(QDialog):
     def _pick_program(self):
         if not self._current:
             return
-        path, _ = QFileDialog.getOpenFileName(self, "Terminal-Programm wählen")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Terminal-Programm wählen"))
         if not path:
             return
         quoted = f'"{path}"' if " " in path else path
@@ -157,7 +159,7 @@ class TerminalsDialog(QDialog):
         self._store()
 
     def _add(self, template: Terminal | None = None):
-        t = template or Terminal("Eigenes Terminal", "")
+        t = template or Terminal(tr("Eigenes Terminal"), "")
         self.terminals.append(t)
         if not self.default_id:
             self.default_id = t.id
@@ -181,12 +183,12 @@ class TerminalsDialog(QDialog):
     def _test(self):
         if not self._current:
             return
-        probe = Connection(name="Terminal-Test", host="localhost")
+        probe = Connection(name=tr("Terminal-Test"), host="localhost")
         cfg = Config(terminals=[self._current], default_terminal_id=self._current.id)
         try:
             launcher.launch(cfg, probe, self._current)
         except launcher.LaunchError as exc:
-            QMessageBox.critical(self, "Terminal-Test fehlgeschlagen", str(exc))
+            QMessageBox.critical(self, tr("Terminal-Test fehlgeschlagen"), str(exc))
 
     def result_values(self) -> tuple[list[Terminal], str]:
         default = self.default_id if any(t.id == self.default_id for t in self.terminals) else ""

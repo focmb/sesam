@@ -9,6 +9,7 @@ from dataclasses import replace
 from . import askpass, launcher, passwords, runtime, storage
 from .askpass import ENV_VAR
 from .models import Connection
+from .i18n import tr
 
 
 def prepare(conn: Connection, password: str | None, askpass_script: str, base_env: dict[str, str] | None = None):
@@ -33,7 +34,7 @@ def prepare(conn: Connection, password: str | None, askpass_script: str, base_en
 def _fail(message: str) -> int:
     print(f"Sesam: {message}", file=sys.stderr)
     try:
-        input("Enter zum Schließen …")
+        input(tr("Enter zum Schließen …"))
     except EOFError:
         pass
     return 1
@@ -55,12 +56,12 @@ def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
     try:
         cfg = storage.load()
     except storage.ConfigError as exc:
-        return _fail(f"Die Konfiguration ist beschädigt ({exc.reason}).\nStarte Sesam, um sie zu sichern, oder repariere {exc.path}.")
+        return _fail(tr("Die Konfiguration ist beschädigt ({reason}).\nStarte Sesam, um sie zu sichern, oder repariere {path}.", reason=exc.reason, path=exc.path))
     except OSError as exc:
-        return _fail(f"Die Konfiguration kann nicht gelesen werden: {exc}")
+        return _fail(tr("Die Konfiguration kann nicht gelesen werden: {exc}", exc=exc))
     conn = cfg.connection_by_id(conn_id)
     if conn is None:
-        return _fail("Verbindung nicht gefunden.")
+        return _fail(tr("Verbindung nicht gefunden."))
     if overrides:
         conn = replace(conn, **overrides)
     conn, password_key = launcher.resolve(cfg, conn)
@@ -71,12 +72,12 @@ def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
         except passwords.PasswordError as exc:
             return _fail(str(exc))
         if password is None:
-            print("Hinweis: Kein Passwort im Schlüsselbund gefunden, ssh fragt selbst.", file=sys.stderr)
+            print(tr("Hinweis: Kein Passwort im Schlüsselbund gefunden, ssh fragt selbst."), file=sys.stderr)
     args, env = prepare(conn, password, askpass.askpass_path() if password is not None else "")
     try:
         if sys.platform.startswith("win"):
             return subprocess.call(args, env=env)
         os.execvpe(args[0], args, env)
     except FileNotFoundError:
-        return _fail("ssh wurde nicht gefunden.")
+        return _fail(tr("ssh wurde nicht gefunden."))
     return 0

@@ -15,6 +15,7 @@ from .. import groups as grp
 from .. import snippets
 from . import theme
 from ..models import SNIPPET_AFTER, Config, Connection, Snippet, new_id
+from ..i18n import tr
 
 AFTER_LABELS = {
     "shell": "Shell offen lassen",
@@ -35,38 +36,38 @@ class SnippetEditDialog(QDialog):
     def __init__(self, cfg: Config, snippet: Snippet | None = None, parent=None):
         super().__init__(parent)
         self.snippet = snippet or Snippet(name="")
-        self.setWindowTitle("Snippet bearbeiten" if snippet else "Neues Snippet")
+        self.setWindowTitle(tr("Snippet bearbeiten") if snippet else tr("Neues Snippet"))
         self.setMinimumWidth(520)
         self.name = QLineEdit(self.snippet.name)
-        self.name.setPlaceholderText("z. B. Speicherplatz prüfen")
+        self.name.setPlaceholderText(tr("z. B. Speicherplatz prüfen"))
         self.category = QComboBox()
         self.category.setEditable(True)
         self.category.addItems(snippets.categories(cfg))
         self.category.setCurrentText(self.snippet.category)
-        self.category.lineEdit().setPlaceholderText("optional, Unterordner mit „/“ (z. B. Docker/Logs)")
+        self.category.lineEdit().setPlaceholderText(tr("optional, Unterordner mit „/“ (z. B. Docker/Logs)"))
         self.command = QPlainTextEdit(self.snippet.command)
         self.command.setFont(monospace())
         theme.notifier().changed.connect(self._refresh_fonts)  # Methode eines QObject: wird beim Schließen getrennt
         self.command.setPlaceholderText("df -h && free -m")
         self.command.setMinimumHeight(110)
         self.command.setTabChangesFocus(True)
-        self.sudo = QCheckBox("Mit sudo ausführen")
+        self.sudo = QCheckBox(tr("Mit sudo ausführen"))
         self.sudo.setChecked(self.snippet.sudo)
-        self.sudo.setToolTip("Nur der Befehl läuft per sudo -i, eine danach offene Shell gehört wieder dem normalen Benutzer. "
-                             "Das gespeicherte Passwort wird wie bei „Mit sudo“ der Verbindung verwendet.")
+        self.sudo.setToolTip(tr("Nur der Befehl läuft per sudo -i, eine danach offene Shell gehört wieder dem normalen Benutzer. "
+                             "Das gespeicherte Passwort wird wie bei „Mit sudo“ der Verbindung verwendet."))
         self.after = QComboBox()
         for key in SNIPPET_AFTER:
-            self.after.addItem(AFTER_LABELS[key], key)
+            self.after.addItem(tr(AFTER_LABELS[key]), key)
         self.after.setCurrentIndex(max(self.after.findData(self.snippet.after), 0))
         self.notes = QLineEdit(self.snippet.notes)
         form = QFormLayout()
         form.setVerticalSpacing(8)
-        form.addRow("Name*", self.name)
-        form.addRow("Kategorie", self.category)
-        form.addRow("Befehl*", self.command)
+        form.addRow(tr("Name*"), self.name)
+        form.addRow(tr("Kategorie"), self.category)
+        form.addRow(tr("Befehl*"), self.command)
         form.addRow("", self.sudo)
-        form.addRow("Danach", self.after)
-        form.addRow("Notiz", self.notes)
+        form.addRow(tr("Danach"), self.after)
+        form.addRow(tr("Notiz"), self.notes)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
@@ -81,7 +82,7 @@ class SnippetEditDialog(QDialog):
 
     def _accept(self):
         if not self.name.text().strip() or not self.command.toPlainText().strip():
-            QMessageBox.warning(self, "Eingabe unvollständig", "Name und Befehl sind Pflichtfelder.")
+            QMessageBox.warning(self, tr("Eingabe unvollständig"), tr("Name und Befehl sind Pflichtfelder."))
             return
         s = self.snippet
         s.name = self.name.text().strip()
@@ -105,7 +106,7 @@ class SnippetsDialog(QDialog):
         self.cfg = cfg
         self.save_callback = save_callback
         self.run_callback = run_callback
-        self.setWindowTitle("Snippets")
+        self.setWindowTitle(tr("Snippets"))
         self.resize(760, 520)
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
@@ -133,13 +134,13 @@ class SnippetsDialog(QDialog):
             b.clicked.connect(slot)
             return b
 
-        self.btn_new = button("Neu …", self._new)
-        self.btn_edit = button("Bearbeiten …", self._edit)
-        self.btn_dup = button("Duplizieren", self._duplicate)
-        self.btn_delete = button("Löschen", self._delete)
-        self.btn_all = button("Alle", lambda: self._check_all(True))
-        self.btn_none = button("Keine", lambda: self._check_all(False))
-        self.btn_run = button("Ausführen", self._run)
+        self.btn_new = button(tr("Neu …"), self._new)
+        self.btn_edit = button(tr("Bearbeiten …"), self._edit)
+        self.btn_dup = button(tr("Duplizieren"), self._duplicate)
+        self.btn_delete = button(tr("Löschen"), self._delete)
+        self.btn_all = button(tr("Alle"), lambda: self._check_all(True))
+        self.btn_none = button(tr("Keine"), lambda: self._check_all(False))
+        self.btn_run = button(tr("Ausführen"), self._run)
         self.btn_run.setDefault(True)
         self.btn_run.setMinimumWidth(280)  # „Auf 12 Verbindungen ausführen“ muss ganz passen
         top = QHBoxLayout()
@@ -155,7 +156,7 @@ class SnippetsDialog(QDialog):
         body.addLayout(left, 2)
         body.addLayout(right, 3)
         run_head = QHBoxLayout()
-        run_head.addWidget(QLabel("Ausführen auf:"))
+        run_head.addWidget(QLabel(tr("Ausführen auf:")))
         run_head.addStretch(1)
         run_head.addWidget(self.btn_all)
         run_head.addWidget(self.btn_none)
@@ -235,9 +236,9 @@ class SnippetsDialog(QDialog):
         sn = self._current()
         if sn is None:
             self.detail.setPlainText("")
-            self.info.setText("Noch keine Snippets. Mit „Neu …“ einen Befehl anlegen." if not self.cfg.snippets else "Snippet auswählen.")
+            self.info.setText(tr("Noch keine Snippets. Mit „Neu …“ einen Befehl anlegen.") if not self.cfg.snippets else tr("Snippet auswählen."))
         else:
-            parts = ["mit sudo" if sn.sudo else "ohne sudo", AFTER_LABELS[sn.after]]
+            parts = [tr("mit sudo") if sn.sudo else tr("ohne sudo"), tr(AFTER_LABELS[sn.after])]
             if sn.notes:
                 parts.append(sn.notes)
             self.info.setText(" · ".join(parts))
@@ -259,7 +260,7 @@ class SnippetsDialog(QDialog):
     def _update_buttons(self):
         n = len(self._checked())
         self.btn_run.setEnabled(self._current() is not None and n > 0)
-        self.btn_run.setText("Ausführen" if n <= 1 else f"Auf {n} Verbindungen ausführen")
+        self.btn_run.setText(tr("Ausführen") if n <= 1 else tr("Auf {n} Verbindungen ausführen", n=n))
 
     def _check_all(self, on: bool):
         for i in range(self.targets.count()):
@@ -290,7 +291,7 @@ class SnippetsDialog(QDialog):
             return
         clone = copy.deepcopy(sn)
         clone.id = new_id()
-        clone.name = f"{sn.name} (Kopie)"
+        clone.name = tr("{name} (Kopie)", name=sn.name)
         self.cfg.snippets.append(clone)
         self._changed(clone.id)
 
@@ -298,7 +299,7 @@ class SnippetsDialog(QDialog):
         sn = self._current()
         if sn is None:
             return
-        if QMessageBox.question(self, "Löschen", f"Snippet „{sn.name}“ wirklich löschen?") != QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, tr("Löschen"), tr("Snippet „{name}“ wirklich löschen?", name=sn.name)) != QMessageBox.StandardButton.Yes:
             return
         self.cfg.snippets.remove(sn)
         self._changed()

@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from .. import passwords, syncing
 from ..models import Config
 from ..syncing import SyncEngine, SyncError, SyncRetry
+from ..i18n import tr
 
 
 class _Job(QThread):
@@ -106,7 +107,7 @@ class SyncController(QObject):
         except Exception as exc:  # noqa: BLE001
             self._finish(None, exc)
             return
-        self.status.emit("Synchronisiere …", False)
+        self.status.emit(tr("Synchronisiere …"), False)
         self._run_job(self._engine.fetch, self._after_fetch)
 
     def _after_fetch(self, remote, exc) -> None:
@@ -147,9 +148,9 @@ class SyncController(QObject):
         self._manual = False
         if exc:
             text = str(exc) or exc.__class__.__name__
-            self.status.emit(f"Sync-Fehler: {text}", True)
+            self.status.emit(tr("Sync-Fehler: {text}", text=text), True)
         else:
-            self.status.emit(f"Synchronisiert {self.cfg.sync.last_sync} – {report.summary()}", False)
+            self.status.emit(tr("Synchronisiert {last_sync} – {v}", last_sync=self.cfg.sync.last_sync, v=report.summary()), False)
         self.finished.emit(report, exc, manual)
         if self.pending:
             self.pending = False

@@ -1,4 +1,4 @@
-"""Seitenleiste ohne Menüleiste: Darstellung und Schriftgröße als Auswahlknöpfe unter einem Trennstrich."""
+"""Seitenleiste ohne Menüleiste: Farbschema-Umschalter und Einstellungen unter einem Trennstrich."""
 import unittest
 from unittest import mock
 
@@ -38,17 +38,18 @@ class SidebarViewTests(GuiTestCase):
     def test_menu_bar_is_gone(self):
         self.assertEqual(self.w.menuBar().actions(), [])
 
-    def test_font_button_and_theme_switches_sit_below_a_separator_at_the_end(self):
+    def test_theme_switches_and_settings_button_sit_below_a_separator_at_the_end(self):
         from PySide6.QtWidgets import QFrame
 
         w = self.w
-        self.assertEqual(list(w.side_menu_buttons), ["font"])  # „Darstellung“ gibt es nicht mehr
-        self.assertEqual(w.side_menu_buttons["font"].text(), "Schriftgröße")
-        ys = [w.side_buttons["a_terms"].y(), w.side_menu_buttons["font"].y(), w.theme_row.y()]
-        self.assertTrue(ys[0] < ys[1] < ys[2])
+        self.assertEqual(list(w.side_menu_buttons), ["settings"])  # „Darstellung“ und „Schriftgröße“ gibt es hier nicht mehr
+        self.assertEqual(w.side_menu_buttons["settings"].text(), "Einstellungen")
+        ys = [w.side_buttons["a_terms"].y(), w.theme_row.y(), w.side_menu_buttons["settings"].y()]
+        self.assertTrue(ys[0] < ys[1] < ys[2])  # Umschalter für das Farbschema, darunter die Einstellungen
         separators = [f for f in w.sidebar.findChildren(QFrame) if f.objectName() == "sideSep"]
         self.assertEqual(len(separators), 2)
         self.assertEqual(len([s for s in separators if ys[0] < s.y() < ys[1]]), 1)
+        self.assertEqual([s for s in separators if s.y() > ys[1]], [])  # unter den Umschaltern kein weiterer Strich
         self.assertEqual({b.width() for b in (*w.side_buttons.values(), *w.side_menu_buttons.values())}, {w.sidebar.width()})
         self.assertEqual(w.theme_row.width(), w.sidebar.width())
 
@@ -106,21 +107,20 @@ class SidebarViewTests(GuiTestCase):
         self.assertTrue(close(dominant(w.theme_buttons["light"]), c["text"]))
         w.theme_buttons["system"].click()
 
-    def test_font_button_opens_its_menu(self):
-        from PySide6.QtWidgets import QMenu
+    def test_settings_button_opens_the_settings_dialog(self):
+        from sesam.gui.settings_dialog import SettingsDialog
 
         opened = []
-        with mock.patch.object(QMenu, "popup", lambda menu, pos, *a: opened.append(menu.title())):
-            self.w.side_menu_buttons["font"].click()
-        self.assertEqual(opened, ["Schriftgröße"])
+        with mock.patch.object(SettingsDialog, "exec", lambda dlg: opened.append((dlg.windowTitle(), dlg.size_box.currentData(), dlg.language_box.currentData()))):
+            self.w.side_menu_buttons["settings"].click()
+        self.assertEqual(opened, [("Einstellungen", 100, "system")])
 
-    def test_font_menu_entries_and_shortcuts_work_without_menu(self):
+    def test_font_shortcuts_work_without_menu(self):
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
 
         w = self.w
-        self.assertEqual(len(w.scale_actions), len(theme.SCALE_STEPS))
-        w.scale_actions[150].trigger()
+        w.set_font_scale(150)
         self.assertEqual(w.cfg.font_scale, 150)
         w.a_font_reset.trigger()
         self.assertEqual(w.cfg.font_scale, 100)

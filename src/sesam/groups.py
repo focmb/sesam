@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .models import Config, Connection
+from .i18n import tr
 
 SEP = "/"
 
@@ -64,7 +65,7 @@ def set_color(cfg: Config, path: str, key: str) -> None:
 def add_group(cfg: Config, path: str) -> str:
     path = normalize(path)
     if not path:
-        raise ValueError("Der Gruppenname darf nicht leer sein.")
+        raise ValueError(tr("Der Gruppenname darf nicht leer sein."))
     if path not in all_groups(cfg):
         cfg.groups.append(path)
     return path
@@ -74,11 +75,11 @@ def rename_group(cfg: Config, old: str, new: str) -> str:
     """Benennt eine Gruppe um bzw. verschiebt sie (inklusive Untergruppen und Verbindungen)."""
     new = normalize(new)
     if not new:
-        raise ValueError("Der Gruppenname darf nicht leer sein.")
+        raise ValueError(tr("Der Gruppenname darf nicht leer sein."))
     if new == old:
         return new
     if new.startswith(old + SEP):
-        raise ValueError("Eine Gruppe kann nicht in sich selbst verschoben werden.")
+        raise ValueError(tr("Eine Gruppe kann nicht in sich selbst verschoben werden."))
 
     def fn(g: str) -> str:
         if g == old:

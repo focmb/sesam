@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from .. import passwords
 from ..models import Config, Identity
 from .keys_dialog import fill_key_combo
+from ..i18n import tr
 
 
 class IdentityEditDialog(QDialog):
@@ -20,11 +21,11 @@ class IdentityEditDialog(QDialog):
         self.cfg = cfg or Config()
         self.ident = ident or Identity(name="")
         self.password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
-        self.setWindowTitle("Identität bearbeiten" if ident else "Neue Identität")
+        self.setWindowTitle(tr("Identität bearbeiten") if ident else tr("Neue Identität"))
         self.setMinimumWidth(440)
 
         self.name = QLineEdit(self.ident.name)
-        self.name.setPlaceholderText("z. B. root@Kunde A")
+        self.name.setPlaceholderText(tr("z. B. root@Kunde A"))
         self.user = QLineEdit(self.ident.user)
         self.key = QLineEdit(self.ident.identity_file)
         self.key_combo = QComboBox()
@@ -41,9 +42,9 @@ class IdentityEditDialog(QDialog):
         row.addWidget(browse)
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password.setPlaceholderText("gespeichert – leer lassen zum Beibehalten" if self.ident.use_password else "optional")
-        self.password.setToolTip("Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei.")
-        self.clear_password = QCheckBox("Gespeichertes Passwort löschen")
+        self.password.setPlaceholderText(tr("gespeichert – leer lassen zum Beibehalten") if self.ident.use_password else tr("optional"))
+        self.password.setToolTip(tr("Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei."))
+        self.clear_password = QCheckBox(tr("Gespeichertes Passwort löschen"))
         self.clear_password.setVisible(self.ident.use_password)
         self.notes = QPlainTextEdit(self.ident.notes)
         self.notes.setFixedHeight(60)
@@ -51,13 +52,13 @@ class IdentityEditDialog(QDialog):
         form = QFormLayout()
 
         form.setVerticalSpacing(8)
-        form.addRow("Name*", self.name)
-        form.addRow("Benutzer", self.user)
-        form.addRow("Gespeicherter Schlüssel", self.key_combo)
-        form.addRow("Schlüsseldatei", key_row)
-        form.addRow("Passwort", self.password)
+        form.addRow(tr("Name*"), self.name)
+        form.addRow(tr("Benutzer"), self.user)
+        form.addRow(tr("Gespeicherter Schlüssel"), self.key_combo)
+        form.addRow(tr("Schlüsseldatei"), key_row)
+        form.addRow(tr("Passwort"), self.password)
         form.addRow("", self.clear_password)
-        form.addRow("Notizen", self.notes)
+        form.addRow(tr("Notizen"), self.notes)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
@@ -74,13 +75,13 @@ class IdentityEditDialog(QDialog):
         self._browse_btn.setEnabled(own)
 
     def _browse(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Schlüsseldatei wählen")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Schlüsseldatei wählen"))
         if path:
             self.key.setText(path)
 
     def _accept(self):
         if not self.name.text().strip():
-            QMessageBox.warning(self, "Eingabe unvollständig", "Der Name ist ein Pflichtfeld.")
+            QMessageBox.warning(self, tr("Eingabe unvollständig"), tr("Der Name ist ein Pflichtfeld."))
             return
         i = self.ident
         i.name = self.name.text().strip()
@@ -101,7 +102,7 @@ def save_identity(parent, ident: Identity, change: str | None) -> bool:
         passwords.apply_change(ident, change)
         return True
     except passwords.PasswordError as exc:
-        QMessageBox.critical(parent, "Passwort", str(exc))
+        QMessageBox.critical(parent, tr("Passwort"), str(exc))
         return False
 
 
@@ -112,11 +113,11 @@ class IdentitiesDialog(QDialog):
         super().__init__(parent)
         self.cfg = cfg
         self.save_callback = save_callback
-        self.setWindowTitle("Identitäten")
+        self.setWindowTitle(tr("Identitäten"))
         self.resize(460, 360)
         self.list = QListWidget()
         self.list.itemDoubleClicked.connect(lambda *_: self._edit())
-        new, edit, delete = QPushButton("Neu …"), QPushButton("Bearbeiten …"), QPushButton("Löschen")
+        new, edit, delete = QPushButton(tr("Neu …")), QPushButton(tr("Bearbeiten …")), QPushButton(tr("Löschen"))
         new.clicked.connect(self._new)
         edit.clicked.connect(self._edit)
         delete.clicked.connect(self._delete)
@@ -143,10 +144,10 @@ class IdentitiesDialog(QDialog):
         for ident in sorted(self.cfg.identities, key=lambda i: i.name.lower()):
             parts = [ident.user or "—"]
             if ident.identity_file or ident.key_id:
-                parts.append("Schlüssel")
+                parts.append(tr("Schlüssel"))
             if ident.use_password:
-                parts.append("Passwort")
-            self.list.addItem(f"{ident.name}   ({', '.join(parts)}; {self._usage(ident)} Verbindung(en))")
+                parts.append(tr("Passwort"))
+            self.list.addItem(tr("{name}   ({parts}; {n} Verbindung(en))", name=ident.name, parts=', '.join(parts), n=self._usage(ident)))
             self.list.item(self.list.count() - 1).setData(256, ident.id)
             if ident.id == select:
                 self.list.setCurrentRow(self.list.count() - 1)
@@ -178,16 +179,16 @@ class IdentitiesDialog(QDialog):
         if not ident:
             return
         n = self._usage(ident)
-        text = f"Identität „{ident.name}“ löschen?"
+        text = tr("Identität „{name}“ löschen?", name=ident.name)
         if n:
-            text += f"\n{n} Verbindung(en) verwenden sie und müssen danach wieder eigene Zugangsdaten bekommen."
-        if QMessageBox.question(self, "Löschen", text) != QMessageBox.StandardButton.Yes:
+            text += tr("\n{n} Verbindung(en) verwenden sie und müssen danach wieder eigene Zugangsdaten bekommen.", n=n)
+        if QMessageBox.question(self, tr("Löschen"), text) != QMessageBox.StandardButton.Yes:
             return
         if ident.use_password:
             try:
                 passwords.delete_password(ident.id)
             except passwords.PasswordError as exc:
-                QMessageBox.warning(self, "Passwort nicht gelöscht", str(exc))
+                QMessageBox.warning(self, tr("Passwort nicht gelöscht"), str(exc))
         for c in self.cfg.connections:
             if c.identity_id == ident.id:
                 c.identity_id = ""

@@ -5,6 +5,7 @@ from typing import Callable
 
 from . import passwords, storage
 from .syncing import GIT_PASSWORD_KEY, PASSPHRASE_KEY
+from .i18n import tr
 
 LEGACY_NAME = "ssh_verwaltung"
 LEGACY_SERVICE = "ssh_verwaltung"
@@ -73,8 +74,8 @@ def run(old=None, new=None, log: Callable[[str], None] = lambda _m: None) -> Non
         cfg = storage.load()
         n = migrate_passwords(cfg, old, new)
         if moved_dir or n:
-            log(f"Aus früherer Version übernommen: Konfiguration verschoben={moved_dir}, Passwörter={n}")
+            log(tr("Aus früherer Version übernommen: Konfiguration verschoben={moved_dir}, Passwörter={n}", moved_dir=moved_dir, n=n))
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text("ok\n", encoding="utf-8")
     except Exception as exc:  # noqa: BLE001 - Start darf daran nicht scheitern
-        log(f"Übernahme der Passwörter später erneut versuchen: {exc}")
+        log(tr("Übernahme der Passwörter später erneut versuchen: {exc}", exc=exc))

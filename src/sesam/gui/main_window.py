@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
+from .. import i18n
+from ..i18n import tr
 from .. import groups as grp
 from . import style, theme
 from .. import colors, docker, launcher, passwords, sftp, snippets, storage
@@ -23,6 +25,7 @@ from .connection_dialog import ConnectionDialog, swatch
 from .docker_dialog import DockerConnectDialog
 from .identities_dialog import IdentitiesDialog
 from .keys_dialog import KeysDialog
+from .settings_dialog import SettingsDialog
 from .snippets_dialog import SnippetsDialog
 from .jobs import Job
 from .sftp_window import SftpWindow
@@ -103,12 +106,12 @@ class MainWindow(QMainWindow):
         self._restore_window_size()
 
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Suchen (Name, Host, Benutzer, Gruppe) …")
+        self.search.setPlaceholderText(tr("Suchen (Name, Host, Benutzer, Gruppe) …"))
         self.search.textChanged.connect(self.refresh)
         self.search.textChanged.connect(self._search_text_changed)
 
         self.tree = ConnectionTree()
-        self.tree.setHeaderLabels(["Name", "Ziel", "Terminal", "Tags"])
+        self.tree.setHeaderLabels([tr("Name"), tr("Ziel"), tr("Terminal"), tr("Tags")])
         self.tree.setAlternatingRowColors(False)
         self.tree.setIndentation(22)
         self.tree.setUniformRowHeights(True)
@@ -153,7 +156,7 @@ class MainWindow(QMainWindow):
         self.sync.finished.connect(self._sync_finished)
         self.sync_label = QLabel("")
         self.statusBar().addPermanentWidget(self.sync_label)
-        self.version_label = QLabel(f"Version {__version__}")  # ganz links in der Statuszeile
+        self.version_label = QLabel(tr("Version {__version__}", __version__=__version__))  # ganz links in der Statuszeile
         self.version_label.setObjectName("versionLabel")
         self.version_label.setToolTip("Sesam")
         self.version_label.setContentsMargins(12, 0, 0, 0)  # bündig mit der Verbindungsliste
@@ -176,44 +179,31 @@ class MainWindow(QMainWindow):
                 a.setShortcut(QKeySequence(shortcut))
             return a
 
-        self.a_connect = act("Verbinden", self.connect_selected, "Return")
-        self.a_files = act("Dateien (SFTP)", self.open_files, "F4")
-        self.a_new = act("Neue Verbindung", self.new_connection, "Ctrl+N")
-        self.a_new_group = act("Neue Gruppe …", self.new_group, "Ctrl+Shift+N")
-        self.a_edit = act("Bearbeiten", self.edit_selected, "F2")
-        self.a_dup = act("Duplizieren", self.duplicate_selected, "Ctrl+D")
-        self.a_del = act("Löschen", self.delete_selected, "Del")
-        self.a_terms = act("Terminals …", self.edit_terminals)
-        self.a_identities = act("Identitäten …", self.edit_identities)
-        self.a_keys = act("Schlüssel …", self.edit_keys)
-        self.a_snippets = act("Snippets …", self.edit_snippets, "Ctrl+Shift+S")
-        self.a_sync = act("Jetzt synchronisieren", lambda: self.sync.sync(manual=True), "F5")
-        self.a_sync_settings = act("Synchronisation …", self.edit_sync)
-        self.a_import = act("Aus ~/.ssh/config importieren", self.import_ssh_config)
+        self.a_connect = act(tr("Verbinden"), self.connect_selected, "Return")
+        self.a_files = act(tr("Dateien (SFTP)"), self.open_files, "F4")
+        self.a_new = act(tr("Neue Verbindung"), self.new_connection, "Ctrl+N")
+        self.a_new_group = act(tr("Neue Gruppe …"), self.new_group, "Ctrl+Shift+N")
+        self.a_edit = act(tr("Bearbeiten"), self.edit_selected, "F2")
+        self.a_dup = act(tr("Duplizieren"), self.duplicate_selected, "Ctrl+D")
+        self.a_del = act(tr("Löschen"), self.delete_selected, "Del")
+        self.a_terms = act(tr("Terminals …"), self.edit_terminals)
+        self.a_identities = act(tr("Identitäten …"), self.edit_identities)
+        self.a_keys = act(tr("Schlüssel …"), self.edit_keys)
+        self.a_snippets = act(tr("Snippets …"), self.edit_snippets, "Ctrl+Shift+S")
+        self.a_sync = act(tr("Jetzt synchronisieren"), lambda: self.sync.sync(manual=True), "F5")
+        self.a_sync_settings = act(tr("Synchronisation …"), self.edit_sync)
+        self.a_import = act(tr("Aus ~/.ssh/config importieren"), self.import_ssh_config)
 
-        self.a_quit = act("Beenden", self.close, "Ctrl+Q")
+        self.a_quit = act(tr("Beenden"), self.close, "Ctrl+Q")
         self.addAction(self.a_quit)  # kein Menü mehr: das Kürzel hängt direkt am Fenster
 
-        # Schriftgröße: Auswahlmenü, das als Knopf am Ende der Seitenleiste erscheint (darunter die Umschalter für das Farbschema)
-        self.size_menu = QMenu("Schriftgröße", self)
-        self.scale_actions: dict[int, QAction] = {}
-        size_group = QActionGroup(self)
-        size_group.setExclusive(True)
-        for pct in theme.SCALE_STEPS:
-            a = QAction(f"{pct} %", self)
-            a.setCheckable(True)
-            a.triggered.connect(lambda _=False, v=pct: self.set_font_scale(v))
-            size_group.addAction(a)
-            self.size_menu.addAction(a)
-            self.scale_actions[pct] = a
-        self.size_menu.addSeparator()
-        self.a_font_bigger = act("Größer", lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, +1)), ["Ctrl++", "Ctrl+="])
-        self.a_font_smaller = act("Kleiner", lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, -1)), "Ctrl+-")
-        self.a_font_reset = act("Zurücksetzen (100 %)", lambda: self.set_font_scale(100), "Ctrl+0")
+        # Schriftgröße: Die Einstellung selbst liegt im Einstellungsdialog; die Tastenkürzel hängen direkt am Fenster
+        self.a_font_bigger = act(tr("Größer"), lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, +1)), ["Ctrl++", "Ctrl+="])
+        self.a_font_smaller = act(tr("Kleiner"), lambda: self.set_font_scale(theme.next_scale(self.cfg.font_scale, -1)), "Ctrl+-")
+        self.a_font_reset = act(tr("Zurücksetzen (100 %)"), lambda: self.set_font_scale(100), "Ctrl+0")
+        self.a_settings = act(tr("Einstellungen"), self.edit_settings)
         for a in (self.a_font_bigger, self.a_font_smaller, self.a_font_reset):
-            self.size_menu.addAction(a)
-            self.addAction(a)  # die Kürzel gelten auch, wenn das Menü zu ist
-        self._mark_font_scale()
+            self.addAction(a)
 
         self._build_sidebar()
         theme.notifier().changed.connect(self._theme_changed)
@@ -264,16 +254,6 @@ class MainWindow(QMainWindow):
         lay.addSpacing(6)
         lay.addWidget(line)
         lay.addSpacing(6)
-        self.side_menu_buttons: dict[str, QPushButton] = {}
-        font_button = QPushButton("Schriftgröße")
-        font_button.setObjectName("side")
-        font_button.setIconSize(QSize(18, 18))
-        font_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        font_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        font_button.setToolTip("Schriftgröße")
-        font_button.clicked.connect(lambda _=False, b=font_button: self.size_menu.popup(b.mapToGlobal(b.rect().bottomLeft())))
-        lay.addWidget(font_button)
-        self.side_menu_buttons["font"] = font_button
         # Farbschema: drei Umschalter nebeneinander (nur Symbole, damit sie schmal bleiben)
         seg = QWidget()
         seg_lay = QHBoxLayout(seg)
@@ -292,8 +272,8 @@ class MainWindow(QMainWindow):
             b.setIconSize(QSize(18, 18))
             b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setToolTip(self.THEME_TIPS[mode])
-            b.setAccessibleName(self.THEME_TIPS[mode])
+            b.setToolTip(tr(self.THEME_TIPS[mode]))
+            b.setAccessibleName(tr(self.THEME_TIPS[mode]))
             b.clicked.connect(lambda _=False, m=mode: self.set_theme(m))
             b.toggled.connect(lambda *_: self._refresh_theme_icons())
             self._theme_group.addButton(b)
@@ -301,6 +281,18 @@ class MainWindow(QMainWindow):
             self.theme_buttons[mode] = b
         lay.addWidget(seg)
         self.theme_row = seg
+        self.side_menu_buttons: dict[str, QPushButton] = {}
+        settings_button = QPushButton()  # unter den Umschaltern für das Farbschema
+        settings_button.setObjectName("side")
+        settings_button.setIconSize(QSize(18, 18))
+        settings_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        settings_button.clicked.connect(lambda _=False: self.a_settings.trigger())
+        self.a_settings.changed.connect(lambda: self._sync_button(settings_button, self.a_settings))
+        self._sync_button(settings_button, self.a_settings)
+        lay.addSpacing(2)
+        lay.addWidget(settings_button)
+        self.side_menu_buttons["settings"] = settings_button
         lay.addStretch(1)
         self._outer_layout.addWidget(side)
         self.sidebar = side
@@ -337,7 +329,7 @@ class MainWindow(QMainWindow):
                 action.setIcon(style.icon(name, c["text"], c["muted"]))
             action.setIconVisibleInMenu(False)
         self._refresh_theme_icons()
-        self.side_menu_buttons["font"].setIcon(style.icon("font_size", c["text"], c["muted"]))
+        self.a_settings.setIcon(style.icon("settings", c["text"], c["muted"]))
         if getattr(self, "_search_action", None) is not None:
             self.search.removeAction(self._search_action)
         self._search_action = self.search.addAction(
@@ -347,7 +339,7 @@ class MainWindow(QMainWindow):
             self.search.removeAction(self._clear_action)
         self._clear_action = self.search.addAction(
             style.icon("close", c["muted"]), QLineEdit.ActionPosition.TrailingPosition)
-        self._clear_action.setToolTip("Suche leeren")
+        self._clear_action.setToolTip(tr("Suche leeren"))
         self._clear_action.triggered.connect(self.search.clear)
         self._clear_action.setVisible(bool(self.search.text()))
 
@@ -384,7 +376,7 @@ class MainWindow(QMainWindow):
     # --- Anzeige ---
     def _terminal_name(self, conn: Connection) -> str:
         t = self.cfg.terminal_by_id(conn.terminal_id) if conn.terminal_id else None
-        return t.name if t else "Standard"
+        return t.name if t else tr("Standard")
 
     def _target(self, conn: Connection) -> str:
         conn, _ = launcher.resolve(self.cfg, conn)
@@ -530,7 +522,7 @@ class MainWindow(QMainWindow):
         for path, item in nodes.items():
             item.setExpanded(bool(needle) or path not in self.collapsed)
             count = len(grp.connections_in(self.cfg, path))
-            item.setText(1, f"{count} Verbindung(en)" if count else "leer")
+            item.setText(1, tr("{count} Verbindung(en)", count=count) if count else tr("leer"))
             item.setForeground(1, muted)
         self._rebuilding -= 1
         for cid in self._docker_expanded:  # z. B. nach dem Bearbeiten des Hosts: neu laden, sobald der Baum steht
@@ -570,7 +562,7 @@ class MainWindow(QMainWindow):
         try:
             storage.save(self.cfg, self.path)
         except OSError as exc:
-            QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
+            QMessageBox.critical(self, tr("Speichern fehlgeschlagen"), str(exc))
             return
         self.sync.schedule()  # Automatikmodus: verzögert abgleichen
 
@@ -588,18 +580,18 @@ class MainWindow(QMainWindow):
         container = self._selected_container()
         if container:
             menu.addAction(self.a_connect)
-            sub = _submenu(menu, "Verbinden mit …")
+            sub = _submenu(menu, tr("Verbinden mit …"))
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_container(term))
-            menu.addAction("Verbinden als …").triggered.connect(lambda: self.connect_container(ask=True))
+            menu.addAction(tr("Verbinden als …")).triggered.connect(lambda: self.connect_container(ask=True))
             menu.addSeparator()
-            menu.addAction("Container aktualisieren").triggered.connect(lambda: self.reload_containers(container[0].id))
+            menu.addAction(tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(container[0].id))
             menu.addSeparator()
         elif conn:
             menu.addAction(self.a_connect)
-            menu.addAction("Als root verbinden (sudo -i)").triggered.connect(lambda: self.connect_selected(sudo=True))
-            sub = _submenu(menu, "Verbinden mit …")
+            menu.addAction(tr("Als root verbinden (sudo -i)")).triggered.connect(lambda: self.connect_selected(sudo=True))
+            sub = _submenu(menu, tr("Verbinden mit …"))
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
@@ -607,21 +599,21 @@ class MainWindow(QMainWindow):
             self._snippet_menu(menu, [conn])
             self._color_menu(menu, conn.color, lambda key: self.set_connection_color(conn, key))
             if conn.docker:
-                menu.addAction("Container aktualisieren").triggered.connect(lambda: self.reload_containers(conn.id))
+                menu.addAction(tr("Container aktualisieren")).triggered.connect(lambda: self.reload_containers(conn.id))
             menu.addSeparator()
             menu.addAction(self.a_edit)
             menu.addAction(self.a_dup)
             menu.addAction(self.a_del)
             menu.addSeparator()
         elif group is not None:
-            menu.addAction("Neue Verbindung hier").triggered.connect(lambda: self.new_connection())
-            menu.addAction("Neue Untergruppe …").triggered.connect(lambda: self.new_group(group))
-            menu.addAction("Umbenennen / verschieben …").triggered.connect(lambda: self.rename_group(group))
+            menu.addAction(tr("Neue Verbindung hier")).triggered.connect(lambda: self.new_connection())
+            menu.addAction(tr("Neue Untergruppe …")).triggered.connect(lambda: self.new_group(group))
+            menu.addAction(tr("Umbenennen / verschieben …")).triggered.connect(lambda: self.rename_group(group))
             self._color_menu(menu, self.cfg.group_colors.get(group, ""), lambda key: self.set_group_color(group, key))
-            menu.addAction("Gruppe löschen").triggered.connect(lambda: self.delete_group(group))
+            menu.addAction(tr("Gruppe löschen")).triggered.connect(lambda: self.delete_group(group))
             menu.addSeparator()
         menu.addAction(self.a_new)
-        menu.addAction("Neue Gruppe (oberste Ebene) …").triggered.connect(lambda: self.new_group(""))
+        menu.addAction(tr("Neue Gruppe (oberste Ebene) …")).triggered.connect(lambda: self.new_group(""))
         menu.addAction(self.a_import)
         self._popup(menu, pos)
 
@@ -630,13 +622,13 @@ class MainWindow(QMainWindow):
 
     def _multi_context_menu(self, conns: list[Connection], pos):
         menu = QMenu(self)
-        menu.addAction(f"{len(conns)} Verbindungen ausgewählt").setEnabled(False)
+        menu.addAction(tr("{n} Verbindungen ausgewählt", n=len(conns))).setEnabled(False)
         menu.addSeparator()
         self._snippet_menu(menu, conns)
         shared = conns[0].color if len({c.color for c in conns}) == 1 else ""
         self._color_menu(menu, shared, lambda key: self.set_connections_color(conns, key))
         menu.addSeparator()
-        menu.addAction(f"{len(conns)} Verbindungen löschen").triggered.connect(lambda: self.delete_connections(conns))
+        menu.addAction(tr("{n} Verbindungen löschen", n=len(conns))).triggered.connect(lambda: self.delete_connections(conns))
         self._popup(menu, pos)
 
     def set_connections_color(self, conns: list[Connection], key: str):
@@ -649,12 +641,13 @@ class MainWindow(QMainWindow):
 
     def _color_menu(self, menu: QMenu, current: str, pick) -> None:
         """Untermenü „Farbe“ mit der Palette; ``pick(schluessel)`` wird mit dem Schlüssel („“ = keine) aufgerufen."""
-        sub = _submenu(menu, "Farbe")
-        none = sub.addAction("Keine")
+        sub = _submenu(menu, tr("Farbe"))
+        none = sub.addAction(tr("Keine"))
         none.setCheckable(True)
         none.setChecked(not colors.valid(current))
         none.triggered.connect(lambda: pick(""))
         for key, (name, hex_) in colors.PALETTE.items():
+            name = tr(name)
             action = sub.addAction(swatch(hex_), name)
             action.setCheckable(True)
             action.setChecked(key == current)
@@ -713,13 +706,13 @@ class MainWindow(QMainWindow):
         muted = QBrush(QColor(c["muted"]))
         state = self._containers.get(conn.id, "")
         if conn.id not in self._containers:
-            host_item.addChild(self._info_item("…", "Aufklappen, um die Container zu laden"))
+            host_item.addChild(self._info_item("…", tr("Aufklappen, um die Container zu laden")))
         elif state is None:
-            host_item.addChild(self._info_item("Container werden geladen …"))
+            host_item.addChild(self._info_item(tr("Container werden geladen …")))
         elif isinstance(state, str):
             host_item.addChild(self._info_item("⚠ " + state, state))
         elif not state:
-            host_item.addChild(self._info_item("Keine laufenden Container"))
+            host_item.addChild(self._info_item(tr("Keine laufenden Container")))
         else:
             for box in state:
                 child = QTreeWidgetItem([box.name, f"{box.image} · {box.status}" if box.status else box.image, ""])
@@ -800,7 +793,7 @@ class MainWindow(QMainWindow):
             typed = self._docker_passwords.pop(cid, None) is not None
             if not typed:  # kein gespeichertes Passwort / kein Schlüssel hat funktioniert: einmal nachfragen
                 text, ok = QInputDialog.getText(
-                    self, "Anmeldung", f"Passwort für {conn.user + '@' if conn.user else ''}{conn.host}:",
+                    self, tr("Anmeldung"), tr("Passwort für {v}{host}:", v=conn.user + '@' if conn.user else '', host=conn.host),
                     QLineEdit.EchoMode.Password)
                 if ok and text:
                     self._docker_passwords[cid] = text
@@ -852,7 +845,7 @@ class MainWindow(QMainWindow):
             titled, command = docker.container_target(conn, name, shell, user)
             launcher.launch(self.cfg, titled, terminal, remote_command=command)
         except (docker.DockerError, launcher.LaunchError) as exc:
-            QMessageBox.critical(self, "Verbindung konnte nicht geöffnet werden", str(exc))
+            QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
 
     # --- Verbindungen ---
     def open_files(self):
@@ -876,7 +869,7 @@ class MainWindow(QMainWindow):
         try:
             launcher.launch(self.cfg, conn, terminal)
         except launcher.LaunchError as exc:
-            QMessageBox.critical(self, "Verbindung konnte nicht geöffnet werden", str(exc))
+            QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
 
     def _apply_password(self, conn: Connection, change: str | None) -> None:
         if change is None:
@@ -884,7 +877,7 @@ class MainWindow(QMainWindow):
         try:
             passwords.apply_change(conn, change)
         except passwords.PasswordError as exc:
-            QMessageBox.critical(self, "Passwort", str(exc))
+            QMessageBox.critical(self, tr("Passwort"), str(exc))
 
     def new_connection(self):
         dlg = ConnectionDialog(self.cfg, parent=self, default_group=self._current_group_context(), save_callback=self._save)
@@ -918,7 +911,7 @@ class MainWindow(QMainWindow):
             return
         clone = copy.deepcopy(conn)
         clone.id = new_id()
-        clone.name = f"{conn.name} (Kopie)"
+        clone.name = tr("{name} (Kopie)", name=conn.name)
         if conn.use_password:
             try:
                 pw = passwords.get_password(conn.id)
@@ -928,7 +921,7 @@ class MainWindow(QMainWindow):
                     clone.use_password = False
             except passwords.PasswordError as exc:
                 clone.use_password = False
-                QMessageBox.warning(self, "Passwort nicht kopiert", str(exc))
+                QMessageBox.warning(self, tr("Passwort nicht kopiert"), str(exc))
         self.cfg.connections.append(clone)
         self._save()
         self.refresh()
@@ -970,12 +963,12 @@ class MainWindow(QMainWindow):
 
     def delete_connections(self, conns: list[Connection]):
         if len(conns) == 1:
-            text = f"Verbindung „{conns[0].name}“ wirklich löschen?"
+            text = tr("Verbindung „{name}“ wirklich löschen?", name=conns[0].name)
         else:
             names = "\n".join(f"• {c.name}" for c in conns[:10])
-            more = f"\n… und {len(conns) - 10} weitere" if len(conns) > 10 else ""
-            text = f"{len(conns)} Verbindungen wirklich löschen?\n\n{names}{more}"
-        if QMessageBox.question(self, "Löschen", text) != QMessageBox.StandardButton.Yes:
+            more = tr("\n… und {v} weitere", v=len(conns) - 10) if len(conns) > 10 else ""
+            text = tr("{n} Verbindungen wirklich löschen?\n\n{names}{more}", n=len(conns), names=names, more=more)
+        if QMessageBox.question(self, tr("Löschen"), text) != QMessageBox.StandardButton.Yes:
             return
         failed: list[str] = []
         for conn in conns:
@@ -991,20 +984,20 @@ class MainWindow(QMainWindow):
         self._save()
         self.refresh()
         if failed:
-            QMessageBox.warning(self, "Passwort nicht gelöscht", "\n".join(failed))
+            QMessageBox.warning(self, tr("Passwort nicht gelöscht"), "\n".join(failed))
 
     # --- Gruppen ---
     def new_group(self, parent: str | None = None):
         if parent is None:
             parent = self._current_group_context()
-        title = f"Neue Untergruppe in „{parent}“" if parent else "Neue Gruppe"
-        name, ok = QInputDialog.getText(self, title, "Name der Gruppe:")
+        title = tr("Neue Untergruppe in „{parent}“", parent=parent) if parent else tr("Neue Gruppe")
+        name, ok = QInputDialog.getText(self, title, tr("Name der Gruppe:"))
         if not ok or not name.strip():
             return
         try:
             path = grp.add_group(self.cfg, grp.join(parent, name))
         except ValueError as exc:
-            QMessageBox.warning(self, "Gruppe", str(exc))
+            QMessageBox.warning(self, tr("Gruppe"), str(exc))
             return
         self.collapsed.difference_update(grp.ancestors(path))
         self._save()
@@ -1012,14 +1005,14 @@ class MainWindow(QMainWindow):
 
     def rename_group(self, path: str):
         new, ok = QInputDialog.getText(
-            self, "Gruppe umbenennen / verschieben", "Neuer Pfad (Untergruppen mit „/“ trennen):", text=path
+            self, tr("Gruppe umbenennen / verschieben"), tr("Neuer Pfad (Untergruppen mit „/“ trennen):"), text=path
         )
         if not ok or not new.strip():
             return
         try:
             grp.rename_group(self.cfg, path, new)
         except ValueError as exc:
-            QMessageBox.warning(self, "Gruppe", str(exc))
+            QMessageBox.warning(self, tr("Gruppe"), str(exc))
             return
         self._remap_collapsed(path, grp.normalize(new))
         self._save()
@@ -1028,12 +1021,11 @@ class MainWindow(QMainWindow):
     def delete_group(self, path: str):
         n = len(grp.connections_in(self.cfg, path))
         parent = grp.parent_of(path)
-        target = f"„{parent}“" if parent else "die oberste Ebene"
+        target = f"„{parent}“" if parent else tr("die oberste Ebene")
         answer = QMessageBox.question(
             self,
-            "Gruppe löschen",
-            f"Gruppe „{path}“ löschen?\nEnthaltene Verbindungen ({n}) und Untergruppen werden nach {target} verschoben, "
-            "keine Verbindung wird gelöscht.",
+            tr("Gruppe löschen"),
+            tr("Gruppe „{path}“ löschen?\nEnthaltene Verbindungen ({n}) und Untergruppen werden nach {target} verschoben, keine Verbindung wird gelöscht.", path=path, n=n, target=target),
         )
         if answer == QMessageBox.StandardButton.Yes:
             grp.delete_group(self.cfg, path)
@@ -1056,7 +1048,7 @@ class MainWindow(QMainWindow):
             try:
                 grp.rename_group(self.cfg, key, new_path)
             except ValueError as exc:
-                QMessageBox.warning(self, "Gruppe", str(exc))
+                QMessageBox.warning(self, tr("Gruppe"), str(exc))
                 return
             self._remap_collapsed(key, grp.normalize(new_path))
         if target:
@@ -1090,13 +1082,13 @@ class MainWindow(QMainWindow):
 
     def _sync_finished(self, report, error, manual: bool):
         if error and manual:
-            QMessageBox.warning(self, "Synchronisation fehlgeschlagen", str(error))
+            QMessageBox.warning(self, tr("Synchronisation fehlgeschlagen"), str(error))
         elif report is not None and report.conflicts:
             QMessageBox.information(
                 self,
-                "Synchronisation",
-                "Es gab widersprüchliche Änderungen an: " + ", ".join(report.conflicts)
-                + ".\nDeine Version blieb erhalten, die andere steht als „… (Konflikt)“ daneben.",
+                tr("Synchronisation"),
+                tr("Es gab widersprüchliche Änderungen an: {names}.\nDeine Version blieb erhalten, die andere steht als „… (Konflikt)“ daneben.",
+                   names=", ".join(report.conflicts)),
             )
 
     def edit_sync(self):
@@ -1106,11 +1098,6 @@ class MainWindow(QMainWindow):
             if self.sync.enabled():
                 self.sync.sync(manual=True)
 
-    def _mark_font_scale(self):
-        current = self.cfg.font_scale
-        for pct, a in self.scale_actions.items():
-            a.setChecked(pct == current)
-
     def set_font_scale(self, percent: int):
         percent = theme.clamp_scale(percent)
         app = QApplication.instance()
@@ -1119,7 +1106,15 @@ class MainWindow(QMainWindow):
         if percent != self.cfg.font_scale:
             self.cfg.font_scale = percent
             self._save_no_sync()  # reiner Anzeigezustand: kein Abgleich nötig
-        self._mark_font_scale()
+
+    def set_language(self, code: str):
+        """Merkt die Sprache; sie wird beim nächsten Start angewandt (die Fenster sind bereits aufgebaut)."""
+        self.cfg.language = i18n.normalize(code)
+        self._save_no_sync()
+
+    def edit_settings(self):
+        dlg = SettingsDialog(self.cfg.font_scale, self.cfg.language, self.set_font_scale, self.set_language, self)
+        dlg.exec()
 
     def set_theme(self, mode: str):
         self.cfg.theme = mode
@@ -1133,7 +1128,7 @@ class MainWindow(QMainWindow):
         try:
             storage.save(self.cfg, self.path)
         except OSError as exc:
-            QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
+            QMessageBox.critical(self, tr("Speichern fehlgeschlagen"), str(exc))
 
     def edit_snippets(self):
         preselect = [c.id for c in self._selected_connections()]
@@ -1143,18 +1138,18 @@ class MainWindow(QMainWindow):
     def run_snippet(self, snippet, conns: list[Connection]):
         """Führt das Snippet im Terminal aus, je Verbindung ein Fenster. Bei mehreren Zielen wird vorher nachgefragt."""
         if len(conns) > snippets.MAX_HOSTS_WITHOUT_WARNING:
-            names = "\n".join(f"• {c.name}" for c in conns[:10]) + (f"\n… und {len(conns) - 10} weitere" if len(conns) > 10 else "")
-            text = f"Snippet „{snippet.name}“ auf {len(conns)} Verbindungen ausführen?\nEs öffnen sich {len(conns)} Terminals.\n\n{names}"
-            if QMessageBox.question(self, "Snippet ausführen", text) != QMessageBox.StandardButton.Yes:
+            names = "\n".join(f"• {c.name}" for c in conns[:10]) + (tr("\n… und {v} weitere", v=len(conns) - 10) if len(conns) > 10 else "")
+            text = tr("Snippet „{name}“ auf {n} Verbindungen ausführen?\nEs öffnen sich {n} Terminals.\n\n{names}", name=snippet.name, n=len(conns), names=names)
+            if QMessageBox.question(self, tr("Snippet ausführen"), text) != QMessageBox.StandardButton.Yes:
                 return
         report = snippets.run(self.cfg, snippet, conns)
         if report.errors:
             lines = "\n".join(f"{name + ': ' if name else ''}{msg}" for name, msg in report.errors)
-            QMessageBox.warning(self, "Snippet", f"Nicht alle Terminals konnten gestartet werden:\n\n{lines}")
+            QMessageBox.warning(self, tr("Snippet"), tr("Nicht alle Terminals konnten gestartet werden:\n\n{lines}", lines=lines))
 
     def _snippet_menu(self, menu: QMenu, conns: list[Connection]) -> None:
         """Untermenü „Snippet ausführen“ mit den Kategorien als Unterordner."""
-        sub = _submenu(menu, "Snippet ausführen")
+        sub = _submenu(menu, tr("Snippet ausführen"))
         sub.setEnabled(bool(self.cfg.snippets))
         submenus: dict[str, QMenu] = {"": sub}
 
@@ -1171,7 +1166,7 @@ class MainWindow(QMainWindow):
                 action.setToolTip(sn.command)
                 action.triggered.connect(lambda _=False, s=sn, c=list(conns): self.run_snippet(s, c))
         if not self.cfg.snippets:
-            sub.setToolTip("Noch keine Snippets angelegt")
+            sub.setToolTip(tr("Noch keine Snippets angelegt"))
 
     def edit_keys(self):
         KeysDialog(self.cfg, self._save, self).exec()
@@ -1186,9 +1181,9 @@ class MainWindow(QMainWindow):
         known = {(c.host, c.user, c.port, c.name) for c in self.cfg.connections}
         new = [c for c in found if (c.host, c.user, c.port, c.name) not in known]
         if not new:
-            QMessageBox.information(self, "Import", "Keine neuen Einträge in ~/.ssh/config gefunden.")
+            QMessageBox.information(self, tr("Import"), tr("Keine neuen Einträge in ~/.ssh/config gefunden."))
             return
         self.cfg.connections.extend(new)
         self._save()
         self.refresh()
-        QMessageBox.information(self, "Import", f"{len(new)} Verbindung(en) importiert (Gruppe „ssh-config“).")
+        QMessageBox.information(self, tr("Import"), tr("{n} Verbindung(en) importiert (Gruppe „ssh-config“).", n=len(new)))

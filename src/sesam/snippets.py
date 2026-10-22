@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from . import groups, launcher
 from .models import Config, Connection, Snippet, Terminal
+from .i18n import tr
 
 MAX_HOSTS_WITHOUT_WARNING = 1  # ab zwei Zielen fragt die Oberfläche vorher nach
 
@@ -15,7 +16,7 @@ def remote_command(snippet: Snippet) -> str:
     command = snippet.command.strip()
     line = f"sh -c {shlex.quote(command)}"
     if snippet.after == "wait":
-        line += "; printf '\\n[Fertig. Eine Taste drücken zum Schließen] '; read -r _ </dev/tty"
+        line += tr("; printf '\\n[Fertig. Eine Taste drücken zum Schließen] '; read -r _ </dev/tty")
     elif snippet.after == "shell":
         line += '; exec "${SHELL:-sh}" -l'
     return line
@@ -48,7 +49,7 @@ def run(cfg: Config, snippet: Snippet, conns: list[Connection], terminal: Termin
     """Startet je Verbindung ein Terminal mit dem Snippet. Ein Fehler bei einem Ziel stoppt die anderen nicht."""
     report = RunReport()
     if not snippet.command.strip():
-        report.errors.append(("", "Das Snippet enthält keinen Befehl."))
+        report.errors.append(("", tr("Das Snippet enthält keinen Befehl.")))
         return report
     line = remote_command(snippet)
     for conn in conns:

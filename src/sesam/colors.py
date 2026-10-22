@@ -1,6 +1,8 @@
 """Farbpalette für Verbindungen und Gruppen. Gespeichert wird nur der Schlüssel (z. B. „blue“), nicht der Farbwert."""
 from __future__ import annotations
 
+from .i18n import tr
+
 # Schlüssel -> (Bezeichnung, Farbwert); die Reihenfolge ist die Anzeigereihenfolge
 PALETTE: dict[str, tuple[str, str]] = {
     "blue": ("Blau", "#3b82f6"),
@@ -19,7 +21,7 @@ def valid(key: str) -> bool:
 
 
 def label(key: str) -> str:
-    return PALETTE[key][0] if key in PALETTE else "Keine"
+    return tr(PALETTE[key][0]) if key in PALETTE else tr("Keine")
 
 
 def hex_of(key: str) -> str | None:

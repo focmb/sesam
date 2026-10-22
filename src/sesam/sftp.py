@@ -16,6 +16,7 @@ from typing import Callable
 
 from . import launcher, passwords
 from .models import Config, Connection
+from .i18n import tr
 
 CHUNK = 256 * 1024
 CONNECT_TIMEOUT = 15
@@ -47,7 +48,7 @@ def _paramiko():
     try:
         import paramiko
     except ImportError as exc:
-        raise SftpError("Das Paket „paramiko“ ist nicht installiert (pip install paramiko).") from exc
+        raise SftpError(tr("Das Paket „paramiko“ ist nicht installiert (pip install paramiko).")) from exc
     return paramiko
 
 
@@ -88,7 +89,7 @@ def open_client(
     password: str | None = None,
     known_hosts: Path | None = None,
     timeout: float = CONNECT_TIMEOUT,
-    purpose: str = "die Dateiübertragung",
+    purpose: str | None = None,
 ):
     """Baut eine SSH-Verbindung mit den Daten einer Sesam-Verbindung auf (inkl. Identität und gespeichertem Passwort).
 
@@ -96,6 +97,8 @@ def open_client(
     ``purpose`` erscheint in der Meldung, wenn die Verbindung einen Jump-Host nutzt (wird hier noch nicht unterstützt).
     Liefert ``(SSHClient, effektive Verbindung)``; der Aufrufer schließt den Client.
     """
+    if purpose is None:
+        purpose = tr("die Dateiübertragung")
     paramiko = _paramiko()
     eff, password_key = launcher.resolve(cfg, conn)
     try:
@@ -103,9 +106,9 @@ def open_client(
     except launcher.LaunchError as exc:
         raise SftpError(str(exc)) from exc
     if eff.jump_host.strip():
-        raise SftpError(f"Für Verbindungen mit Jump-Host ist {purpose} noch nicht möglich.")
+        raise SftpError(tr("Für Verbindungen mit Jump-Host ist {purpose} noch nicht möglich.", purpose=purpose))
     if not eff.host.strip():
-        raise SftpError("Die Verbindung hat keinen Host.")
+        raise SftpError(tr("Die Verbindung hat keinen Host."))
     if password is None and eff.use_password:
         try:
             password = passwords.get_password(password_key)
@@ -141,20 +144,19 @@ def open_client(
     except paramiko.BadHostKeyException as exc:
         client.close()
         raise SftpError(
-            f"Der Schlüssel von {eff.host} hat sich geändert (möglicher Angriff). "
-            "Prüfe die Datei known_hosts, bevor du erneut verbindest."
+            tr("Der Schlüssel von {host} hat sich geändert (möglicher Angriff). Prüfe die Datei known_hosts, bevor du erneut verbindest.", host=eff.host)
         ) from exc
     except paramiko.AuthenticationException as exc:
         client.close()
-        raise SftpAuthError("Anmeldung abgelehnt (Passwort oder Schlüssel stimmen nicht).") from exc
+        raise SftpAuthError(tr("Anmeldung abgelehnt (Passwort oder Schlüssel stimmen nicht).")) from exc
     except paramiko.PasswordRequiredException as exc:
         client.close()
-        raise SftpAuthError("Der Schlüssel ist durch eine Passphrase geschützt.") from exc
+        raise SftpAuthError(tr("Der Schlüssel ist durch eine Passphrase geschützt.")) from exc
     except (paramiko.SSHException, OSError, EOFError) as exc:
         client.close()
         if "No authentication methods" in str(exc):  # weder Passwort noch Schlüssel vorhanden
-            raise SftpAuthError("Es ist kein Passwort oder Schlüssel hinterlegt.") from exc
-        raise SftpError(f"Verbindung zu {eff.host} fehlgeschlagen: {exc}") from exc
+            raise SftpAuthError(tr("Es ist kein Passwort oder Schlüssel hinterlegt.")) from exc
+        raise SftpError(tr("Verbindung zu {host} fehlgeschlagen: {exc}", host=eff.host, exc=exc)) from exc
 
 
 class SftpSession:
@@ -185,7 +187,7 @@ class SftpSession:
             return cls(client, eff.name or eff.host)
         except (_paramiko().SSHException, OSError, EOFError) as exc:  # z. B. SFTP-Subsystem nicht verfügbar
             client.close()
-            raise SftpError(f"Verbindung zu {eff.host} fehlgeschlagen: {exc}") from exc
+            raise SftpError(tr("Verbindung zu {host} fehlgeschlagen: {exc}", host=eff.host, exc=exc)) from exc
 
     def close(self) -> None:
         """Schließt die Verbindung; mehrfach oder bei schon getrennter Verbindung aufrufbar, ohne Fehler."""
@@ -209,14 +211,14 @@ class SftpSession:
             try:
                 return self._browse.normalize(path)
             except OSError as exc:
-                raise SftpError(f"Pfad nicht gefunden: {path} ({exc})") from exc
+                raise SftpError(tr("Pfad nicht gefunden: {path} ({exc})", path=path, exc=exc)) from exc
 
     def listdir(self, path: str) -> list[RemoteEntry]:
         with self._lock:
             try:
                 attrs = self._browse.listdir_attr(path)
             except OSError as exc:
-                raise SftpError(f"Ordner kann nicht gelesen werden: {path} ({exc})") from exc
+                raise SftpError(tr("Ordner kann nicht gelesen werden: {path} ({exc})", path=path, exc=exc)) from exc
             entries = []
             for a in attrs:
                 mode = a.st_mode or 0
@@ -235,14 +237,14 @@ class SftpSession:
             try:
                 self._browse.mkdir(path)
             except OSError as exc:
-                raise SftpError(f"Ordner konnte nicht angelegt werden: {exc}") from exc
+                raise SftpError(tr("Ordner konnte nicht angelegt werden: {exc}", exc=exc)) from exc
 
     def rename(self, old: str, new: str) -> None:
         with self._lock:
             try:
                 self._browse.rename(old, new)
             except OSError as exc:
-                raise SftpError(f"Umbenennen fehlgeschlagen: {exc}") from exc
+                raise SftpError(tr("Umbenennen fehlgeschlagen: {exc}", exc=exc)) from exc
 
     def remove(self, path: str) -> None:
         """Löscht eine Datei, einen Link oder einen Ordner samt Inhalt."""
@@ -250,7 +252,7 @@ class SftpSession:
             try:
                 self._remove(path)
             except OSError as exc:
-                raise SftpError(f"Löschen fehlgeschlagen: {exc}") from exc
+                raise SftpError(tr("Löschen fehlgeschlagen: {exc}", exc=exc)) from exc
 
     def _remove(self, path: str) -> None:
         mode = self._browse.lstat(path).st_mode or 0
@@ -287,9 +289,9 @@ class SftpSession:
                 except OSError:
                     try:
                         if not stat.S_ISDIR(sftp.stat(target).st_mode or 0):
-                            raise SftpError(f"{target} existiert und ist kein Ordner.")
+                            raise SftpError(tr("{target} existiert und ist kein Ordner.", target=target))
                     except OSError as exc:
-                        raise SftpError(f"Ordner konnte nicht angelegt werden: {target} ({exc})") from exc
+                        raise SftpError(tr("Ordner konnte nicht angelegt werden: {target} ({exc})", target=target, exc=exc)) from exc
             for local, rel, size in plan.files:
                 _check(cancel)
                 target = posixpath.join(remote_dir, rel)
@@ -309,7 +311,7 @@ class SftpSession:
                         pass
                     raise
                 except OSError as exc:
-                    raise SftpError(f"Hochladen von {rel} fehlgeschlagen: {exc}") from exc
+                    raise SftpError(tr("Hochladen von {rel} fehlgeschlagen: {exc}", rel=rel, exc=exc)) from exc
                 done += size
                 if progress:
                     progress(done, total, rel)
@@ -331,7 +333,7 @@ class SftpSession:
             try:
                 plan = _plan_remote(sftp, [p for p in remote_paths if posixpath.basename(p.rstrip("/")) not in (skip or set())], cancel)
             except OSError as exc:
-                raise SftpError(f"Ordner kann nicht gelesen werden: {exc}") from exc
+                raise SftpError(tr("Ordner kann nicht gelesen werden: {exc}", exc=exc)) from exc
             total = sum(size for _, _, size in plan.files)
             done = 0
             for rel_dir in plan.dirs:
@@ -339,7 +341,7 @@ class SftpSession:
                 try:
                     os.makedirs(os.path.join(local_dir, *rel_dir.split("/")), exist_ok=True)
                 except OSError as exc:
-                    raise SftpError(f"Ordner konnte nicht angelegt werden: {rel_dir} ({exc})") from exc
+                    raise SftpError(tr("Ordner konnte nicht angelegt werden: {rel_dir} ({exc})", rel_dir=rel_dir, exc=exc)) from exc
             for remote, rel, size in plan.files:
                 _check(cancel)
                 target = os.path.join(local_dir, *rel.split("/"))
@@ -360,7 +362,7 @@ class SftpSession:
                         pass
                     raise
                 except OSError as exc:
-                    raise SftpError(f"Herunterladen von {rel} fehlgeschlagen: {exc}") from exc
+                    raise SftpError(tr("Herunterladen von {rel} fehlgeschlagen: {exc}", rel=rel, exc=exc)) from exc
                 done += size
                 if progress:
                     progress(done, total, rel)

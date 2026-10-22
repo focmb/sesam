@@ -41,11 +41,17 @@ stehen untereinander in einer Seitenleiste am rechten Rand (Strg+Q beendet das P
 *Duplizieren* legt eine Kopie an und öffnet sie sofort zum Bearbeiten, der Name ist markiert und lässt sich gleich überschreiben; bricht man ab, bleibt die Kopie bestehen.
 
 Ganz unten in der Seitenleiste schalten drei Symbole zwischen **Hell** (Sonne), **Dunkel** (Mond) und **Wie das System** (Monitor) um (wirkt sofort, wird gespeichert).
+Darunter öffnet der Knopf **Einstellungen** den Einstellungsdialog (Schriftgröße und Sprache, siehe unten).
 Bei *Wie das System* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
 andernfalls stellst du es manuell ein.
 
-**Schriftgröße:** der Knopf *Schriftgröße* in der Seitenleiste (80 bis 200 % der Systemschrift), oder per Tastatur **Strg + Plus** (größer), **Strg + Minus** (kleiner) und **Strg + 0** (zurück auf 100 %).
+**Schriftgröße:** im Dialog *Einstellungen* (80 bis 200 % der Systemschrift), oder per Tastatur **Strg + Plus** (größer), **Strg + Minus** (kleiner) und **Strg + 0** (zurück auf 100 %).
 Icons und Seitenleiste wachsen mit. Die Einstellung gilt sofort, wird gespeichert und bleibt lokal (wird nicht per Git synchronisiert).
+
+**Sprache:** Sesam gibt es auf Deutsch und Englisch. Im Dialog *Einstellungen* wählst du *Systemvorgabe* (Deutsch, wenn das System auf Deutsch läuft, sonst Englisch), *Deutsch* oder *English*.
+Die Sprache gilt nach dem nächsten Start von Sesam und wird lokal gespeichert (wird nicht per Git synchronisiert). Das gilt auch für den Befehlszeilenmodus (`sesam --connect`).
+Die Quelltexte sind deutsch; `src/sesam/i18n.py` liefert über `tr("deutscher Text")` die englische Fassung aus `src/sesam/translations_en.py`. Neue Texte trägst du dort ein –
+der Test `tests/test_i18n.py` schlägt fehl, solange ein Text im Katalog fehlt. Eine weitere Sprache braucht eine zweite Katalogdatei und einen Eintrag in `i18n.LANGUAGES`.
 
 Das Erscheinungsbild (Farben, Abstände, Icons) kommt aus `src/sesam/gui/style.py`: ein gemeinsames Stylesheet für Hell und Dunkel, das aus einer
 Farbtabelle (`TOKENS`) erzeugt wird. Farben änderst du dort an einer Stelle; Icons sind einfache Linienzeichnungen im gleichen Modul.

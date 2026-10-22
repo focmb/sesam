@@ -4,6 +4,7 @@ import shutil
 import sys
 from dataclasses import replace
 
+from .i18n import tr
 from .models import Terminal, new_id
 
 # (Terminal, ausführbare Datei zur Erkennung)
@@ -39,10 +40,10 @@ def default_terminals() -> list[Terminal]:
     candidates = _WINDOWS if current_platform() == "windows" else _LINUX
     found = [t for t, exe in candidates if shutil.which(exe)]
     chosen = found or [t for t, _ in candidates]
-    return [replace(t, id=new_id()) for t in chosen]
+    return [replace(t, id=new_id(), name=tr(t.name)) for t in chosen]
 
 
 def template_terminals() -> list[Terminal]:
     """Alle bekannten Vorlagen der aktuellen Plattform (auch nicht installierte)."""
     candidates = _WINDOWS if current_platform() == "windows" else _LINUX
-    return [replace(t, id=new_id()) for t, _ in candidates]
+    return [replace(t, id=new_id(), name=tr(t.name)) for t, _ in candidates]

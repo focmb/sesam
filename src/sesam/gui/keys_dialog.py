@@ -16,10 +16,13 @@ from PySide6.QtWidgets import (
 from .. import keys, keystore, launcher, passwords, sftp
 from ..models import Config, SshKey
 from .jobs import Job
+from ..i18n import tr
 
 
-def fill_key_combo(combo: QComboBox, cfg: Config, select: str = "", none_text: str = "Keiner (Schlüsseldatei oder Passwort)") -> None:
+def fill_key_combo(combo: QComboBox, cfg: Config, select: str = "", none_text: str | None = None) -> None:
     """Füllt eine Auswahl mit den gespeicherten Schlüsseln; ``itemData`` ist die Schlüssel-ID."""
+    if none_text is None:
+        none_text = tr("Keiner (Schlüsseldatei oder Passwort)")
     combo.blockSignals(True)
     combo.clear()
     combo.addItem(none_text, "")
@@ -41,7 +44,7 @@ def store_key(parent, cfg: Config, entry: SshKey, private: str) -> bool:
     try:
         keystore.FileStore().set(entry.id, private)
     except passwords.PasswordError as exc:
-        QMessageBox.critical(parent, "Schlüssel", str(exc))
+        QMessageBox.critical(parent, tr("Schlüssel"), str(exc))
         return False
     cfg.ssh_keys.append(entry)
     return True
@@ -50,25 +53,25 @@ def store_key(parent, cfg: Config, entry: SshKey, private: str) -> bool:
 class GenerateKeyDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Neuen Schlüssel erzeugen")
+        self.setWindowTitle(tr("Neuen Schlüssel erzeugen"))
         self.setMinimumWidth(420)
         self.name = QLineEdit()
-        self.name.setPlaceholderText("z. B. Arbeit")
+        self.name.setPlaceholderText(tr("z. B. Arbeit"))
         self.type = QComboBox()
-        self.type.addItem("Ed25519 (empfohlen)", "ed25519")
-        self.type.addItem("RSA 4096 (kompatibel mit sehr alten Servern)", "rsa")
+        self.type.addItem(tr("Ed25519 (empfohlen)"), "ed25519")
+        self.type.addItem(tr("RSA 4096 (kompatibel mit sehr alten Servern)"), "rsa")
         self.comment = QLineEdit(default_comment())
         self.passphrase = QLineEdit()
         self.passphrase.setEchoMode(QLineEdit.EchoMode.Password)
-        self.passphrase.setPlaceholderText("optional, schützt den Schlüssel")
+        self.passphrase.setPlaceholderText(tr("optional, schützt den Schlüssel"))
         self.repeat = QLineEdit()
         self.repeat.setEchoMode(QLineEdit.EchoMode.Password)
-        self.repeat.setPlaceholderText("Passphrase wiederholen")
+        self.repeat.setPlaceholderText(tr("Passphrase wiederholen"))
         form = QFormLayout()
-        form.addRow("Name*", self.name)
-        form.addRow("Typ", self.type)
-        form.addRow("Kommentar", self.comment)
-        form.addRow("Passphrase", self.passphrase)
+        form.addRow(tr("Name*"), self.name)
+        form.addRow(tr("Typ"), self.type)
+        form.addRow(tr("Kommentar"), self.comment)
+        form.addRow(tr("Passphrase"), self.passphrase)
         form.addRow("", self.repeat)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._accept)
@@ -82,17 +85,17 @@ class GenerateKeyDialog(QDialog):
 
     def _accept(self):
         if not self.name.text().strip():
-            QMessageBox.warning(self, "Eingabe unvollständig", "Der Name ist ein Pflichtfeld.")
+            QMessageBox.warning(self, tr("Eingabe unvollständig"), tr("Der Name ist ein Pflichtfeld."))
             return
         if self.passphrase.text() != self.repeat.text():
-            QMessageBox.warning(self, "Passphrase", "Die beiden Passphrasen stimmen nicht überein.")
+            QMessageBox.warning(self, tr("Passphrase"), tr("Die beiden Passphrasen stimmen nicht überein."))
             return
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self.material = keys.generate(self.type.currentData(), self.passphrase.text() or None)
         except keys.KeyManagementError as exc:
             QApplication.restoreOverrideCursor()
-            QMessageBox.critical(self, "Schlüssel", str(exc))
+            QMessageBox.critical(self, tr("Schlüssel"), str(exc))
             return
         QApplication.restoreOverrideCursor()
         self.accept()
@@ -108,16 +111,16 @@ class InstallKeyDialog(QDialog):
     def __init__(self, cfg: Config, key: SshKey, parent=None):
         super().__init__(parent)
         self.cfg, self.key = cfg, key
-        self.setWindowTitle(f"„{key.name}“ auf Server installieren")
+        self.setWindowTitle(tr("„{name}“ auf Server installieren", name=key.name))
         self.setMinimumWidth(460)
         self.target = QComboBox()
         for conn in sorted(cfg.connections, key=lambda c: c.name.lower()):
             eff, _ = launcher.resolve(cfg, conn)
             self.target.addItem(f"{conn.name}  ({eff.user + '@' if eff.user else ''}{eff.host})", conn.id)
-        self.status = QLabel("Der öffentliche Schlüssel wird in ~/.ssh/authorized_keys eingetragen. "
-                             "Dafür muss die Anmeldung einmalig klappen (Passwort oder anderer Schlüssel).")
+        self.status = QLabel(tr("Der öffentliche Schlüssel wird in ~/.ssh/authorized_keys eingetragen. "
+                             "Dafür muss die Anmeldung einmalig klappen (Passwort oder anderer Schlüssel)."))
         self.status.setWordWrap(True)
-        self.install_btn = QPushButton("Installieren")
+        self.install_btn = QPushButton(tr("Installieren"))
         self.install_btn.clicked.connect(self._install)
         self.install_btn.setEnabled(self.target.count() > 0)
         close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
@@ -126,7 +129,7 @@ class InstallKeyDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 18, 20, 18)
         layout.setSpacing(12)
-        layout.addWidget(QLabel("Verbindung:"))
+        layout.addWidget(QLabel(tr("Verbindung:")))
         layout.addWidget(self.target)
         layout.addWidget(self.status)
         row = QHBoxLayout()
@@ -142,7 +145,7 @@ class InstallKeyDialog(QDialog):
             return
         self.install_btn.setEnabled(False)
         self.target.setEnabled(False)
-        self.status.setText("Verbinde …")
+        self.status.setText(tr("Verbinde …"))
         line = self.key.authorized_line
         self._job = Job(lambda job: keys.install_public_key(self.cfg, conn, line, password=password), self)
         self._job.result.connect(self._done)
@@ -150,17 +153,17 @@ class InstallKeyDialog(QDialog):
         self._job.start()
 
     def _done(self, added: bool):
-        self._finish("Schlüssel wurde eingetragen." if added else "Der Schlüssel war dort bereits eingetragen.")
+        self._finish(tr("Schlüssel wurde eingetragen.") if added else tr("Der Schlüssel war dort bereits eingetragen."))
 
     def _failed(self, exc):
         if isinstance(exc, sftp.SftpAuthError):
-            text, ok = QInputDialog.getText(self, "Passwort", "Passwort für die Anmeldung:", QLineEdit.EchoMode.Password)
+            text, ok = QInputDialog.getText(self, tr("Passwort"), tr("Passwort für die Anmeldung:"), QLineEdit.EchoMode.Password)
             if ok and text:
                 self._install(text)
                 return
-            self._finish("Anmeldung abgebrochen.")
+            self._finish(tr("Anmeldung abgebrochen."))
         else:
-            self._finish(f"Fehlgeschlagen: {exc}")
+            self._finish(tr("Fehlgeschlagen: {exc}", exc=exc))
 
     def _finish(self, text: str):
         self.status.setText(text)
@@ -175,7 +178,7 @@ class KeysDialog(QDialog):
         super().__init__(parent)
         self.cfg = cfg
         self.save_callback = save_callback
-        self.setWindowTitle("SSH-Schlüssel")
+        self.setWindowTitle(tr("SSH-Schlüssel"))
         self.resize(640, 420)
         self.list = QListWidget()
         self.list.currentRowChanged.connect(lambda *_: self._show())
@@ -188,12 +191,12 @@ class KeysDialog(QDialog):
             b.clicked.connect(slot)
             return b
 
-        self.btn_copy = button("Öffentlichen Schlüssel kopieren", self._copy)
-        self.btn_install = button("Auf Server installieren …", self._install)
-        self.btn_delete = button("Löschen", self._delete)
+        self.btn_copy = button(tr("Öffentlichen Schlüssel kopieren"), self._copy)
+        self.btn_install = button(tr("Auf Server installieren …"), self._install)
+        self.btn_delete = button(tr("Löschen"), self._delete)
         top = QHBoxLayout()
-        top.addWidget(button("Erzeugen …", self._generate))
-        top.addWidget(button("Importieren …", self._import))
+        top.addWidget(button(tr("Erzeugen …"), self._generate))
+        top.addWidget(button(tr("Importieren …"), self._import))
         top.addStretch(1)
         actions = QHBoxLayout()
         actions.addWidget(self.btn_copy)
@@ -237,20 +240,20 @@ class KeysDialog(QDialog):
         for b in (self.btn_copy, self.btn_install, self.btn_delete):
             b.setEnabled(key is not None)
         if key is None:
-            self.detail.setPlainText("Noch keine Schlüssel. Mit „Erzeugen …“ oder „Importieren …“ anlegen.")
+            self.detail.setPlainText(tr("Noch keine Schlüssel. Mit „Erzeugen …“ oder „Importieren …“ anlegen."))
             return
         users = keys.users_of(self.cfg, key.id)
         local = keystore.FileStore().exists(key.id)
         lines = [
-            f"Name: {key.name}",
-            f"Typ: {key.type}" + (" · mit Passphrase geschützt" if key.encrypted else ""),
-            f"Fingerabdruck: {key.fingerprint}",
-            f"Kommentar: {key.comment or '—'}",
-            f"Erstellt: {key.created or '—'}",
-            "Privater Schlüssel auf diesem Gerät: " + ("ja" if local else "nein (Passwort-Synchronisation aktivieren, um ihn zu übertragen)"),
-            "Verwendet von: " + (", ".join(users) if users else "—"),
+            tr("Name: {name}", name=key.name),
+            tr("Typ: {type}", type=key.type) + (tr(" · mit Passphrase geschützt") if key.encrypted else ""),
+            tr("Fingerabdruck: {fingerprint}", fingerprint=key.fingerprint),
+            tr("Kommentar: {v}", v=key.comment or '—'),
+            tr("Erstellt: {v}", v=key.created or '—'),
+            tr("Privater Schlüssel auf diesem Gerät: ") + ("ja" if local else tr("nein (Passwort-Synchronisation aktivieren, um ihn zu übertragen)")),
+            tr("Verwendet von: ") + (", ".join(users) if users else "—"),
             "",
-            "Öffentlicher Schlüssel:",
+            tr("Öffentlicher Schlüssel:"),
             key.authorized_line,
         ]
         self.detail.setPlainText("\n".join(lines))
@@ -268,7 +271,7 @@ class KeysDialog(QDialog):
             self._changed(entry.id)
 
     def _import(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Privaten Schlüssel wählen")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Privaten Schlüssel wählen"))
         if not path:
             return
         passphrase = None
@@ -278,15 +281,15 @@ class KeysDialog(QDialog):
                 break
             except keys.NeedsPassphrase:
                 passphrase, ok = QInputDialog.getText(
-                    self, "Passphrase", "Der Schlüssel ist geschützt. Passphrase (nur zum Auslesen des öffentlichen Teils):",
+                    self, tr("Passphrase"), tr("Der Schlüssel ist geschützt. Passphrase (nur zum Auslesen des öffentlichen Teils):"),
                     QLineEdit.EchoMode.Password)
                 if not ok:
                     return
             except keys.KeyManagementError as exc:
-                QMessageBox.critical(self, "Importieren", str(exc))
+                QMessageBox.critical(self, tr("Importieren"), str(exc))
                 return
         default = os.path.basename(path)
-        name, ok = QInputDialog.getText(self, "Name", "Name des Schlüssels:", QLineEdit.EchoMode.Normal, default)
+        name, ok = QInputDialog.getText(self, tr("Name"), tr("Name des Schlüssels:"), QLineEdit.EchoMode.Normal, default)
         if not ok or not name.strip():
             return
         comment = material.public.split(None, 2)[2] if len(material.public.split(None, 2)) > 2 else ""
@@ -295,7 +298,7 @@ class KeysDialog(QDialog):
             with open(path, encoding="utf-8") as f:
                 private = f.read()
         except OSError as exc:
-            QMessageBox.critical(self, "Importieren", str(exc))
+            QMessageBox.critical(self, tr("Importieren"), str(exc))
             return
         if store_key(self, self.cfg, entry, private):
             self._changed(entry.id)
@@ -310,7 +313,7 @@ class KeysDialog(QDialog):
         if key is None:
             return
         if not self.cfg.connections:
-            QMessageBox.information(self, "Installieren", "Es gibt noch keine Verbindung, auf die der Schlüssel installiert werden könnte.")
+            QMessageBox.information(self, tr("Installieren"), tr("Es gibt noch keine Verbindung, auf die der Schlüssel installiert werden könnte."))
             return
         InstallKeyDialog(self.cfg, key, self).exec()
 
@@ -319,16 +322,16 @@ class KeysDialog(QDialog):
         if key is None:
             return
         users = keys.users_of(self.cfg, key.id)
-        text = f"Schlüssel „{key.name}“ löschen?\nDer private Teil wird auf diesem Gerät und – bei aktiver Synchronisation – auf allen Geräten entfernt."
+        text = tr("Schlüssel „{name}“ löschen?\nDer private Teil wird auf diesem Gerät und – bei aktiver Synchronisation – auf allen Geräten entfernt.", name=key.name)
         if users:
-            text += "\n\nNoch zugewiesen an: " + ", ".join(users) + "\nDie Zuweisung wird aufgehoben."
-        text += "\n\nAuf Servern eingetragene öffentliche Schlüssel bleiben dort bestehen."
-        if QMessageBox.question(self, "Löschen", text) != QMessageBox.StandardButton.Yes:
+            text += tr("\n\nNoch zugewiesen an: ") + ", ".join(users) + tr("\nDie Zuweisung wird aufgehoben.")
+        text += tr("\n\nAuf Servern eingetragene öffentliche Schlüssel bleiben dort bestehen.")
+        if QMessageBox.question(self, tr("Löschen"), text) != QMessageBox.StandardButton.Yes:
             return
         try:
             keystore.FileStore().delete(key.id)
         except passwords.PasswordError as exc:
-            QMessageBox.critical(self, "Löschen", str(exc))
+            QMessageBox.critical(self, tr("Löschen"), str(exc))
             return
         keys.forget(self.cfg, key.id)
         self._changed()

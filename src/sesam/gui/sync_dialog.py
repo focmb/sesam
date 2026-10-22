@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 
 from .. import passwords, syncing
 from ..models import Config
+from ..i18n import tr
 
 HELP = (
     "Verbindungen, Gruppen und Identitäten werden in einem Git-Repository abgeglichen (eine Datei pro Eintrag). "
@@ -24,33 +25,33 @@ class SyncDialog(QDialog):
         super().__init__(parent)
         self.cfg = cfg
         s = cfg.sync
-        self.setWindowTitle("Synchronisation")
+        self.setWindowTitle(tr("Synchronisation"))
         self.setMinimumWidth(520)
 
-        self.enabled = QCheckBox("Synchronisation aktivieren")
+        self.enabled = QCheckBox(tr("Synchronisation aktivieren"))
         self.enabled.setChecked(s.enabled)
         self.url = QLineEdit(s.url)
-        self.url.setPlaceholderText("git@server:gruppe/sesam.git oder https://…")
+        self.url.setPlaceholderText(tr("git@server:gruppe/sesam.git oder https://…"))
         self.branch = QLineEdit(s.branch or "main")
         self.user = QLineEdit(s.username)
-        self.user.setPlaceholderText("nur bei https:// nötig – leer: SSH-Schlüssel bzw. vorhandene Git-Zugangsdaten")
+        self.user.setPlaceholderText(tr("nur bei https:// nötig – leer: SSH-Schlüssel bzw. vorhandene Git-Zugangsdaten"))
         self.git_pw = QLineEdit()
         self.git_pw.setEchoMode(QLineEdit.EchoMode.Password)
         self.git_pw.setPlaceholderText(
-            "gespeichert – leer lassen zum Beibehalten" if s.git_password_saved else "Passwort oder Zugriffstoken"
+            tr("gespeichert – leer lassen zum Beibehalten") if s.git_password_saved else tr("Passwort oder Zugriffstoken")
         )
-        self.auto = QCheckBox("Automatisch abgleichen (beim Start und nach jeder Änderung)")
+        self.auto = QCheckBox(tr("Automatisch abgleichen (beim Start und nach jeder Änderung)"))
         self.auto.setChecked(s.auto)
-        self.passwords = QCheckBox("Passwörter verschlüsselt mitsynchronisieren")
+        self.passwords = QCheckBox(tr("Passwörter verschlüsselt mitsynchronisieren"))
         self.passwords.setChecked(s.passwords)
         self.phrase = QLineEdit()
         self.phrase.setEchoMode(QLineEdit.EchoMode.Password)
-        self.phrase.setPlaceholderText("gespeichert – leer lassen zum Beibehalten" if s.passphrase_saved else "mind. 8 Zeichen")
+        self.phrase.setPlaceholderText(tr("gespeichert – leer lassen zum Beibehalten") if s.passphrase_saved else tr("mind. 8 Zeichen"))
         self.phrase2 = QLineEdit()
         self.phrase2.setEchoMode(QLineEdit.EchoMode.Password)
-        self.phrase2.setPlaceholderText("zur Kontrolle wiederholen")
-        self.status = QLabel(f"Letzter Abgleich: {s.last_sync}" if s.last_sync else "Noch nicht abgeglichen.")
-        test = QPushButton("Verbindung testen")
+        self.phrase2.setPlaceholderText(tr("zur Kontrolle wiederholen"))
+        self.status = QLabel(tr("Letzter Abgleich: {last_sync}", last_sync=s.last_sync) if s.last_sync else tr("Noch nicht abgeglichen."))
+        test = QPushButton(tr("Verbindung testen"))
         test.clicked.connect(self._test)
         self.test_result = QLabel()
         self.test_result.setWordWrap(True)
@@ -58,13 +59,13 @@ class SyncDialog(QDialog):
         form = QFormLayout()
 
         form.setVerticalSpacing(8)
-        form.addRow("Repository-URL", self.url)
-        form.addRow("Branch", self.branch)
-        form.addRow("Benutzername", self.user)
-        form.addRow("Passwort / Token", self.git_pw)
+        form.addRow(tr("Repository-URL"), self.url)
+        form.addRow(tr("Branch"), self.branch)
+        form.addRow(tr("Benutzername"), self.user)
+        form.addRow(tr("Passwort / Token"), self.git_pw)
         form.addRow("", self.auto)
         form.addRow("", self.passwords)
-        form.addRow("Sync-Passwort", self.phrase)
+        form.addRow(tr("Sync-Passwort"), self.phrase)
         form.addRow("", self.phrase2)
         row = QWidget()
         r = QHBoxLayout(row)
@@ -73,7 +74,7 @@ class SyncDialog(QDialog):
         r.addWidget(self.test_result, 1)
         form.addRow("", row)
 
-        help_label = QLabel(HELP)
+        help_label = QLabel(tr(HELP))
         help_label.setWordWrap(True)
         help_label.setTextFormat(Qt.TextFormat.RichText)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -103,7 +104,7 @@ class SyncDialog(QDialog):
     def _test(self):
         url = self.url.text().strip()
         if not url:
-            self.test_result.setText("Bitte zuerst eine URL eintragen.")
+            self.test_result.setText(tr("Bitte zuerst eine URL eintragen."))
             return
         QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
@@ -129,28 +130,28 @@ class SyncDialog(QDialog):
         new_phrase = self.phrase.text()
         if on:
             if not self.url.text().strip():
-                QMessageBox.warning(self, "Synchronisation", "Bitte eine Repository-URL eintragen.")
+                QMessageBox.warning(self, tr("Synchronisation"), tr("Bitte eine Repository-URL eintragen."))
                 return
             if self.git_pw.text() and not self.user.text().strip():
-                QMessageBox.warning(self, "Synchronisation", "Zum Passwort fehlt der Benutzername.")
+                QMessageBox.warning(self, tr("Synchronisation"), tr("Zum Passwort fehlt der Benutzername."))
                 return
             if self.passwords.isChecked():
                 if new_phrase:
                     if len(new_phrase) < 8:
-                        QMessageBox.warning(self, "Synchronisation", "Das Sync-Passwort braucht mindestens 8 Zeichen.")
+                        QMessageBox.warning(self, tr("Synchronisation"), tr("Das Sync-Passwort braucht mindestens 8 Zeichen."))
                         return
                     if new_phrase != self.phrase2.text():
-                        QMessageBox.warning(self, "Synchronisation", "Die beiden Sync-Passwörter stimmen nicht überein.")
+                        QMessageBox.warning(self, tr("Synchronisation"), tr("Die beiden Sync-Passwörter stimmen nicht überein."))
                         return
                 elif not s.passphrase_saved:
-                    QMessageBox.warning(self, "Synchronisation", "Bitte ein Sync-Passwort für die Verschlüsselung festlegen.")
+                    QMessageBox.warning(self, tr("Synchronisation"), tr("Bitte ein Sync-Passwort für die Verschlüsselung festlegen."))
                     return
         if new_phrase and on and self.passwords.isChecked():
             try:
                 passwords.set_password(syncing.PASSPHRASE_KEY, new_phrase)
                 s.passphrase_saved = True
             except passwords.PasswordError as exc:
-                QMessageBox.critical(self, "Sync-Passwort", str(exc))
+                QMessageBox.critical(self, tr("Sync-Passwort"), str(exc))
                 return
         if on:
             user = self.user.text().strip()
@@ -162,7 +163,7 @@ class SyncDialog(QDialog):
                     passwords.delete_password(syncing.GIT_PASSWORD_KEY)
                     s.git_password_saved = False
             except passwords.PasswordError as exc:
-                QMessageBox.critical(self, "Repository-Passwort", str(exc))
+                QMessageBox.critical(self, tr("Repository-Passwort"), str(exc))
                 return
             s.username = user
         s.enabled = on

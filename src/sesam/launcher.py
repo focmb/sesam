@@ -11,6 +11,7 @@ from dataclasses import replace
 from . import keystore, passwords, runtime
 from .models import Config, Connection, Terminal
 from .terminals import current_platform
+from .i18n import tr
 
 IS_WINDOWS = sys.platform.startswith("win")
 
@@ -107,11 +108,10 @@ def check_key(cfg: Config, eff: Connection) -> None:
         return
     key = cfg.ssh_key_by_id(eff.key_id)
     if key is None:
-        raise LaunchError("Der zugewiesene SSH-Schlüssel existiert nicht mehr. Bitte in der Verbindung einen anderen wählen.")
+        raise LaunchError(tr("Der zugewiesene SSH-Schlüssel existiert nicht mehr. Bitte in der Verbindung einen anderen wählen."))
     if not keystore.FileStore().exists(eff.key_id):
         raise LaunchError(
-            f"Der private Schlüssel „{key.name}“ ist auf diesem Gerät nicht vorhanden. Mit eingeschaltetem Passwort-Abgleich "
-            "kommt er per Synchronisation; sonst den Schlüssel hier neu importieren."
+            tr("Der private Schlüssel „{name}“ ist auf diesem Gerät nicht vorhanden. Mit eingeschaltetem Passwort-Abgleich kommt er per Synchronisation; sonst den Schlüssel hier neu importieren.", name=key.name)
         )
 
 
@@ -135,7 +135,7 @@ def resolve_terminal(cfg: Config, conn: Connection) -> Terminal:
         usable = [t for t in cfg.terminals if t.platform in ("all", current_platform())]
         term = usable[0] if usable else None
     if term is None:
-        raise LaunchError("Es ist kein Terminal konfiguriert. Bitte unter „Terminals“ eines anlegen.")
+        raise LaunchError(tr("Es ist kein Terminal konfiguriert. Bitte unter „Terminals“ eines anlegen."))
     return term
 
 
@@ -158,7 +158,7 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
             token = token.replace(key, value)
         out.append(token)
     if not out:
-        raise LaunchError(f"Die Befehlsvorlage von „{terminal.name}“ ist leer.")
+        raise LaunchError(tr("Die Befehlsvorlage von „{name}“ ist leer.", name=terminal.name))
     return out
 
 
@@ -175,7 +175,7 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remo
     terminal = terminal or resolve_terminal(cfg, conn)
     cmd = build_terminal_command(terminal, conn, wrapper_args(conn, remote_command) if conn.use_password else None)
     if shutil.which(cmd[0]) is None:
-        raise LaunchError(f"Programm „{cmd[0]}“ wurde nicht gefunden (Terminal „{terminal.name}“).")
+        raise LaunchError(tr("Programm „{v}“ wurde nicht gefunden (Terminal „{name}“).", v=cmd[0], name=terminal.name))
     kwargs: dict = {}
     if IS_WINDOWS:
         flags = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -190,5 +190,5 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remo
             env=runtime.clean_env(), **kwargs,
         )
     except OSError as exc:
-        raise LaunchError(f"Terminal konnte nicht gestartet werden: {exc}") from exc
+        raise LaunchError(tr("Terminal konnte nicht gestartet werden: {exc}", exc=exc)) from exc
     return cmd

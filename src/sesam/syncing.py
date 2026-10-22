@@ -31,6 +31,7 @@ from typing import Callable, Protocol
 
 from . import keystore, passwords, runtime, storage
 from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings, new_id
+from .i18n import tr
 
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
 GIT_PASSWORD_KEY = "sync:git-password"  # Schlüssel im Schlüsselbund für das Repository-Passwort bzw. den Token
@@ -84,7 +85,7 @@ def new_kdf() -> dict:
 
 def derive_key(passphrase: str, kdf: dict) -> bytes:
     if kdf.get("name") != "scrypt":
-        raise SyncError("Unbekanntes Schlüsselableitungsverfahren im Repository.")
+        raise SyncError(tr("Unbekanntes Schlüsselableitungsverfahren im Repository."))
     return hashlib.scrypt(
         passphrase.encode("utf-8"), salt=_b64d(kdf["salt"]), n=kdf["n"], r=kdf["r"], p=kdf["p"],
         maxmem=256 * 1024 * 1024, dklen=32,
@@ -106,7 +107,7 @@ def decrypt(key: bytes, blob: dict, aad: str) -> str:
     try:
         return AESGCM(key).decrypt(_b64d(blob["nonce"]), _b64d(blob["ct"]), aad.encode("utf-8")).decode("utf-8")
     except (InvalidTag, KeyError, ValueError) as exc:
-        raise SyncError("Entschlüsselung fehlgeschlagen (falsches Sync-Passwort?).") from exc
+        raise SyncError(tr("Entschlüsselung fehlgeschlagen (falsches Sync-Passwort?).")) from exc
 
 
 # ---------------------------------------------------------------- Einträge und Zusammenführung
@@ -229,13 +230,13 @@ class Git:
                 encoding="utf-8", errors="replace", **kwargs,
             )
         except FileNotFoundError as exc:
-            raise SyncError("git wurde nicht gefunden. Bitte Git installieren.") from exc
+            raise SyncError(tr("git wurde nicht gefunden. Bitte Git installieren.")) from exc
         except subprocess.TimeoutExpired as exc:
-            raise SyncError(f"Zeitüberschreitung bei „git {args[0]}“.") from exc
+            raise SyncError(tr("Zeitüberschreitung bei „git {v}“.", v=args[0])) from exc
         if check and proc.returncode != 0:
             msg = (proc.stderr or proc.stdout).strip().splitlines()
             short = next((m for m in reversed(msg) if not m.startswith("hint:")), msg[-1] if msg else str(proc.returncode))
-            raise SyncError(f"git {args[0]} fehlgeschlagen: {short}", detail="\n".join(msg))
+            raise SyncError(tr("git {v} fehlgeschlagen: {short}", v=args[0], short=short), detail="\n".join(msg))
         return proc.stdout
 
 
@@ -243,7 +244,7 @@ def check_remote(url: str, credentials: tuple[str, str] | None = None) -> str:
     """Prüft, ob das Repository erreichbar ist. Liefert eine kurze Beschreibung."""
     out = Git(Path.cwd(), credentials).run("ls-remote", "--heads", url, timeout=60)
     n = len(out.strip().splitlines())
-    return "Repository erreichbar (leer)." if n == 0 else f"Repository erreichbar ({n} Branch(es))."
+    return tr("Repository erreichbar (leer).") if n == 0 else tr("Repository erreichbar ({n} Branch(es)).", n=n)
 
 
 # ---------------------------------------------------------------- Engine
@@ -272,12 +273,12 @@ class SyncReport:
     def summary(self) -> str:
         parts = []
         if self.added or self.updated or self.removed:
-            parts.append(f"lokal: {self.added} neu, {self.updated} geändert, {self.removed} entfernt")
+            parts.append(tr("lokal: {added} neu, {updated} geändert, {removed} entfernt", added=self.added, updated=self.updated, removed=self.removed))
         if self.pushed:
-            parts.append("Änderungen hochgeladen")
+            parts.append(tr("Änderungen hochgeladen"))
         if self.conflicts:
-            parts.append(f"{len(self.conflicts)} Konflikt(e): " + ", ".join(self.conflicts))
-        return "; ".join(parts) or "Alles aktuell"
+            parts.append(tr("{n} Konflikt(e): ", n=len(self.conflicts)) + ", ".join(self.conflicts))
+        return "; ".join(parts) or tr("Alles aktuell")
 
 
 class SyncEngine:
@@ -321,7 +322,7 @@ class SyncEngine:
     # ---- Phase 1: Server-Stand holen ----
     def fetch(self) -> RemoteState:
         if not self.s.url.strip():
-            raise SyncError("Keine Repository-URL eingestellt.")
+            raise SyncError(tr("Keine Repository-URL eingestellt."))
         branch = self.s.branch.strip() or "main"
         self.repo.parent.mkdir(parents=True, exist_ok=True)
         if not (self.repo / ".git").exists():
@@ -350,11 +351,11 @@ class SyncEngine:
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
             except ValueError as exc:
-                raise SyncError("meta.json im Repository ist beschädigt.") from exc
+                raise SyncError(tr("meta.json im Repository ist beschädigt.")) from exc
         key, new_meta = None, False
         if self.s.passwords:
             if not self.passphrase:
-                raise SyncError("Das Sync-Passwort fehlt (Seitenleiste → Synchronisation …).")
+                raise SyncError(tr("Das Sync-Passwort fehlt (Seitenleiste → Synchronisation …)."))
             if meta and meta.get("kdf"):
                 key = derive_key(self.passphrase, meta["kdf"])
                 decrypt(key, meta["check"], "check")  # prüft das Sync-Passwort
@@ -435,7 +436,7 @@ class SyncEngine:
         for k, loc, rem in conflicts:
             copy_id = new_id()
             data = dict(rem.data, id=copy_id)
-            data["name"] = f"{data.get('name', '')} (Konflikt)"
+            data["name"] = tr("{v} (Konflikt)", v=data.get('name', ''))
             result[(k[0], copy_id)] = Item(k[0], copy_id, data, rem.pw)
             report.conflicts.append(loc.data.get("name", loc.id))
 
@@ -570,7 +571,7 @@ class SyncEngine:
                 self.git.run("push", "-q", "origin", f"HEAD:refs/heads/{branch}", timeout=180)
             except SyncError as exc:
                 if any(w in (str(exc) + exc.detail).lower() for w in ("rejected", "non-fast-forward", "fetch first", "stale")):
-                    raise SyncRetry("Der Server wurde zwischenzeitlich geändert.") from exc
+                    raise SyncRetry(tr("Der Server wurde zwischenzeitlich geändert.")) from exc
                 raise
             pushed = True
         if self._next_state is not None:
@@ -590,7 +591,7 @@ class SyncEngine:
             except SyncRetry:
                 if attempt == retries - 1:
                     raise
-        raise SyncError("Abgleich nicht möglich.")  # pragma: no cover
+        raise SyncError(tr("Abgleich nicht möglich."))  # pragma: no cover
 
 
 def work_dir() -> Path:

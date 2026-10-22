@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import sftp
 from .models import Config, Connection, SshKey
+from .i18n import tr
 
 TYPES = {"ed25519": "Ed25519 (empfohlen)", "rsa": "RSA (4096 Bit)"}
 RSA_BITS = 4096
@@ -33,7 +34,7 @@ def _crypto():
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
     except ImportError as exc:
-        raise KeyManagementError("Das Paket „cryptography“ ist nicht installiert.") from exc
+        raise KeyManagementError(tr("Das Paket „cryptography“ ist nicht installiert.")) from exc
     return serialization, ed25519, rsa
 
 
@@ -42,7 +43,7 @@ def fingerprint(public: str) -> str:
     try:
         blob = base64.b64decode(public.split()[1], validate=True)
     except (IndexError, ValueError) as exc:
-        raise KeyManagementError("Kein gültiger öffentlicher Schlüssel.") from exc
+        raise KeyManagementError(tr("Kein gültiger öffentlicher Schlüssel.")) from exc
     return "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
 
 
@@ -66,7 +67,7 @@ def generate(kind: str = "ed25519", passphrase: str = "") -> KeyMaterial:
     elif kind == "rsa":
         key = rsa.generate_private_key(public_exponent=65537, key_size=RSA_BITS)
     else:
-        raise KeyManagementError(f"Unbekannter Schlüsseltyp: {kind}")
+        raise KeyManagementError(tr("Unbekannter Schlüsseltyp: {kind}", kind=kind))
     algo = (serialization.BestAvailableEncryption(passphrase.encode("utf-8")) if passphrase
             else serialization.NoEncryption())
     private = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH, algo).decode("ascii")
@@ -83,7 +84,7 @@ def read_key(text: str, passphrase: str | None = None, public_hint: str | None =
     serialization, _ed, _rsa = _crypto()
     data = text.encode("utf-8")
     if b"PRIVATE KEY" not in data:
-        raise KeyManagementError("Das ist keine private OpenSSH-Schlüsseldatei (PuTTY-.ppk-Dateien lassen sich vorher mit PuTTYgen exportieren).")
+        raise KeyManagementError(tr("Das ist keine private OpenSSH-Schlüsseldatei (PuTTY-.ppk-Dateien lassen sich vorher mit PuTTYgen exportieren)."))
     encrypted = (b"ENCRYPTED" in data) or _openssh_encrypted(text)
     pw = passphrase.encode("utf-8") if passphrase else None
     for loader in (serialization.load_ssh_private_key, serialization.load_pem_private_key):
@@ -92,11 +93,11 @@ def read_key(text: str, passphrase: str | None = None, public_hint: str | None =
         except TypeError:  # verschlüsselt, aber keine Passphrase angegeben
             if public_hint:
                 return _material(text, public_hint, True)
-            raise NeedsPassphrase("Der Schlüssel ist durch eine Passphrase geschützt.") from None
+            raise NeedsPassphrase(tr("Der Schlüssel ist durch eine Passphrase geschützt.")) from None
         except ValueError as exc:
             if "password" in str(exc).lower() or "decrypt" in str(exc).lower() or "bad" in str(exc).lower():
                 if passphrase and not public_hint:
-                    raise KeyManagementError("Die Passphrase ist falsch.") from exc
+                    raise KeyManagementError(tr("Die Passphrase ist falsch.")) from exc
             continue
         except Exception:  # noqa: BLE001 - nicht unterstützte Schlüsselarten usw.
             continue
@@ -105,8 +106,8 @@ def read_key(text: str, passphrase: str | None = None, public_hint: str | None =
     if passphrase and public_hint:
         return _material(text, public_hint, True)
     if encrypted and passphrase:
-        raise KeyManagementError("Die Passphrase ist falsch.")
-    raise KeyManagementError("Die Schlüsseldatei konnte nicht gelesen werden (unbekanntes Format oder beschädigt).")
+        raise KeyManagementError(tr("Die Passphrase ist falsch."))
+    raise KeyManagementError(tr("Die Schlüsseldatei konnte nicht gelesen werden (unbekanntes Format oder beschädigt)."))
 
 
 class NeedsPassphrase(KeyManagementError):
@@ -137,7 +138,7 @@ def read_key_file(path: str | Path, passphrase: str | None = None) -> KeyMateria
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        raise KeyManagementError(f"Datei konnte nicht gelesen werden: {exc}") from exc
+        raise KeyManagementError(tr("Datei konnte nicht gelesen werden: {exc}", exc=exc)) from exc
     hint = None
     pub = path.with_name(path.name + ".pub")
     if pub.is_file():
@@ -160,7 +161,7 @@ def new_entry(name: str, material: KeyMaterial, comment: str = "") -> SshKey:
 
 def users_of(cfg: Config, key_id: str) -> list[str]:
     """Namen der Verbindungen und Identitäten, die den Schlüssel benutzen."""
-    return [c.name for c in cfg.connections if c.key_id == key_id] + [f"Identität {i.name}" for i in cfg.identities if i.key_id == key_id]
+    return [c.name for c in cfg.connections if c.key_id == key_id] + [tr("Identität {name}", name=i.name) for i in cfg.identities if i.key_id == key_id]
 
 
 def forget(cfg: Config, key_id: str) -> None:
@@ -190,10 +191,10 @@ def install_public_key(
     """
     line = " ".join(authorized_line.split())
     if "\n" in authorized_line.strip() or len(line.split()) < 2:
-        raise KeyManagementError("Kein gültiger öffentlicher Schlüssel.")
+        raise KeyManagementError(tr("Kein gültiger öffentlicher Schlüssel."))
     fingerprint(line)
     client, _eff = sftp.open_client(cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout,
-                                    purpose="die Schlüssel-Installation")
+                                    purpose=tr("die Schlüssel-Installation"))
     try:
         try:
             _in, out, err = client.exec_command(INSTALL_SCRIPT.format(line=shlex.quote(line)), timeout=20)
@@ -201,10 +202,10 @@ def install_public_key(
             stderr = err.read().decode("utf-8", "replace")
             status = out.channel.recv_exit_status()
         except (OSError, EOFError, sftp._paramiko().SSHException) as exc:
-            raise KeyManagementError(f"Installation fehlgeschlagen: {exc}") from exc
+            raise KeyManagementError(tr("Installation fehlgeschlagen: {exc}", exc=exc)) from exc
     finally:
         client.close()
     if status != 0 or ("SESAM_ADDED" not in stdout and "SESAM_PRESENT" not in stdout):
-        detail = (stderr.strip().splitlines() or [f"Fehlercode {status}"])[0]
-        raise KeyManagementError(f"Installation fehlgeschlagen: {detail}")
+        detail = (stderr.strip().splitlines() or [tr("Fehlercode {status}", status=status)])[0]
+        raise KeyManagementError(tr("Installation fehlgeschlagen: {detail}", detail=detail))
     return "SESAM_ADDED" in stdout

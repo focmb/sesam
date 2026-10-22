@@ -7,6 +7,8 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
+from .i18n import normalize as _normalize_language
+from .i18n import tr
 from .models import FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal
 from .terminals import default_terminals
 
@@ -41,14 +43,14 @@ def load(path: Path | None = None) -> Config:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
-            raise ValueError("die Datei enthält kein JSON-Objekt")
+            raise ValueError(tr("die Datei enthält kein JSON-Objekt"))
         cfg = _from_data(data)
     except json.JSONDecodeError as exc:  # vor ValueError, da eine Unterklasse davon
-        raise ConfigError(path, f"kein gültiges JSON (Zeile {exc.lineno}, Spalte {exc.colno}: {exc.msg})") from exc
+        raise ConfigError(path, tr("kein gültiges JSON (Zeile {lineno}, Spalte {colno}: {msg})", lineno=exc.lineno, colno=exc.colno, msg=exc.msg)) from exc
     except UnicodeDecodeError as exc:
-        raise ConfigError(path, f"keine gültige UTF-8-Datei ({exc.reason})") from exc
+        raise ConfigError(path, tr("keine gültige UTF-8-Datei ({reason})", reason=exc.reason)) from exc
     except (TypeError, KeyError, ValueError, AttributeError) as exc:
-        raise ConfigError(path, f"unerwarteter Inhalt ({type(exc).__name__}: {exc})") from exc
+        raise ConfigError(path, tr("unerwarteter Inhalt ({kind}: {exc})", kind=type(exc).__name__, exc=exc)) from exc
     if not cfg.terminals:
         cfg.terminals = default_terminals()
     if not cfg.terminal_by_id(cfg.default_terminal_id) and cfg.terminals:
@@ -100,6 +102,7 @@ def _from_data(data: dict) -> Config:
         collapsed_groups=[g for g in data["collapsed_groups"] if isinstance(g, str)] if isinstance(data.get("collapsed_groups"), list) else [],
         sync=SyncSettings.from_dict(data.get("sync", {})),
         theme=data.get("theme", "system") if data.get("theme") in ("system", "light", "dark") else "system",
+        language=_normalize_language(data.get("language")),
         font_scale=_font_scale(data.get("font_scale")),
         window_size=_window_size(data.get("window_size")),
         window_maximized=data.get("window_maximized") is True,

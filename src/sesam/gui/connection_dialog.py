@@ -13,6 +13,7 @@ from .. import tags as tag_util
 from ..models import Config, Connection
 from .identities_dialog import IdentityEditDialog, save_identity
 from .keys_dialog import fill_key_combo
+from ..i18n import tr
 
 
 def swatch(color: str, size: int = 14) -> QIcon:
@@ -46,7 +47,7 @@ class ConnectionDialog(QDialog):
         self.cfg = cfg
         self.save_callback = save_callback or (lambda: None)
         self.conn = conn or Connection(name="", host="")
-        self.setWindowTitle("Verbindung bearbeiten" if conn else "Neue Verbindung")
+        self.setWindowTitle(tr("Verbindung bearbeiten") if conn else tr("Neue Verbindung"))
         self.setMinimumWidth(480)
 
         self.name = QLineEdit(self.conn.name)
@@ -71,18 +72,18 @@ class ConnectionDialog(QDialog):
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.setPlaceholderText(
-            "gespeichert – leer lassen zum Beibehalten" if self.conn.use_password else "optional"
+            tr("gespeichert – leer lassen zum Beibehalten") if self.conn.use_password else tr("optional")
         )
         self.password.setToolTip(
-            "Für SSH-Login und (optional) sudo. Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei."
+            tr("Für SSH-Login und (optional) sudo. Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei.")
         )
-        self.clear_password = QCheckBox("Gespeichertes Passwort löschen")
+        self.clear_password = QCheckBox(tr("Gespeichertes Passwort löschen"))
         self.clear_password.setVisible(self.conn.use_password)
         self.password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
         self.identity_combo = QComboBox()
         self.identity_info = QLabel()
         self.identity_info.setWordWrap(True)
-        new_identity = QPushButton("Neu …")
+        new_identity = QPushButton(tr("Neu …"))
         new_identity.clicked.connect(self._new_identity)
         identity_pick = QWidget()
         pick_row = QHBoxLayout(identity_pick)
@@ -92,23 +93,23 @@ class ConnectionDialog(QDialog):
         self._fill_identities(self.conn.identity_id)
         self.identity_combo.currentIndexChanged.connect(self._identity_changed)
         self.jump = QLineEdit(self.conn.jump_host)
-        self.jump.setPlaceholderText("z. B. user@bastion.example.org")
+        self.jump.setPlaceholderText(tr("z. B. user@bastion.example.org"))
         self.extra = QLineEdit(self.conn.extra_args)
-        self.extra.setPlaceholderText("z. B. -o ServerAliveInterval=30 -L 8080:localhost:80")
+        self.extra.setPlaceholderText(tr("z. B. -o ServerAliveInterval=30 -L 8080:localhost:80"))
         self.remote = QLineEdit(self.conn.remote_command)
-        self.remote.setPlaceholderText("optional, z. B. tmux attach")
+        self.remote.setPlaceholderText(tr("optional, z. B. tmux attach"))
         self.sudo_mode = QComboBox()
-        self.sudo_mode.addItem("Aus", "")
-        self.sudo_mode.addItem("sudo -i (Login-Shell des Zielbenutzers)", "login")
-        self.sudo_mode.addItem("sudo -s (Shell, Umgebung bleibt)", "shell")
+        self.sudo_mode.addItem(tr("Aus"), "")
+        self.sudo_mode.addItem(tr("sudo -i (Login-Shell des Zielbenutzers)"), "login")
+        self.sudo_mode.addItem(tr("sudo -s (Shell, Umgebung bleibt)"), "shell")
         self.sudo_mode.setCurrentIndex(max(self.sudo_mode.findData(self.conn.sudo_mode), 0))
         self.sudo_user = QLineEdit(self.conn.sudo_user)
-        self.sudo_user.setPlaceholderText("root (Standard)")
-        self.sudo_pw = QCheckBox("Gespeichertes Passwort auch für sudo verwenden")
+        self.sudo_user.setPlaceholderText(tr("root (Standard)"))
+        self.sudo_pw = QCheckBox(tr("Gespeichertes Passwort auch für sudo verwenden"))
         self.sudo_pw.setChecked(self.conn.sudo_use_password)
         self.sudo_pw.setToolTip(
-            "Das Passwort wird verschlüsselt als Umgebungsvariable (SendEnv) übertragen. "
-            "Der Server muss LC_* per AcceptEnv zulassen (Debian/Ubuntu: Standard); sonst fragt sudo im Terminal."
+            tr("Das Passwort wird verschlüsselt als Umgebungsvariable (SendEnv) übertragen. "
+            "Der Server muss LC_* per AcceptEnv zulassen (Debian/Ubuntu: Standard); sonst fragt sudo im Terminal.")
         )
 
         def _sudo_toggled(*_):
@@ -118,15 +119,15 @@ class ConnectionDialog(QDialog):
 
         self.sudo_mode.currentIndexChanged.connect(_sudo_toggled)
         _sudo_toggled()
-        self.sudo_mode.setToolTip("Nach dem Login per sudo zu root (oder einem anderen Benutzer) wechseln. "
-                                  "Ein sudo-Passwort wird im Terminal abgefragt.")
-        self.docker = QCheckBox("Docker-Container dieses Hosts im Verbindungsbaum anzeigen")
+        self.sudo_mode.setToolTip(tr("Nach dem Login per sudo zu root (oder einem anderen Benutzer) wechseln. "
+                                  "Ein sudo-Passwort wird im Terminal abgefragt."))
+        self.docker = QCheckBox(tr("Docker-Container dieses Hosts im Verbindungsbaum anzeigen"))
         self.docker.setChecked(self.conn.docker)
-        self.docker.setToolTip("Beim Aufklappen wird der Host per SSH nach laufenden Containern gefragt (docker ps).")
+        self.docker.setToolTip(tr("Beim Aufklappen wird der Host per SSH nach laufenden Containern gefragt (docker ps)."))
         self.docker_shell = QLineEdit(self.conn.docker_shell)
-        self.docker_shell.setPlaceholderText("automatisch (bash, sonst sh)")
+        self.docker_shell.setPlaceholderText(tr("automatisch (bash, sonst sh)"))
         self.docker_user = QLineEdit(self.conn.docker_user)
-        self.docker_user.setPlaceholderText("Standard des Containers")
+        self.docker_user.setPlaceholderText(tr("Standard des Containers"))
 
         def _docker_toggled(*_):
             self.docker_shell.setEnabled(self.docker.isChecked())
@@ -138,21 +139,22 @@ class ConnectionDialog(QDialog):
         self.group.setEditable(True)
         self.group.addItems([""] + grp.all_groups(cfg))
         self.group.setCurrentText(self.conn.group if conn else default_group)
-        self.group.setToolTip("Untergruppen mit „/“ trennen, z. B. Kunde A/Produktion")
+        self.group.setToolTip(tr("Untergruppen mit „/“ trennen, z. B. Kunde A/Produktion"))
         self.color = QComboBox()
-        self.color.addItem("Keine", "")
+        self.color.addItem(tr("Keine"), "")
         for key, (name, hex_) in colors.PALETTE.items():
+            name = tr(name)
             self.color.addItem(swatch(hex_), name, key)
         self.color.setCurrentIndex(max(self.color.findData(self.conn.color), 0))
-        self.color.setToolTip("Färbt das Symbol der Verbindung im Baum.")
+        self.color.setToolTip(tr("Färbt das Symbol der Verbindung im Baum."))
         self.tags = QLineEdit(tag_util.format(self.conn.tags))
-        self.tags.setPlaceholderText("mit Komma trennen, z. B. prod, kunde-a")
+        self.tags.setPlaceholderText(tr("mit Komma trennen, z. B. prod, kunde-a"))
         completer = TagCompleter(tag_util.all_tags(cfg), self.tags)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.tags.setCompleter(completer)
-        self.tags.setToolTip("Schlagwörter zum Suchen und Ordnen; die Suche findet auch Tags.")
+        self.tags.setToolTip(tr("Schlagwörter zum Suchen und Ordnen; die Suche findet auch Tags."))
         self.terminal = QComboBox()
-        self.terminal.addItem("Standardterminal", "")
+        self.terminal.addItem(tr("Standardterminal"), "")
         for t in cfg.terminals:
             self.terminal.addItem(t.name, t.id)
         idx = self.terminal.findData(self.conn.terminal_id)
@@ -163,30 +165,30 @@ class ConnectionDialog(QDialog):
         form = QFormLayout()
 
         form.setVerticalSpacing(8)
-        form.addRow("Name*", self.name)
-        form.addRow("Host*", self.host)
-        form.addRow("Identität", identity_pick)
+        form.addRow(tr("Name*"), self.name)
+        form.addRow(tr("Host*"), self.host)
+        form.addRow(tr("Identität"), identity_pick)
         form.addRow("", self.identity_info)
-        form.addRow("Benutzer", self.user)
-        form.addRow("Port", self.port)
-        form.addRow("Gespeicherter Schlüssel", self.key_combo)
-        form.addRow("Schlüsseldatei", identity_row)
-        form.addRow("Passwort", self.password)
+        form.addRow(tr("Benutzer"), self.user)
+        form.addRow(tr("Port"), self.port)
+        form.addRow(tr("Gespeicherter Schlüssel"), self.key_combo)
+        form.addRow(tr("Schlüsseldatei"), identity_row)
+        form.addRow(tr("Passwort"), self.password)
         form.addRow("", self.clear_password)
-        form.addRow("Jump-Host", self.jump)
-        form.addRow("Zusätzliche Optionen", self.extra)
-        form.addRow("Remote-Befehl", self.remote)
-        form.addRow("Mit sudo", self.sudo_mode)
-        form.addRow("sudo als Benutzer", self.sudo_user)
+        form.addRow(tr("Jump-Host"), self.jump)
+        form.addRow(tr("Zusätzliche Optionen"), self.extra)
+        form.addRow(tr("Remote-Befehl"), self.remote)
+        form.addRow(tr("Mit sudo"), self.sudo_mode)
+        form.addRow(tr("sudo als Benutzer"), self.sudo_user)
         form.addRow("", self.sudo_pw)
-        form.addRow("Docker", self.docker)
-        form.addRow("Shell im Container", self.docker_shell)
-        form.addRow("Benutzer im Container", self.docker_user)
-        form.addRow("Gruppe", self.group)
-        form.addRow("Farbe", self.color)
-        form.addRow("Tags", self.tags)
-        form.addRow("Terminal", self.terminal)
-        form.addRow("Notizen", self.notes)
+        form.addRow(tr("Docker"), self.docker)
+        form.addRow(tr("Shell im Container"), self.docker_shell)
+        form.addRow(tr("Benutzer im Container"), self.docker_user)
+        form.addRow(tr("Gruppe"), self.group)
+        form.addRow(tr("Farbe"), self.color)
+        form.addRow(tr("Tags"), self.tags)
+        form.addRow(tr("Terminal"), self.terminal)
+        form.addRow(tr("Notizen"), self.notes)
 
         self._identity_changed()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -201,7 +203,7 @@ class ConnectionDialog(QDialog):
     def _fill_identities(self, select: str = ""):
         self.identity_combo.blockSignals(True)
         self.identity_combo.clear()
-        self.identity_combo.addItem("Keine – Zugangsdaten direkt eintragen", "")
+        self.identity_combo.addItem(tr("Keine – Zugangsdaten direkt eintragen"), "")
         for ident in sorted(self.cfg.identities, key=lambda i: i.name.lower()):
             self.identity_combo.addItem(ident.name, ident.id)
         self.identity_combo.setCurrentIndex(max(self.identity_combo.findData(select), 0))
@@ -218,8 +220,8 @@ class ConnectionDialog(QDialog):
             self.identity_info.setText("")
         else:
             self.identity_info.setText(
-                f"Benutzer: {ident.user or '—'} · Schlüssel: {self._identity_key_label(ident)} · "
-                f"Passwort: {'gespeichert' if ident.use_password else '—'}"
+                tr("Benutzer: {user} · Schlüssel: {key} · Passwort: {password}", user=ident.user or '—', key=self._identity_key_label(ident),
+                   password=tr('gespeichert') if ident.use_password else '—')
             )
 
     def _identity_key_label(self, ident) -> str:
@@ -236,13 +238,13 @@ class ConnectionDialog(QDialog):
             self._identity_changed()
 
     def _browse_key(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Schlüsseldatei wählen")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Schlüsseldatei wählen"))
         if path:
             self.identity.setText(path)
 
     def _accept(self):
         if not self.name.text().strip() or not self.host.text().strip():
-            QMessageBox.warning(self, "Eingabe unvollständig", "Name und Host sind Pflichtfelder.")
+            QMessageBox.warning(self, tr("Eingabe unvollständig"), tr("Name und Host sind Pflichtfelder."))
             return
         c = self.conn
         c.name = self.name.text().strip()

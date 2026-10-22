@@ -1,4 +1,4 @@
-"""Variable Schriftgröße: Menü, Tastenkürzel, Speicherung."""
+"""Variable Schriftgröße: Einstellungsdialog, Tastenkürzel, Speicherung."""
 import json
 import unittest
 
@@ -58,10 +58,8 @@ class FontScaleTests(GuiTestCase):
         schedule.assert_not_called()
         self.assertAlmostEqual(self._size(), base * 1.5, delta=1)
         self.assertEqual(storage.load(self.path).font_scale, 150)
-        self.assertTrue(w.scale_actions[150].isChecked())
         w.set_font_scale(100)
         self.assertAlmostEqual(self._size(), base, delta=0.01)  # zurück ohne Rundungsdrift
-        self.assertTrue(w.scale_actions[100].isChecked())
 
     def test_bigger_smaller_reset_actions_and_limits(self):
         w = self._window()

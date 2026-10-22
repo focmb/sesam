@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import storage
 from .passwords import PasswordError
+from .i18n import tr
 
 _SAFE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
@@ -21,7 +22,7 @@ def directory() -> Path:
 
 def _check(key_id: str) -> str:
     if not isinstance(key_id, str) or not _SAFE_ID.fullmatch(key_id):
-        raise PasswordError(f"Ungültige Schlüssel-ID: {key_id!r}")  # schützt vor Pfaden aus einem manipulierten Sync-Repository
+        raise PasswordError(tr("Ungültige Schlüssel-ID: {key_id!r}", key_id=key_id))  # schützt vor Pfaden aus einem manipulierten Sync-Repository
     return key_id
 
 
@@ -39,7 +40,7 @@ class FileStore:
         except FileNotFoundError:
             return None
         except OSError as exc:
-            raise PasswordError(f"Schlüsseldatei konnte nicht gelesen werden: {exc}") from exc
+            raise PasswordError(tr("Schlüsseldatei konnte nicht gelesen werden: {exc}", exc=exc)) from exc
 
     def set(self, key_id: str, value: str) -> None:
         path = path_of(key_id)
@@ -64,13 +65,13 @@ class FileStore:
                 tmp.unlink(missing_ok=True)
             except OSError:
                 pass
-            raise PasswordError(f"Schlüsseldatei konnte nicht gespeichert werden: {exc}") from exc
+            raise PasswordError(tr("Schlüsseldatei konnte nicht gespeichert werden: {exc}", exc=exc)) from exc
 
     def delete(self, key_id: str) -> None:
         try:
             path_of(key_id).unlink(missing_ok=True)
         except OSError as exc:
-            raise PasswordError(f"Schlüsseldatei konnte nicht gelöscht werden: {exc}") from exc
+            raise PasswordError(tr("Schlüsseldatei konnte nicht gelöscht werden: {exc}", exc=exc)) from exc
 
     def exists(self, key_id: str) -> bool:
         try:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 
+from .i18n import tr
+
 
 def _load_config(path):
     """Lädt die Konfiguration. Ist die Datei beschädigt, wird sie gesichert und Sesam startet leer.
@@ -17,27 +19,25 @@ def _load_config(path):
     except storage.ConfigError as exc:
         reason = exc.reason
     except OSError as exc:
-        QMessageBox.critical(None, "Konfiguration nicht lesbar", f"Die Konfigurationsdatei kann nicht gelesen werden:\n{path}\n\n{exc}")
+        QMessageBox.critical(None, tr("Konfiguration nicht lesbar"), tr("Die Konfigurationsdatei kann nicht gelesen werden:\n{path}\n\n{exc}", path=path, exc=exc))
         return None
     try:
         backup = storage.quarantine(path)
     except OSError as exc:
         QMessageBox.critical(
-            None, "Konfiguration beschädigt",
-            f"Die Konfigurationsdatei ist beschädigt ({reason}) und konnte nicht gesichert werden:\n{exc}\n\n"
-            "Sesam wird beendet, damit nichts überschrieben wird.")
+            None, tr("Konfiguration beschädigt"),
+            tr("Die Konfigurationsdatei ist beschädigt ({reason}) und konnte nicht gesichert werden:\n{exc}\n\nSesam wird beendet, damit nichts überschrieben wird.", reason=reason, exc=exc))
         return None
     QMessageBox.warning(
-        None, "Konfiguration beschädigt",
-        f"Die Konfigurationsdatei konnte nicht gelesen werden:\n{reason}\n\n"
-        f"Sie wurde nicht gelöscht, sondern gesichert als:\n{backup}\n\n"
-        "Sesam startet jetzt mit einer leeren Konfiguration. Passwörter im Schlüsselbund sind nicht betroffen. "
-        "Du kannst die gesicherte Datei reparieren und als config.json zurückkopieren. "
-        "Nutzt du die Git-Synchronisation, richte sie wieder ein – die Verbindungen kommen dann aus dem Repository zurück.")
+        None, tr("Konfiguration beschädigt"),
+        tr("Die Konfigurationsdatei konnte nicht gelesen werden:\n{reason}\n\nSie wurde nicht gelöscht, sondern gesichert als:\n{backup}\n\nSesam startet jetzt mit einer leeren Konfiguration. Passwörter im Schlüsselbund sind nicht betroffen. Du kannst die gesicherte Datei reparieren und als config.json zurückkopieren. Nutzt du die Git-Synchronisation, richte sie wieder ein – die Verbindungen kommen dann aus dem Repository zurück.", reason=reason, backup=backup))
     return storage.load(path)
 
 
 def main() -> int:
+    from . import i18n
+
+    i18n.load_saved_language()  # auch Meldungen vor dem Laden der Konfiguration und der Befehlszeilenmodus sprechen die gewählte Sprache
     if len(sys.argv) >= 3 and sys.argv[1] == "--connect":
         from .connect_cli import parse_overrides, run
 
@@ -64,6 +64,7 @@ def main() -> int:
     cfg = _load_config(path)
     if cfg is None:
         return 1
+    i18n.set_language(cfg.language)
     theme.apply(app, cfg.theme)
     theme.apply_scale(app, cfg.font_scale)
     window = MainWindow(cfg, path)

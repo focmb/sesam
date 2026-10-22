@@ -18,6 +18,8 @@ from .. import sftp
 from ..models import Config, Connection
 from . import style, theme
 from .jobs import Job
+from .. import i18n
+from ..i18n import tr
 
 MIME = "application/x-sesam-files"
 NAME_ROLE = Qt.ItemDataRole.UserRole
@@ -27,14 +29,17 @@ def format_size(size: int) -> str:
     value = float(size)
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if value < 1024 or unit == "TB":
-            return f"{int(value)} B" if unit == "B" else f"{value:.1f} {unit}".replace(".", ",")
+            if unit == "B":
+                return f"{int(value)} B"
+            text = f"{value:.1f} {unit}"
+            return text.replace(".", ",") if i18n.language() == "de" else text
         value /= 1024
     return ""
 
 
 def format_time(timestamp: float) -> str:
     try:
-        return datetime.fromtimestamp(timestamp).strftime("%d.%m.%Y %H:%M") if timestamp else ""
+        return datetime.fromtimestamp(timestamp).strftime("%d.%m.%Y %H:%M" if i18n.language() == "de" else "%Y-%m-%d %H:%M") if timestamp else ""
     except (OverflowError, OSError, ValueError):
         return ""
 
@@ -48,7 +53,7 @@ class _Item(QTreeWidgetItem):
         self.setData(0, NAME_ROLE, name)
         self.setTextAlignment(1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         if is_link:
-            self.setToolTip(0, "Verknüpfung")
+            self.setToolTip(0, tr("Verknüpfung"))
 
     def __lt__(self, other):
         tree = self.treeWidget()
@@ -75,7 +80,7 @@ class FileList(QTreeWidget):
         self.side = side
         self.directory = ""
         self._accept_urls = accept_urls
-        self.setHeaderLabels(["Name", "Größe", "Geändert"])
+        self.setHeaderLabels([tr("Name"), tr("Größe"), tr("Geändert")])
         self.headerItem().setTextAlignment(1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)  # über den Zahlen
         self._icons = (QIcon(), QIcon())  # (Ordner, Datei); werden vom Panel passend zur Darstellung gesetzt
         self.setRootIsDecorated(False)
@@ -187,13 +192,13 @@ class FilePanel(QWidget):
         self.title = QLabel(title)
         self.title.setStyleSheet("font-weight: 600;")
         self.up_button = QToolButton()
-        self.up_button.setToolTip("Eine Ebene höher")
+        self.up_button.setToolTip(tr("Eine Ebene höher"))
         self.home_button = QToolButton()
-        self.home_button.setToolTip("Persönlicher Ordner")
+        self.home_button.setToolTip(tr("Persönlicher Ordner"))
         self.refresh_button = QToolButton()
-        self.refresh_button.setToolTip("Aktualisieren (F5)")
+        self.refresh_button.setToolTip(tr("Aktualisieren (F5)"))
         self.path = QLineEdit()
-        self.path.setPlaceholderText("Pfad")
+        self.path.setPlaceholderText(tr("Pfad"))
         self.list = FileList(side, accept_urls)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._context_menu)
@@ -262,16 +267,16 @@ class FilePanel(QWidget):
         transfer.setEnabled(has_selection)
         transfer.triggered.connect(lambda: self.transfer.emit())
         menu.addSeparator()
-        menu.addAction("Neuer Ordner …").triggered.connect(lambda: self.new_folder.emit())
-        rename = menu.addAction("Umbenennen …")
+        menu.addAction(tr("Neuer Ordner …")).triggered.connect(lambda: self.new_folder.emit())
+        rename = menu.addAction(tr("Umbenennen …"))
         rename.setEnabled(len(self.list.selected()) == 1)
         rename.triggered.connect(lambda: self.rename.emit())
         if self._can_delete:
-            delete = menu.addAction("Löschen")
+            delete = menu.addAction(tr("Löschen"))
             delete.setEnabled(has_selection)
             delete.triggered.connect(lambda: self.delete.emit())
         menu.addSeparator()
-        menu.addAction("Aktualisieren").triggered.connect(lambda: self.refresh_requested.emit())
+        menu.addAction(tr("Aktualisieren")).triggered.connect(lambda: self.refresh_requested.emit())
         menu.exec(self.list.viewport().mapToGlobal(pos))
 
 
@@ -285,8 +290,8 @@ class TransferRow(QWidget):
         self.bar = QProgressBar()
         self.bar.setRange(0, 1000)
         self.bar.setTextVisible(True)
-        self.bar.setFormat("Plane …")
-        self.cancel = QPushButton("Abbrechen")
+        self.bar.setFormat(tr("Plane …"))
+        self.cancel = QPushButton(tr("Abbrechen"))
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.label, 2)
@@ -299,11 +304,11 @@ class TransferRow(QWidget):
     def _cancel(self):
         self.job.cancel_event.set()
         self.cancel.setEnabled(False)
-        self.bar.setFormat("Abbrechen …")
+        self.bar.setFormat(tr("Abbrechen …"))
 
     def set_progress(self, done: int, total: int, name: str):
         self.bar.setValue(int(1000 * done / total) if total else 1000)
-        self.bar.setFormat(f"{format_size(done)} von {format_size(total)} – {name}")
+        self.bar.setFormat(tr("{v} von {v2} – {name}", v=format_size(done), v2=format_size(total), name=name))
 
     def finish(self, state: str, message: str):
         self.finished_state = state
@@ -325,11 +330,11 @@ class SftpWindow(QMainWindow):
         self._closing = False
         self._password_asked = False
         name = conn.name or conn.host
-        self.setWindowTitle(f"Dateien – {name}")
+        self.setWindowTitle(tr("Dateien – {name}", name=name))
         self.resize(1100, 680)
 
-        self.local = FilePanel("local", "Dieser Rechner", accept_urls=False, sep=os.sep, can_delete=False, transfer_text="Hochladen")
-        self.remote = FilePanel("remote", f"Server: {name}", accept_urls=True, sep="/", can_delete=True, transfer_text="Herunterladen")
+        self.local = FilePanel("local", tr("Dieser Rechner"), accept_urls=False, sep=os.sep, can_delete=False, transfer_text=tr("Hochladen"))
+        self.remote = FilePanel("remote", tr("Server: {name}", name=name), accept_urls=True, sep="/", can_delete=True, transfer_text=tr("Herunterladen"))
         self.remote.setEnabled(False)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -337,14 +342,14 @@ class SftpWindow(QMainWindow):
         splitter.addWidget(self.local)
         splitter.addWidget(self.remote)
 
-        self.upload_button = QPushButton("Hochladen")
-        self.download_button = QPushButton("Herunterladen")
-        self.upload_button.setToolTip("Auswahl von links in den Ordner rechts hochladen")
-        self.download_button.setToolTip("Auswahl von rechts in den Ordner links herunterladen")
+        self.upload_button = QPushButton(tr("Hochladen"))
+        self.download_button = QPushButton(tr("Herunterladen"))
+        self.upload_button.setToolTip(tr("Auswahl von links in den Ordner rechts hochladen"))
+        self.download_button.setToolTip(tr("Auswahl von rechts in den Ordner links herunterladen"))
         self.upload_button.setEnabled(False)
         self.download_button.setEnabled(False)
-        self.clear_button = QPushButton("Liste leeren")
-        self.clear_button.setToolTip("Beendete Übertragungen aus der Liste entfernen")
+        self.clear_button = QPushButton(tr("Liste leeren"))
+        self.clear_button.setToolTip(tr("Beendete Übertragungen aus der Liste entfernen"))
         buttons = QHBoxLayout()
         buttons.addWidget(self.upload_button)
         buttons.addWidget(self.download_button)
@@ -413,7 +418,7 @@ class SftpWindow(QMainWindow):
         if self._closing:
             return
         self.statusBar().showMessage(str(exc) or exc.__class__.__name__, 10000)
-        QMessageBox.warning(self, "Dateien", str(exc) or exc.__class__.__name__)
+        QMessageBox.warning(self, tr("Dateien"), str(exc) or exc.__class__.__name__)
 
     def _refresh_icons(self):
         self.local.refresh_icons()
@@ -426,7 +431,7 @@ class SftpWindow(QMainWindow):
 
     # --- Verbindung ---
     def _connect(self, password: str | None = None):
-        self.statusBar().showMessage("Verbinde …")
+        self.statusBar().showMessage(tr("Verbinde …"))
         self._start(
             lambda job: sftp.SftpSession.connect(self.cfg, self.conn, password=password),
             self._connected,
@@ -435,7 +440,7 @@ class SftpWindow(QMainWindow):
 
     def _ask_password(self) -> str | None:
         text, ok = QInputDialog.getText(
-            self, "Anmeldung", f"Passwort für {self.conn.user + '@' if self.conn.user else ''}{self.conn.host}:",
+            self, tr("Anmeldung"), tr("Passwort für {v}{host}:", v=self.conn.user + '@' if self.conn.user else '', host=self.conn.host),
             QLineEdit.EchoMode.Password,
         )
         return text if ok else None
@@ -449,8 +454,8 @@ class SftpWindow(QMainWindow):
             if password:
                 self._connect(password)
                 return
-        self.statusBar().showMessage("Nicht verbunden")
-        QMessageBox.critical(self, "Verbindung fehlgeschlagen", str(exc) or exc.__class__.__name__)
+        self.statusBar().showMessage(tr("Nicht verbunden"))
+        QMessageBox.critical(self, tr("Verbindung fehlgeschlagen"), str(exc) or exc.__class__.__name__)
         self.close()
 
     def _connected(self, session):
@@ -460,7 +465,7 @@ class SftpWindow(QMainWindow):
         self.session = session
         self.remote.setEnabled(True)
         self._update_buttons()
-        self.statusBar().showMessage(f"Verbunden mit {session.label}", 5000)
+        self.statusBar().showMessage(tr("Verbunden mit {label}", label=session.label), 5000)
         self.remote_go(".")
 
     # --- Ordner anzeigen ---
@@ -477,7 +482,7 @@ class SftpWindow(QMainWindow):
                         continue
                     entries.append({"name": e.name, "is_dir": is_dir, "size": st.st_size, "mtime": st.st_mtime, "is_link": e.is_symlink()})
         except OSError as exc:
-            self.statusBar().showMessage(f"Ordner kann nicht gelesen werden: {exc}", 8000)
+            self.statusBar().showMessage(tr("Ordner kann nicht gelesen werden: {exc}", exc=exc), 8000)
             self.local.path.setText(self.local.list.directory)
             return
         self.local.show_entries(os.path.abspath(path), entries)
@@ -510,35 +515,35 @@ class SftpWindow(QMainWindow):
         if not ok or not name:
             return None
         if "/" in name or "\\" in name or name in (".", ".."):
-            QMessageBox.warning(self, title, "Der Name darf keine Pfadtrenner enthalten.")
+            QMessageBox.warning(self, title, tr("Der Name darf keine Pfadtrenner enthalten."))
             return None
         return name
 
     def local_new_folder(self):
-        name = self._ask_name("Neuer Ordner", "Name des neuen Ordners:")
+        name = self._ask_name(tr("Neuer Ordner"), tr("Name des neuen Ordners:"))
         if name:
             try:
                 os.mkdir(os.path.join(self.local.list.directory, name))
             except OSError as exc:
-                QMessageBox.warning(self, "Neuer Ordner", f"Ordner konnte nicht angelegt werden: {exc}")
+                QMessageBox.warning(self, tr("Neuer Ordner"), tr("Ordner konnte nicht angelegt werden: {exc}", exc=exc))
             self.local_go(self.local.list.directory)
 
     def local_rename(self):
         names = self.local.list.names()
         if len(names) != 1:
             return
-        new = self._ask_name("Umbenennen", "Neuer Name:", names[0])
+        new = self._ask_name(tr("Umbenennen"), tr("Neuer Name:"), names[0])
         if new and new != names[0]:
             try:
                 os.rename(self.local.child_path(names[0]), self.local.child_path(new))
             except OSError as exc:
-                QMessageBox.warning(self, "Umbenennen", f"Umbenennen fehlgeschlagen: {exc}")
+                QMessageBox.warning(self, tr("Umbenennen"), tr("Umbenennen fehlgeschlagen: {exc}", exc=exc))
             self.local_go(self.local.list.directory)
 
     def remote_new_folder(self):
         if self.session is None:
             return
-        name = self._ask_name("Neuer Ordner", "Name des neuen Ordners auf dem Server:")
+        name = self._ask_name(tr("Neuer Ordner"), tr("Name des neuen Ordners auf dem Server:"))
         if name:
             path = self.remote.child_path(name)
             session = self.session
@@ -548,16 +553,16 @@ class SftpWindow(QMainWindow):
         names = self.remote.list.names()
         if self.session is None or len(names) != 1:
             return
-        new = self._ask_name("Umbenennen", "Neuer Name:", names[0])
+        new = self._ask_name(tr("Umbenennen"), tr("Neuer Name:"), names[0])
         if new and new != names[0]:
             old_path, new_path, session = self.remote.child_path(names[0]), self.remote.child_path(new), self.session
             self._start(lambda job: session.rename(old_path, new_path), lambda _v: self.remote_go(self.remote.list.directory), self._refresh_after_error)
 
     def _confirm_delete(self, names: list[str]) -> bool:
-        shown = "\n".join(names[:8]) + (f"\n… und {len(names) - 8} weitere" if len(names) > 8 else "")
+        shown = "\n".join(names[:8]) + (tr("\n… und {v} weitere", v=len(names) - 8) if len(names) > 8 else "")
         answer = QMessageBox.question(
-            self, "Löschen",
-            f"Auf dem Server endgültig löschen (Ordner samt Inhalt)?\n\n{shown}",
+            self, tr("Löschen"),
+            tr("Auf dem Server endgültig löschen (Ordner samt Inhalt)?\n\n{shown}", shown=shown),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
         )
         return answer == QMessageBox.StandardButton.Yes
@@ -605,11 +610,11 @@ class SftpWindow(QMainWindow):
 
     def _ask_conflict(self, names: list[str]) -> str | None:
         """„overwrite“, „skip“ oder None (abbrechen)."""
-        shown = "\n".join(names[:8]) + (f"\n… und {len(names) - 8} weitere" if len(names) > 8 else "")
-        box = QMessageBox(QMessageBox.Icon.Question, "Vorhandene Dateien", f"Am Ziel gibt es schon:\n\n{shown}", parent=self)
-        overwrite = box.addButton("Überschreiben", QMessageBox.ButtonRole.AcceptRole)
-        skip = box.addButton("Überspringen", QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton("Abbrechen", QMessageBox.ButtonRole.RejectRole)
+        shown = "\n".join(names[:8]) + (tr("\n… und {v} weitere", v=len(names) - 8) if len(names) > 8 else "")
+        box = QMessageBox(QMessageBox.Icon.Question, tr("Vorhandene Dateien"), tr("Am Ziel gibt es schon:\n\n{shown}", shown=shown), parent=self)
+        overwrite = box.addButton(tr("Überschreiben"), QMessageBox.ButtonRole.AcceptRole)
+        skip = box.addButton(tr("Überspringen"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         return "overwrite" if clicked is overwrite else "skip" if clicked is skip else None
@@ -631,7 +636,7 @@ class SftpWindow(QMainWindow):
         try:
             existing = set(os.listdir(local_dir))
         except OSError as exc:
-            QMessageBox.warning(self, "Herunterladen", f"Zielordner kann nicht gelesen werden: {exc}")
+            QMessageBox.warning(self, tr("Herunterladen"), tr("Zielordner kann nicht gelesen werden: {exc}", exc=exc))
             return
         self._run_transfer("down", paths, local_dir, existing)
 
@@ -648,7 +653,7 @@ class SftpWindow(QMainWindow):
             if choice == "skip":
                 skip = set(conflicts)
                 if len(skip) == len({base(p) for p in paths}):
-                    self.statusBar().showMessage("Alles übersprungen", 5000)
+                    self.statusBar().showMessage(tr("Alles übersprungen"), 5000)
                     return
         session = self.session
 
@@ -657,21 +662,21 @@ class SftpWindow(QMainWindow):
             return run(paths, target_dir, progress=job.progress.emit, cancel=job.cancel_event, skip=skip)
 
         arrow = "→" if direction == "up" else "←"
-        label = (base(paths[0]) if len(paths) == 1 else f"{len(paths)} Elemente")
+        label = (base(paths[0]) if len(paths) == 1 else tr("{n} Elemente", n=len(paths)))
         job = Job(work, self)
         row = TransferRow(f"{arrow} {label}", job)
         self.transfers_layout.insertWidget(self.transfers_layout.count() - 1, row)
         self._jobs.add(job)
 
         def ok(count):
-            row.finish("ok", f"Fertig ({count} Datei{'en' if count != 1 else ''})")
+            row.finish("ok", tr("Fertig (1 Datei)") if count == 1 else tr("Fertig ({count} Dateien)", count=count))
             self._refresh_target(direction, target_dir)
 
         def failed(exc):
             if isinstance(exc, sftp.TransferCancelled):
-                row.finish("cancelled", "Abgebrochen")
+                row.finish("cancelled", tr("Abgebrochen"))
             else:
-                row.finish("error", f"Fehler: {exc}")
+                row.finish("error", tr("Fehler: {exc}", exc=exc))
             self._refresh_target(direction, target_dir)
 
         job.result.connect(ok)
@@ -706,8 +711,8 @@ class SftpWindow(QMainWindow):
     # --- Schließen ---
     def _confirm_close(self) -> bool:
         answer = QMessageBox.question(
-            self, "Dateien",
-            "Es laufen noch Übertragungen. Abbrechen und schließen?",
+            self, tr("Dateien"),
+            tr("Es laufen noch Übertragungen. Abbrechen und schließen?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
         )
         return answer == QMessageBox.StandardButton.Yes

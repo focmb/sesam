@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import sftp
 from .models import Config, Connection
+from .i18n import tr
 
 LIST_COMMAND = "docker ps --format '{{json .}}'"  # nur laufende Container; eine JSON-Zeile je Container
 # Als Argument von „sh -c“ im Container: bash, falls vorhanden, sonst sh.
@@ -56,13 +57,13 @@ def describe_error(status: int, stderr: str) -> str:
     text = stderr.strip()
     low = text.lower()
     if status == 127 or "command not found" in low or "docker: not found" in low:
-        return "Docker ist auf dem Host nicht installiert (Befehl „docker“ nicht gefunden)."
+        return tr("Docker ist auf dem Host nicht installiert (Befehl „docker“ nicht gefunden).")
     if "permission denied" in low:
-        return "Kein Zugriff auf Docker: Der Benutzer darf den Docker-Dienst nicht nutzen (Mitglied der Gruppe „docker“?)."
+        return tr("Kein Zugriff auf Docker: Der Benutzer darf den Docker-Dienst nicht nutzen (Mitglied der Gruppe „docker“?).")
     if "cannot connect to the docker daemon" in low or "is the docker daemon running" in low:
-        return "Der Docker-Dienst auf dem Host läuft nicht."
-    first = text.splitlines()[0] if text else f"Fehlercode {status}"
-    return f"Docker meldet: {first}"
+        return tr("Der Docker-Dienst auf dem Host läuft nicht.")
+    first = text.splitlines()[0] if text else tr("Fehlercode {status}", status=status)
+    return tr("Docker meldet: {first}", first=first)
 
 
 def list_containers(
@@ -77,7 +78,7 @@ def list_containers(
     Wirft ``sftp.SftpAuthError`` bei abgelehnter Anmeldung, sonst ``sftp.SftpError`` oder ``DockerError``.
     """
     client, _eff = sftp.open_client(
-        cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout, purpose="die Container-Anzeige"
+        cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout, purpose=tr("die Container-Anzeige")
     )
     try:
         try:
@@ -86,7 +87,7 @@ def list_containers(
             stderr = err.read().decode("utf-8", "replace")
             status = out.channel.recv_exit_status()
         except (OSError, EOFError, sftp._paramiko().SSHException) as exc:
-            raise DockerError(f"Abfrage der Container fehlgeschlagen: {exc}") from exc
+            raise DockerError(tr("Abfrage der Container fehlgeschlagen: {exc}", exc=exc)) from exc
     finally:
         client.close()
     if status != 0:
@@ -107,7 +108,7 @@ def exec_command(container: str, shell: str = "", user: str = "") -> str:
         try:
             parts += shlex.split(shell)
         except ValueError as exc:
-            raise DockerError(f"Der Shell-Befehl ist ungültig: {exc}") from exc
+            raise DockerError(tr("Der Shell-Befehl ist ungültig: {exc}", exc=exc)) from exc
     else:
         parts += ["sh", "-c", AUTO_SHELL]
     return shlex.join(parts)  # der Host ist POSIX
