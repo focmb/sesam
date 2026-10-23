@@ -10,7 +10,7 @@
 
 *[Deutsche Fassung: README.md](README.md)*
 
-Desktop tool (Windows and Linux, Python + PySide6) for managing SSH connections.
+SSH connection manager (Windows and Linux, Python + PySide6) for managing SSH connections.
 Connections open in a **freely configurable terminal**.
 
 ## Getting started
