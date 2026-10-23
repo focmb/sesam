@@ -1,4 +1,4 @@
-"""Docker-Container auf einem SSH-Host: per SSH auflisten und eine Shell darin öffnen (``docker exec``)."""
+"""Docker-Container auf einem SSH-Host: per SSH auflisten, starten/stoppen/löschen und eine Shell darin öffnen (``docker exec``)."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,9 @@ from . import sftp
 from .models import Config, Connection
 from .i18n import tr
 
-LIST_COMMAND = "docker ps --format '{{json .}}'"  # nur laufende Container; eine JSON-Zeile je Container
+LIST_COMMAND = "docker ps -a --format '{{json .}}'"  # alle Container (auch gestoppte); eine JSON-Zeile je Container
+ACTIONS = ("start", "stop", "restart", "remove")  # Aktionen auf einem Container (Reihenfolge wie im Menü)
+ACTION_TIMEOUT = 60  # Sekunden: „docker stop“ wartet bis zu 10 s auf das Beenden des Containers
 # Als Argument von „sh -c“ im Container: bash, falls vorhanden, sonst sh.
 AUTO_SHELL = "command -v bash >/dev/null 2>&1 && exec bash || exec sh"
 EXEC_TIMEOUT = 20  # Sekunden für die Abfrage selbst (der Verbindungsaufbau hat einen eigenen Timeout)
@@ -27,10 +29,18 @@ class Container:
     image: str
     status: str
     ports: str = ""
+    state: str = ""  # „running“, „exited“, „paused“ …; leer bei älteren Docker-Versionen
+
+    @property
+    def running(self) -> bool:
+        """Läuft der Container (auch pausiert oder im Neustart gilt als „läuft noch“)?"""
+        if self.state:
+            return self.state in ("running", "paused", "restarting")
+        return self.status.startswith("Up") or self.status.startswith("Restarting")
 
 
 def parse_ps(output: str) -> list[Container]:
-    """Liest die Ausgabe von ``docker ps --format '{{json .}}'``. Unlesbare Zeilen werden übergangen."""
+    """Liest die Ausgabe von ``docker ps -a --format '{{json .}}'``. Unlesbare Zeilen werden übergangen."""
     found = []
     for line in output.splitlines():
         line = line.strip()
@@ -48,6 +58,7 @@ def parse_ps(output: str) -> list[Container]:
         found.append(Container(
             id=str(data.get("ID", "")), name=name, image=str(data.get("Image", "")),
             status=str(data.get("Status", "")), ports=str(data.get("Ports", "")),
+            state=str(data.get("State", "")).lower(),
         ))
     return sorted(found, key=lambda c: c.name.casefold())
 
@@ -66,23 +77,13 @@ def describe_error(status: int, stderr: str) -> str:
     return tr("Docker meldet: {first}", first=first)
 
 
-def list_containers(
-    cfg: Config,
-    conn: Connection,
-    password: str | None = None,
-    known_hosts: Path | None = None,
-    timeout: float = 10.0,
-) -> list[Container]:
-    """Fragt den Host nach seinen laufenden Containern. Blockiert, gehört in einen Hintergrund-Thread.
-
-    Wirft ``sftp.SftpAuthError`` bei abgelehnter Anmeldung, sonst ``sftp.SftpError`` oder ``DockerError``.
-    """
-    client, _eff = sftp.open_client(
-        cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout, purpose=tr("die Container-Anzeige")
-    )
+def _run(cfg: Config, conn: Connection, command: str, password: str | None, known_hosts: Path | None,
+         timeout: float, purpose: str, exec_timeout: float = EXEC_TIMEOUT) -> str:
+    """Führt einen Befehl auf dem Host aus und liefert stdout; bei Fehlerstatus ``DockerError``."""
+    client, _eff = sftp.open_client(cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout, purpose=purpose)
     try:
         try:
-            _stdin, out, err = client.exec_command(LIST_COMMAND, timeout=EXEC_TIMEOUT)
+            _stdin, out, err = client.exec_command(command, timeout=exec_timeout)
             stdout = out.read().decode("utf-8", "replace")
             stderr = err.read().decode("utf-8", "replace")
             status = out.channel.recv_exit_status()
@@ -92,7 +93,46 @@ def list_containers(
         client.close()
     if status != 0:
         raise DockerError(describe_error(status, stderr))
-    return parse_ps(stdout)
+    return stdout
+
+
+def list_containers(
+    cfg: Config,
+    conn: Connection,
+    password: str | None = None,
+    known_hosts: Path | None = None,
+    timeout: float = 10.0,
+) -> list[Container]:
+    """Fragt den Host nach seinen Containern (auch gestoppten). Blockiert, gehört in einen Hintergrund-Thread.
+
+    Wirft ``sftp.SftpAuthError`` bei abgelehnter Anmeldung, sonst ``sftp.SftpError`` oder ``DockerError``.
+    """
+    return parse_ps(_run(cfg, conn, LIST_COMMAND, password, known_hosts, timeout, tr("die Container-Anzeige")))
+
+
+def action_command(container: Container | str, action: str) -> str:
+    """Befehl für den Host, der den Container startet, stoppt, neu startet oder löscht.
+
+    Löschen entfernt nur den Container (nicht seine Volumes); ein noch laufender Container wird dabei erzwungen beendet.
+    """
+    name = container.name if isinstance(container, Container) else container
+    running = container.running if isinstance(container, Container) else False
+    if not name.strip():
+        raise DockerError(tr("Kein Container ausgewählt."))
+    if action == "remove":
+        parts = ["docker", "rm"] + (["-f"] if running else [])
+    elif action in ("start", "stop", "restart"):
+        parts = ["docker", action]
+    else:
+        raise DockerError(tr("Unbekannte Aktion „{action}“.", action=action))
+    return shlex.join(parts + [name])  # der Host ist POSIX
+
+
+def run_action(cfg: Config, conn: Connection, container: Container, action: str, password: str | None = None,
+               known_hosts: Path | None = None, timeout: float = 10.0) -> None:
+    """Führt eine Aktion auf dem Container aus. Blockiert, gehört in einen Hintergrund-Thread."""
+    _run(cfg, conn, action_command(container, action), password, known_hosts, timeout,
+         tr("die Container-Steuerung"), exec_timeout=ACTION_TIMEOUT)
 
 
 def exec_command(container: str, shell: str = "", user: str = "") -> str:

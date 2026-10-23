@@ -188,8 +188,11 @@ Beim Verbinden startet das Terminal `ssh` über einen kleinen Wrapper, der das P
 
 Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In der Verbindung (*Bearbeiten*) den Haken
 **Docker-Container dieses Hosts im Verbindungsbaum anzeigen** setzen; optional lassen sich Standard-Shell und -Benutzer für die Container festlegen.
-- **Im Baum:** Der Host bekommt einen Pfeil. Beim Aufklappen fragt Sesam den Host per SSH nach seinen *laufenden* Containern (`docker ps`) und zeigt sie als Unterelemente
-  (Name, Image, Status). Erst beim Aufklappen wird verbunden; *Container aktualisieren* (Kontextmenü) lädt neu.
+- **Im Baum:** Der Host bekommt einen Pfeil. Beim Aufklappen fragt Sesam den Host per SSH nach seinen Containern (`docker ps -a`) und zeigt sie als Unterelemente
+  (Name, Image, Status). Gestoppte Container erscheinen ausgegraut. Erst beim Aufklappen wird verbunden; *Container aktualisieren* (Kontextmenü) lädt neu.
+- **Steuern:** Im Kontextmenü eines Containers gibt es *Starten*, *Stoppen*, *Neustarten* und *Löschen …* (`docker start`, `stop`, `restart`, `rm`).
+  Stoppen, Neustarten und Löschen fragen vorher nach. Löschen entfernt nur den Container, nicht seine Volumes; ein noch laufender Container wird dabei beendet (`docker rm -f`).
+  Danach lädt Sesam die Liste neu. Eine Shell lässt sich nur in laufende Container öffnen.
 - **Verbinden:** Doppelklick oder Enter öffnet im Terminal eine Shell im Container (`docker exec -it`). Ohne feste Shell nimmt Sesam `bash`, sonst `sh`.
   *Verbinden als …* fragt Shell und Benutzer (z. B. `root`) für diesen einen Aufruf ab; *Verbinden mit …* wählt ein anderes Terminal.
 - **Anmeldung:** Passwort und Schlüssel der Verbindung werden wie beim Terminal und bei SFTP verwendet. Ist keins gespeichert, fragt Sesam einmal nach

@@ -20,8 +20,8 @@ from sesam import storage
 from sesam.models import Config, Connection
 
 
-def ps(name, image="nginx", status="Up 1 hour"):
-    return json.dumps({"ID": name, "Names": name, "Image": image, "Status": status, "Ports": ""})
+def ps(name, image="nginx", status="Up 1 hour", state="running"):
+    return json.dumps({"ID": name, "Names": name, "Image": image, "Status": status, "Ports": "", "State": state})
 
 
 @unittest.skipIf(paramiko is None, "paramiko nicht verfügbar")
@@ -85,7 +85,7 @@ class DockerTreeTests(GuiTestCase):
         self.expand()
         item = self.host_item().child(0)
         self.assertEqual(item.text(1), "postgres:16 · Up 1 hour")
-        self.assertEqual(self.server.commands.count("docker ps --format '{{json .}}'"), 1)
+        self.assertEqual(self.server.commands.count("docker ps -a --format '{{json .}}'"), 1)
         self.host_item().setExpanded(False)
         self.host_item().setExpanded(True)  # erneutes Aufklappen lädt nicht noch einmal
         self.app.processEvents()
@@ -118,10 +118,10 @@ class DockerTreeTests(GuiTestCase):
         self.wait(lambda: self.child_texts(self.host_item()) == ["web", "zzz"])
         self.assertEqual(self.w._selected_container()[1], "web")
 
-    def test_no_running_containers(self):
+    def test_no_containers(self):
         self.reply = (b"", b"", 0)
         self.host_item().setExpanded(True)
-        self.wait(lambda: self.child_texts(self.host_item()) == ["Keine laufenden Container"])
+        self.wait(lambda: self.child_texts(self.host_item()) == ["Keine Container"])
 
     def test_containers_survive_refresh_and_expanded_state(self):
         self.expand()
@@ -150,6 +150,72 @@ class DockerTreeTests(GuiTestCase):
         self.w.duplicate_selected()
         self.w.delete_selected()
         self.assertEqual(len(self.w.cfg.connections), before)
+
+    def test_stopped_container_is_listed_and_not_connectable(self):
+        from PySide6.QtWidgets import QMessageBox
+
+        self.reply = ((ps("web") + "\n" + ps("old", status="Exited (0) 2 days ago", state="exited")).encode(), b"", 0)
+        self.host_item().setExpanded(True)
+        self.wait(lambda: self.child_texts(self.host_item()) == ["old", "web"])
+        self.w.tree.setCurrentItem(self.host_item().child(0))
+        with mock.patch("sesam.gui.main_window.launcher.launch") as launch, \
+                mock.patch.object(QMessageBox, "information") as info:
+            self.w.connect_container()
+        launch.assert_not_called()
+        info.assert_called_once()
+
+    def _act(self, name, action, answer=True, **reply_after):
+        from PySide6.QtWidgets import QMessageBox
+
+        self.w.tree.setCurrentItem(next(self.host_item().child(i) for i in range(self.host_item().childCount())
+                                        if self.host_item().child(i).text(0) == name))
+        answer_button = QMessageBox.StandardButton.Yes if answer else QMessageBox.StandardButton.No
+        with mock.patch.object(QMessageBox, "question", return_value=answer_button) as question:
+            self.w.container_action(action)
+        return question
+
+    def test_actions_run_the_right_docker_command_and_reload(self):
+        self.reply = ((ps("web") + "\n" + ps("old", status="Exited (0) 2 days ago", state="exited")).encode(), b"", 0)
+        self.host_item().setExpanded(True)
+        self.wait(lambda: self.child_texts(self.host_item()) == ["old", "web"])
+        before = len(self.server.commands)
+        self._act("old", "start")  # Starten fragt nicht nach
+        self.wait(lambda: len(self.server.commands) >= before + 2)  # Aktion + anschließendes Neuladen
+        self.assertEqual(self.server.commands[before], "docker start old")
+        self.assertEqual(self.server.commands[before + 1], "docker ps -a --format '{{json .}}'")
+        before = len(self.server.commands)
+        question = self._act("web", "stop")
+        question.assert_called_once()
+        self.wait(lambda: len(self.server.commands) >= before + 2)
+        self.assertEqual(self.server.commands[before], "docker stop web")
+
+    def test_remove_asks_and_forces_only_for_running_containers(self):
+        self.reply = ((ps("web") + "\n" + ps("old", status="Exited (0) 2 days ago", state="exited")).encode(), b"", 0)
+        self.host_item().setExpanded(True)
+        self.wait(lambda: self.child_texts(self.host_item()) == ["old", "web"])
+        before = len(self.server.commands)
+        self._act("old", "remove", answer=False)  # abgebrochen: nichts passiert
+        self.app.processEvents()
+        self.assertEqual(len(self.server.commands), before)
+        self._act("old", "remove")
+        self.wait(lambda: len(self.server.commands) >= before + 2)
+        self.assertEqual(self.server.commands[before], "docker rm old")
+        before = len(self.server.commands)
+        self._act("web", "remove")
+        self.wait(lambda: len(self.server.commands) >= before + 2)
+        self.assertEqual(self.server.commands[before], "docker rm -f web")
+
+    def test_failed_action_shows_error_and_reloads(self):
+        from PySide6.QtWidgets import QMessageBox
+
+        self.expand()
+        before = len(self.server.commands)
+        self.reply = (b"", b"Error response from daemon: No such container: web\n", 1)
+        with mock.patch.object(QMessageBox, "critical") as critical:
+            self._act("web", "restart")
+            self.wait(lambda: critical.called)
+        self.assertIn("No such container", critical.call_args.args[2])
+        self.assertEqual(self.server.commands[before], "docker restart web")
 
     def test_double_click_opens_shell_in_container_with_defaults(self):
         import shlex

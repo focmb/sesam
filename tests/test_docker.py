@@ -20,8 +20,8 @@ except ImportError:  # paramiko nicht installiert
     paramiko = None
 
 
-def ps_line(name, image="nginx:1.27", status="Up 2 hours", cid="abc123", ports=""):
-    return json.dumps({"ID": cid, "Names": name, "Image": image, "Status": status, "Ports": ports})
+def ps_line(name, image="nginx:1.27", status="Up 2 hours", cid="abc123", ports="", state="running"):
+    return json.dumps({"ID": cid, "Names": name, "Image": image, "Status": status, "Ports": ports, "State": state})
 
 
 class ParseTests(unittest.TestCase):
@@ -38,6 +38,14 @@ class ParseTests(unittest.TestCase):
     def test_parse_ps_takes_first_name_and_strips_slash(self):
         self.assertEqual(docker.parse_ps(ps_line("/web,/other/db"))[0].name, "web")
 
+    def test_running_follows_state_with_status_as_fallback(self):
+        up, down = docker.parse_ps(ps_line("a") + "\n" + ps_line("b", status="Exited (1) 3 days ago", state="exited"))
+        self.assertTrue(up.running)
+        self.assertFalse(down.running)
+        self.assertTrue(docker.Container("i", "n", "img", "Up 5 minutes").running)  # ohne State (alte Docker-Version)
+        self.assertFalse(docker.Container("i", "n", "img", "Exited (0) 1 hour ago").running)
+        self.assertTrue(docker.Container("i", "n", "img", "Up 1 second (Paused)", state="paused").running)
+
     def test_parse_ps_empty_output(self):
         self.assertEqual(docker.parse_ps(""), [])
 
@@ -49,6 +57,24 @@ class ParseTests(unittest.TestCase):
         self.assertIn("läuft nicht", d(1, "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"))
         self.assertEqual(d(2, "irgendwas\nzweite Zeile"), "Docker meldet: irgendwas")
         self.assertEqual(d(3, ""), "Docker meldet: Fehlercode 3")
+
+
+class ActionCommandTests(unittest.TestCase):
+    def test_simple_actions(self):
+        for action in ("start", "stop", "restart"):
+            self.assertEqual(docker.action_command("web", action), f"docker {action} web")
+
+    def test_remove_forces_only_running_containers(self):
+        self.assertEqual(docker.action_command(docker.Container("1", "web", "i", "Exited (0) 1 h ago", state="exited"), "remove"), "docker rm web")
+        self.assertEqual(docker.action_command(docker.Container("1", "web", "i", "Up 1 h", state="running"), "remove"), "docker rm -f web")
+        self.assertNotIn("-v", docker.action_command("web", "remove").split())  # Volumes bleiben
+
+    def test_name_is_quoted_and_bad_input_rejected(self):
+        self.assertEqual(shlex.split(docker.action_command("a;b", "stop")), ["docker", "stop", "a;b"])
+        with self.assertRaises(docker.DockerError):
+            docker.action_command("web", "kill")
+        with self.assertRaises(docker.DockerError):
+            docker.action_command("  ", "start")
 
 
 class ExecCommandTests(unittest.TestCase):
@@ -173,6 +199,15 @@ class ListContainersTests(unittest.TestCase):
         with self.assertRaises(docker.DockerError) as ctx:
             self.list()
         self.assertIn("Kein Zugriff", str(ctx.exception))
+
+    def test_run_action_sends_command_and_reports_errors(self):
+        box = docker.Container("1", "web", "nginx", "Exited (0) 1 hour ago", state="exited")
+        docker.run_action(self.cfg, self.conn, box, "start", password="geheim", known_hosts=self.base / "known_hosts")
+        self.assertEqual(self.server.commands, ["docker start web"])
+        self.reply = (b"", b"Error response from daemon: No such container: web\n", 1)
+        with self.assertRaises(docker.DockerError) as ctx:
+            docker.run_action(self.cfg, self.conn, box, "start", password="geheim", known_hosts=self.base / "known_hosts")
+        self.assertIn("No such container", str(ctx.exception))
 
     def test_wrong_password_raises_auth_error(self):
         from sesam import sftp

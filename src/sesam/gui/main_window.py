@@ -603,6 +603,16 @@ class MainWindow(QMainWindow):
                 a.triggered.connect(lambda _=False, term=t: self.connect_container(term))
             if guest is None:
                 menu.addAction(tr("Verbinden als …")).triggered.connect(lambda: self.connect_container(ask=True))
+                box = self._selected_box()
+                if box is not None:
+                    menu.addSeparator()
+                    labels = {"start": tr("Starten"), "stop": tr("Stoppen"), "restart": tr("Neustarten"), "remove": tr("Löschen …")}
+                    for action in docker.ACTIONS:
+                        if action == "remove":
+                            menu.addSeparator()
+                        a = menu.addAction(labels[action])
+                        a.setEnabled(not box[1].running if action == "start" else box[1].running if action in ("stop", "restart") else True)
+                        a.triggered.connect(lambda _=False, act=action: self.container_action(act))
             else:
                 menu.addSeparator()
                 labels = {"start": tr("Starten"), "shutdown": tr("Herunterfahren"), "stop": tr("Stoppen (hart)"), "reboot": tr("Neustarten")}
@@ -724,6 +734,18 @@ class MainWindow(QMainWindow):
                 return conn, guest
         return None
 
+    def _selected_box(self) -> tuple[Connection, docker.Container] | None:
+        """Der gewählte Docker-Container samt Host (nicht bei Proxmox-Gästen und Cisco-Ports)."""
+        target = self._selected_container()
+        if not target or target[0].proxmox or target[0].cisco:
+            return None
+        conn, name = target
+        state = self._containers.get(conn.id)
+        for box in state if isinstance(state, list) else []:
+            if box.name == name:
+                return conn, box
+        return None
+
     def _selected_port(self) -> tuple[Connection, cisco.Port] | None:
         target = self._selected_container()
         if not target or not target[0].cisco:
@@ -763,7 +785,7 @@ class MainWindow(QMainWindow):
         elif isinstance(state, str):
             host_item.addChild(self._info_item("⚠ " + state, state))
         elif not state:
-            host_item.addChild(self._info_item(tr("Keine Ports") if ports else tr("Keine Gäste") if guests else tr("Keine laufenden Container")))
+            host_item.addChild(self._info_item(tr("Keine Ports") if ports else tr("Keine Gäste") if guests else tr("Keine Container")))
         elif ports:
             for port in state:
                 label = tr("aus") if port.disabled else tr("verbunden") if port.up else port.status or "?"
@@ -795,8 +817,10 @@ class MainWindow(QMainWindow):
             for box in state:
                 child = QTreeWidgetItem([box.name, f"{box.image} · {box.status}" if box.status else box.image, ""])
                 child.setData(0, CONTAINER_ROLE, f"{conn.id}\x1f{box.name}")
-                child.setIcon(0, icon)
+                child.setIcon(0, icon if box.running else style.icon("box", c["muted"]))
                 child.setForeground(1, muted)
+                if not box.running:
+                    child.setForeground(0, muted)
                 child.setToolTip(0, "\n".join(filter(None, [box.name, box.image, box.status, box.ports])))
                 child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)  # nicht verschiebbar
                 host_item.addChild(child)
@@ -923,6 +947,11 @@ class MainWindow(QMainWindow):
         if conn.proxmox:
             self._connect_guest(terminal)
             return
+        box = self._selected_box()
+        if box is not None and not box[1].running:
+            QMessageBox.information(self, tr("Verbindung konnte nicht geöffnet werden"),
+                                    tr("Der Container „{name}“ läuft nicht.", name=name))
+            return
         shell = user = None  # None = Vorgaben der Verbindung
         if ask:
             dlg = DockerConnectDialog(name, conn.docker_shell, conn.docker_user, self)
@@ -934,6 +963,45 @@ class MainWindow(QMainWindow):
             launcher.launch(self.cfg, titled, terminal, remote_command=command)
         except (docker.DockerError, launcher.LaunchError) as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
+
+    def container_action(self, action: str):
+        """Startet, stoppt, startet neu oder löscht den gewählten Docker-Container. Stoppen, Neustart und Löschen fragen vorher nach."""
+        target = self._selected_box()
+        if not target or action not in docker.ACTIONS:
+            return
+        conn, box = target
+        questions = {
+            "stop": tr("Container „{name}“ stoppen?", name=box.name),
+            "restart": tr("Container „{name}“ neu starten?", name=box.name),
+            "remove": (tr("Container „{name}“ läuft noch. Er wird beendet und gelöscht. Seine Volumes bleiben erhalten. Fortfahren?", name=box.name)
+                       if box.running else
+                       tr("Container „{name}“ löschen? Seine Volumes bleiben erhalten.", name=box.name)),
+        }
+        if action in questions and QMessageBox.question(self, tr("Bestätigen"), questions[action]) != QMessageBox.StandardButton.Yes:
+            return
+        snapshot, password = replace(conn), self._docker_passwords.get(conn.id)
+
+        def work(job):
+            try:
+                docker.run_action(self.cfg, snapshot, box, action, password=password)
+            except Exception as exc:
+                return job, conn.id, exc
+            return job, conn.id, None
+
+        job = Job(work, self)
+        self._docker_jobs.add(job)
+        job.result.connect(self._container_action_done)
+        job.start()
+
+    @Slot(object)
+    def _container_action_done(self, res):
+        job, cid, exc = res
+        self._docker_jobs.discard(job)
+        if exc is not None:
+            QMessageBox.critical(self, tr("Docker"), str(exc))
+        conn = self.cfg.connection_by_id(cid)
+        if conn is not None and conn.docker and not conn.proxmox and not conn.cisco:
+            self.reload_containers(cid)  # auch nach einem Fehler: der Stand könnte sich trotzdem geändert haben
 
     def _connect_guest(self, terminal: Terminal | None = None):
         """LXC: ``pct enter`` über den Host. VM: Adresse per Gast-Agent erfragen, dann SSH vom Host aus in die VM."""
