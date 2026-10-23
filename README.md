@@ -1,17 +1,17 @@
-<p align="center"><img src="packaging/linux/sesam.svg" alt="Sesam-Icon" width="128" height="128"></p>
-
-# Sesam
 
 [![Build](https://github.com/focmb/sesam/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/focmb/sesam/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/focmb/sesam)](https://github.com/focmb/sesam/releases/latest)
 [![License: MIT](https://img.shields.io/github/license/focmb/sesam)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey)
+<p align="center"><img src="packaging/linux/sesam.svg" alt="Sesam-Icon" width="128" height="128"></p>
+
+# Sesam
+
+SSH-Verbindungsmanager (Windows und Linux, Python + PySide6) zum Verwalten von SSH-Verbindungen.
+Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 
 *[English version: README.en.md](README.en.md)*
-
-Desktop-Tool (Windows und Linux, Python + PySide6) zum Verwalten von SSH-Verbindungen.
-Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 
 ## Funktionen
 

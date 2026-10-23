@@ -1,12 +1,15 @@
-<p align="center"><img src="packaging/linux/sesam.svg" alt="Sesam icon" width="128" height="128"></p>
-
-# Sesam
-
 [![Build](https://github.com/focmb/sesam/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/focmb/sesam/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/focmb/sesam)](https://github.com/focmb/sesam/releases/latest)
 [![License: MIT](https://img.shields.io/github/license/focmb/sesam)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey)
+
+<p align="center"><img src="packaging/linux/sesam.svg" alt="Sesam icon" width="128" height="128"></p>
+
+# Sesam
+
+SSH connection manager (Windows and Linux, Python + PySide6) for managing SSH connections.
+Connections open in a **freely configurable terminal**.
 
 *[Deutsche Fassung: README.md](README.md)*
 
@@ -24,9 +27,6 @@
 - **Cisco switches:** Ports in the tree with state, VLAN and speed; switch them on and off, change descriptions, save the configuration.
 - **Git synchronization:** Sync connections, groups, identities, keys and snippets between several devices; passwords and private keys are stored encrypted only (AES-256-GCM).
 - **Windows and Linux:** The same experience on both systems, light and dark theme, adjustable font size, interface in German and English.
-
-SSH connection manager (Windows and Linux, Python + PySide6) for managing SSH connections.
-Connections open in a **freely configurable terminal**.
 
 ## Getting started
 
