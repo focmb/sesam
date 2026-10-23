@@ -68,6 +68,38 @@ class CommandTests(unittest.TestCase):
             self.assertEqual((Path(tmp) / "out").read_text(), "it's\n")
 
 
+class WindowsTerminalTests(unittest.TestCase):
+    """Windows Terminal (wt.exe) zerlegt die Befehlszeile an „;“, auch in Anführungszeichen: Snippets mit „;“ schlugen dort fehl."""
+
+    def setUp(self):
+        self.conn = Connection(name="Server; eins", host="h.example", user="u")
+        self.line = snippets.remote_command(Snippet(name="s", command="uptime", after="shell"))
+        self.assertIn(";", self.line)
+
+    def build(self, command, ssh_args):
+        return launcher.build_terminal_command(Terminal("T", command), self.conn, ssh_args)
+
+    def test_semicolons_are_escaped_for_windows_terminal(self):
+        ssh = ["ssh", "-t", "u@h.example", self.line]
+        argv = self.build("wt.exe new-tab --title {title} {ssh_args}", ssh)
+        self.assertEqual(argv[:4], ["wt.exe", "new-tab", "--title", "Server\\; eins"])
+        self.assertEqual(argv[-1], self.line.replace(";", "\\;"))
+        self.assertNotIn(";", argv[-1].replace("\\;", ""))  # kein ungeschütztes Semikolon
+
+    def test_path_to_wt_is_recognised_and_wrapper_args_are_escaped_too(self):
+        wrapper = ["python", "-m", "sesam", "--connect", "id", "--remote-command", self.line]
+        with mock.patch.object(launcher, "IS_WINDOWS", True):  # Windows-Pfade mit „\\“ zerlegt nur die Windows-Variante richtig
+            argv = self.build(r"C:\Users\x\AppData\Local\Microsoft\WindowsApps\wt.exe new-tab {ssh_args}", wrapper)
+        self.assertEqual(argv[-1], self.line.replace(";", "\\;"))
+
+    def test_other_terminals_and_template_separators_stay_untouched(self):
+        ssh = ["ssh", "-t", "u@h.example", self.line]
+        self.assertEqual(self.build("xterm -e {ssh_args}", ssh)[-1], self.line)
+        self.assertEqual(self.build("xterm -T {title} -e {ssh_args}", ssh)[2], "Server; eins")
+        argv = self.build("wt.exe new-tab {ssh_args} ; split-pane {ssh_args}", ssh)  # eigenes „;“ der Vorlage bleibt Trenner
+        self.assertIn(";", argv)
+
+
 class RunTests(unittest.TestCase):
     def setUp(self):
         self.cfg = Config(terminals=[Terminal("T", "xterm -e {ssh_args}")])

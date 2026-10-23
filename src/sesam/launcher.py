@@ -139,8 +139,20 @@ def resolve_terminal(cfg: Config, conn: Connection) -> Terminal:
     return term
 
 
+def is_windows_terminal(program: str) -> bool:
+    return os.path.basename(program.replace("\\", "/")).lower() in ("wt", "wt.exe")
+
+
+def _wt_escape(text: str) -> str:
+    """Windows Terminal trennt Befehle an „;“ – auch innerhalb von Anführungszeichen. Ein „\\;“ gibt ein echtes Semikolon weiter."""
+    return text.replace(";", "\\;")
+
+
 def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[str] | None = None) -> list[str]:
     ssh_args = ssh_args if ssh_args is not None else build_ssh_args(conn)
+    wt = bool(terminal.command.strip()) and is_windows_terminal(split_command(terminal.command)[0])
+    if wt:  # eingesetzte Werte (z. B. Snippet-Befehle mit „;“) dürfen Windows Terminal nicht in mehrere Befehle zerlegen
+        ssh_args = [_wt_escape(a) for a in ssh_args]
     ctx = {
         "{title}": conn.name or conn.host,
         "{host}": conn.host,
@@ -149,6 +161,8 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
         "{destination}": destination(conn),
         "{ssh_command}": join_command(ssh_args),
     }
+    if wt:
+        ctx = {key: _wt_escape(value) if key != "{ssh_command}" else value for key, value in ctx.items()}
     out: list[str] = []
     for token in split_command(terminal.command):
         if token == "{ssh_args}":
