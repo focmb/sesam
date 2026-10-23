@@ -174,19 +174,24 @@ class DockerTreeTests(GuiTestCase):
             self.w.container_action(action)
         return question
 
+    def _settle(self, before, names):
+        """Wartet, bis Aktion und anschließendes Neuladen durch sind und der Baum wieder die Container zeigt."""
+        self.wait(lambda: len(self.server.commands) >= before + 2)
+        self.wait(lambda: self.child_texts(self.host_item()) == names)
+
     def test_actions_run_the_right_docker_command_and_reload(self):
         self.reply = ((ps("web") + "\n" + ps("old", status="Exited (0) 2 days ago", state="exited")).encode(), b"", 0)
         self.host_item().setExpanded(True)
         self.wait(lambda: self.child_texts(self.host_item()) == ["old", "web"])
         before = len(self.server.commands)
         self._act("old", "start")  # Starten fragt nicht nach
-        self.wait(lambda: len(self.server.commands) >= before + 2)  # Aktion + anschließendes Neuladen
+        self._settle(before, ["old", "web"])  # Aktion + anschließendes Neuladen
         self.assertEqual(self.server.commands[before], "docker start old")
         self.assertEqual(self.server.commands[before + 1], "docker ps -a --format '{{json .}}'")
         before = len(self.server.commands)
         question = self._act("web", "stop")
         question.assert_called_once()
-        self.wait(lambda: len(self.server.commands) >= before + 2)
+        self._settle(before, ["old", "web"])
         self.assertEqual(self.server.commands[before], "docker stop web")
 
     def test_remove_asks_and_forces_only_for_running_containers(self):
@@ -198,11 +203,11 @@ class DockerTreeTests(GuiTestCase):
         self.app.processEvents()
         self.assertEqual(len(self.server.commands), before)
         self._act("old", "remove")
-        self.wait(lambda: len(self.server.commands) >= before + 2)
+        self._settle(before, ["old", "web"])
         self.assertEqual(self.server.commands[before], "docker rm old")
         before = len(self.server.commands)
         self._act("web", "remove")
-        self.wait(lambda: len(self.server.commands) >= before + 2)
+        self._settle(before, ["old", "web"])
         self.assertEqual(self.server.commands[before], "docker rm -f web")
 
     def test_failed_action_shows_error_and_reloads(self):

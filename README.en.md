@@ -190,8 +190,11 @@ When connecting, the terminal starts `ssh` through a small wrapper that supplies
 
 If Docker runs on a host, you can connect straight into a container. In the connection (*Edit*) tick
 **Show this host’s Docker containers in the connection tree**; optionally set a default shell and user for the containers.
-- **In the tree:** the host gets an arrow. On expanding, Sesam asks the host over SSH for its *running* containers (`docker ps`) and shows them as child items
-  (name, image, status). It only connects on expanding; *Refresh containers* (context menu) reloads.
+- **In the tree:** the host gets an arrow. On expanding, Sesam asks the host over SSH for its containers (`docker ps -a`) and shows them as child items
+  (name, image, status). Stopped containers are greyed out. It only connects on expanding; *Refresh containers* (context menu) reloads.
+- **Control:** the context menu of a container offers *Start*, *Stop*, *Restart* and *Delete …* (`docker start`, `stop`, `restart`, `rm`).
+  Stop, restart and delete ask first. Delete removes only the container, not its volumes; a container that is still running is stopped in the process (`docker rm -f`).
+  Sesam then reloads the list. A shell can only be opened in running containers.
 - **Connect:** double-click or Enter opens a shell in the container in the terminal (`docker exec -it`). Without a fixed shell Sesam uses `bash`, otherwise `sh`.
   *Connect as …* asks for shell and user (e.g. `root`) for this one call; *Connect with …* picks a different terminal.
 - **Login:** the connection’s password and key are used as for terminal and SFTP. If none is saved, Sesam asks once
