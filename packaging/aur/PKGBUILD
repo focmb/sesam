@@ -1,6 +1,6 @@
 # Maintainer: Christian Leitzke <christian.leitzke@gmail.com>
 pkgname=sesam
-pkgver=1.6.1
+pkgver=1.6.2
 pkgrel=1
 pkgdesc="SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen"
 arch=('any')
@@ -13,7 +13,7 @@ optdepends=('wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige'
             'gnome-keyring: Passwörter im Schlüsselbund speichern'
             'kwallet: Passwörter im Schlüsselbund speichern')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('f41f5d682936f1c64d17bb07dcbdf3d4fa18c882d2a0dd1851849ff998c6b890')
+sha256sums=('1b17c3876072e52489e8cc817a34aadbe03c9662c6de068e4c5cc7f304a47211')
 
 build() {
   cd "$srcdir/$pkgname-$pkgver"
