@@ -261,6 +261,7 @@ class MainWindowTests(GuiTestCase):
     def test_pill_is_styled_per_state(self):
         from sesam.gui import style, theme
 
+        self._wait_visible()  # erst die Antwort der ersten Abfrage abwarten, sonst überschreibt sie den Zustand unten
         self.assertEqual(theme.apply(self.app, "dark"), "dark")
         t = style.tokens("dark")
         qss = self.app.styleSheet()
