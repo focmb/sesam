@@ -13,6 +13,32 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 
 *[English version: README.en.md](README.en.md)*
 
+## Inhaltsverzeichnis
+
+- [Funktionen](#funktionen)
+- [Start](#start)
+- [Screenshots](#screenshots)
+- [Darstellung](#darstellung)
+- [Im Anwendungsmenü / Dash installieren (Linux)](#im-anwendungsmenü--dash-installieren-linux)
+- [Gruppen](#gruppen)
+- [Farben und Tags](#farben-und-tags)
+- [Terminals konfigurieren](#terminals-konfigurieren)
+- [Identitäten](#identitäten)
+- [SSH-Schlüssel](#ssh-schlüssel)
+- [sudo](#sudo)
+- [Passwörter](#passwörter)
+- [Snippets](#snippets)
+- [Dateien übertragen (SFTP)](#dateien-übertragen-sftp)
+- [Docker-Container](#docker-container)
+- [Proxmox](#proxmox)
+- [Cisco-Geräte](#cisco-geräte)
+- [Synchronisation über Git](#synchronisation-über-git)
+- [Daten](#daten)
+- [Programm bauen (Linux und Windows)](#programm-bauen-linux-und-windows)
+- [Automatischer Build (Gitea Actions)](#automatischer-build-gitea-actions)
+- [Automatischer Build (GitHub Actions)](#automatischer-build-github-actions)
+- [Tests](#tests)
+
 ## Funktionen
 
 - **Verbindungsverwaltung:** SSH-Verbindungen in verschachtelten Gruppen mit Drag & Drop, Farben, Tags, Suche und Mehrfachauswahl; Import aus `~/.ssh/config`.

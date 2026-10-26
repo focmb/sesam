@@ -13,6 +13,32 @@ Connections open in a **freely configurable terminal**.
 
 *[Deutsche Fassung: README.md](README.md)*
 
+## Table of contents
+
+- [Features](#features)
+- [Getting started](#getting-started)
+- [Screenshots](#screenshots)
+- [Appearance](#appearance)
+- [Installing in the application menu / dash (Linux)](#installing-in-the-application-menu--dash-linux)
+- [Groups](#groups)
+- [Colors and tags](#colors-and-tags)
+- [Configuring terminals](#configuring-terminals)
+- [Identities](#identities)
+- [SSH keys](#ssh-keys)
+- [sudo](#sudo)
+- [Passwords](#passwords)
+- [Snippets](#snippets)
+- [Transferring files (SFTP)](#transferring-files-sftp)
+- [Docker containers](#docker-containers)
+- [Proxmox](#proxmox)
+- [Cisco devices](#cisco-devices)
+- [Synchronization via Git](#synchronization-via-git)
+- [Data](#data)
+- [Building the program (Linux and Windows)](#building-the-program-linux-and-windows)
+- [Automatic build (Gitea Actions)](#automatic-build-gitea-actions)
+- [Automatic build (GitHub Actions)](#automatic-build-github-actions)
+- [Tests](#tests)
+
 ## Features
 
 - **Connection management:** SSH connections in nested groups with drag & drop, colors, tags, search and multi-select; import from `~/.ssh/config`.

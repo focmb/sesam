@@ -1,0 +1,14 @@
+#!/bin/sh
+# Pre-commit-Hook: Inhaltsverzeichnis der READMEs aktualisieren.
+# Aktivieren (einmalig pro Klon): git config core.hooksPath tools/hooks
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+
+changed=$($PY tools/update_toc.py) || exit 1
+if [ -n "$changed" ]; then
+    # shellcheck disable=SC2086
+    git add $changed
+    echo "Inhaltsverzeichnis aktualisiert: $changed"
+fi
