@@ -236,8 +236,15 @@ EN: dict[str, str] = {
     "Kein WireGuard-Tunnel aktiv": "No WireGuard tunnel active",
     "WireGuard-Status nicht verfügbar": "WireGuard status unavailable",
     "Der Zustand lässt sich auf diesem System nicht ermitteln.": "The state cannot be determined on this system.",
-    "Endpunkt, Handshake und Datenmenge liefert WireGuard nur mit Administratorrechten.":
-        "WireGuard provides endpoint, handshake and data volume only with administrator rights.",
+    "Endpunkt und Handshake liefert WireGuard nur mit Administratorrechten.":
+        "WireGuard provides endpoint and handshake only with administrator rights.",
+    "Das sudo-Passwort wurde nicht akzeptiert. Schalte die WireGuard-Anzeige in den Einstellungen aus und wieder ein, "
+    "um es neu einzugeben.":
+        "The sudo password was not accepted. Turn the WireGuard indicator off and on again in the settings to re-enter it.",
+    "sudo-Passwort für Endpunkt und Handshake (optional).\nOhne Passwort zeigt Sesam die einfache Anzeige.":
+        "sudo password for endpoint and handshake (optional).\nWithout a password Sesam shows the simple display.",
+    "WireGuard: einfache Anzeige (kein sudo-Passwort)": "WireGuard: simple display (no sudo password)",
+    "WireGuard: sudo-Passwort nicht akzeptiert, einfache Anzeige": "WireGuard: sudo password not accepted, simple display",
     "Tunnel": "Tunnel",
     "Endpunkt": "Endpoint",
     "Tunnel-Adresse": "Tunnel address",

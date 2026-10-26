@@ -17,7 +17,7 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import style, theme
-from .. import colors, docker, cisco, launcher, passwords, proxmox, sftp, snippets, storage
+from .. import colors, docker, cisco, launcher, passwords, proxmox, sftp, snippets, storage, wireguard
 from .. import tags as tag_util
 from ..models import Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -173,7 +173,9 @@ class MainWindow(QMainWindow):
 
         self._build_actions()
         self.refresh()
-        self.wg_indicator.set_enabled(self.cfg.wireguard)  # standardmäßig aus: dann wird nichts abgefragt
+        if self.cfg.wireguard:  # standardmäßig aus: dann wird nichts abgefragt und kein Passwort gelesen
+            self.wg_indicator.set_elevation(self._stored_elevation())
+        self.wg_indicator.set_enabled(self.cfg.wireguard)
         if self.sync.enabled() and self.cfg.sync.auto:
             QTimer.singleShot(500, lambda: self.sync.sync())  # beim Start abgleichen
 
@@ -1423,11 +1425,58 @@ class MainWindow(QMainWindow):
         self.cfg.language = i18n.normalize(code)
         self._save_no_sync()
 
+    @staticmethod
+    def _stored_elevation() -> wireguard.Elevation | None:
+        """Das im Schlüsselbund hinterlegte sudo-Passwort; ohne Passwort, ohne sudo oder ohne Schlüsselbund ``None``."""
+        if not wireguard.sudo_available():
+            return None
+        try:
+            password = passwords.get_password(wireguard.SUDO_KEY)
+        except passwords.PasswordError:
+            return None
+        return wireguard.Elevation(password) if password else None
+
+    def _ask_sudo_password(self) -> wireguard.Elevation | None:
+        """Fragt beim Einschalten das sudo-Passwort. Leer, abgebrochen oder falsch: ``None`` (einfache Anzeige)."""
+        password, ok = QInputDialog.getText(
+            self, tr("WireGuard"),
+            tr("sudo-Passwort für Endpunkt und Handshake (optional).\nOhne Passwort zeigt Sesam die einfache Anzeige."),
+            QLineEdit.EchoMode.Password)
+        if not ok or not password:
+            self.statusBar().showMessage(tr("WireGuard: einfache Anzeige (kein sudo-Passwort)"), 6000)
+            return None
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            valid = wireguard.verify_sudo_password(password)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not valid:
+            self.statusBar().showMessage(tr("WireGuard: sudo-Passwort nicht akzeptiert, einfache Anzeige"), 8000)
+            return None
+        try:
+            passwords.set_password(wireguard.SUDO_KEY, password)
+        except passwords.PasswordError:
+            pass  # ohne Schlüsselbund gilt das Passwort nur bis zum Beenden
+        return wireguard.Elevation(password)
+
     def set_wireguard(self, enabled: bool):
-        """Schaltet die WireGuard-Anzeige ein oder aus (wirkt sofort, nur lokal gespeichert)."""
-        self.cfg.wireguard = bool(enabled)
+        """Schaltet die WireGuard-Anzeige ein oder aus (wirkt sofort, nur lokal gespeichert).
+
+        Beim Einschalten unter Linux wird das sudo-Passwort gefragt (siehe :meth:`_ask_sudo_password`); beim Ausschalten
+        wird es wieder aus dem Schlüsselbund entfernt.
+        """
+        enabled = bool(enabled)
+        if enabled and not self.cfg.wireguard and wireguard.sudo_available():
+            self.wg_indicator.set_elevation(self._ask_sudo_password())
+        elif not enabled:
+            self.wg_indicator.set_elevation(None)
+            try:
+                passwords.delete_password(wireguard.SUDO_KEY)
+            except passwords.PasswordError:
+                pass
+        self.cfg.wireguard = enabled
         self._save_no_sync()
-        self.wg_indicator.set_enabled(self.cfg.wireguard)
+        self.wg_indicator.set_enabled(enabled)
 
     def edit_settings(self):
         dlg = SettingsDialog(self.cfg.font_scale, self.cfg.language, self.set_font_scale, self.set_language, self,

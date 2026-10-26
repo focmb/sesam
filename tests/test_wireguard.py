@@ -98,19 +98,44 @@ class DetectionTests(unittest.TestCase):
         with mock.patch.object(wireguard, "IS_WINDOWS", False), mock.patch.object(wireguard.sys, "platform", "darwin"):
             self.assertEqual(wireguard.detect().state, UNKNOWN)
 
-    def test_windows_adapters(self):
-        cases = {'{"Name":"VZS"}': ["VZS"], '[{"Name":"a"},{"Name":"b"}]': ["a", "b"], "": [], "  \n": [], "kein json": None}
+    def test_windows_tunnels(self):
+        cases = {'{"Name":"VZS","Rx":100,"Tx":50}': [("VZS", 100, 50)],
+                 '[{"Name":"a","Rx":1,"Tx":2},{"Name":"b","Rx":null,"Tx":-5}]': [("a", 1, 2), ("b", None, None)],
+                 '{"Name":"VZS"}': [("VZS", None, None)], "": [], "  \n": [], "kein json": None}
         for out, expected in cases.items():
             with mock.patch.object(wireguard, "_run", return_value=out):
-                self.assertEqual(wireguard.windows_adapters(), expected, out)
+                found = wireguard.windows_tunnels()
+                self.assertEqual(None if found is None else [(t.name, t.rx, t.tx) for t in found], expected, out)
         with mock.patch.object(wireguard, "_run", return_value=None):  # PowerShell fehlt oder scheitert
-            self.assertIsNone(wireguard.windows_adapters())
+            self.assertIsNone(wireguard.windows_tunnels())
 
     def test_detect_on_windows(self):
-        with mock.patch.object(wireguard, "IS_WINDOWS", True), mock.patch.object(wireguard, "windows_adapters", return_value=["VZS"]), \
+        with mock.patch.object(wireguard, "IS_WINDOWS", True), mock.patch.object(wireguard, "windows_tunnels", return_value=[Tunnel("VZS", rx=7, tx=9)]), \
                 mock.patch.object(wireguard, "_details", return_value=None):
             status = wireguard.detect()
-        self.assertEqual((status.state, status.tunnels[0].name), (CONNECTED, "VZS"))
+        self.assertEqual((status.state, status.tunnels[0].name, status.tunnels[0].rx, status.tunnels[0].tx),
+                         (CONNECTED, "VZS", 7, 9))
+
+    def test_linux_traffic_needs_no_rights(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "wg0" / "statistics").mkdir(parents=True)
+            (root / "wg0" / "statistics" / "rx_bytes").write_text("1234\n")
+            (root / "wg0" / "statistics" / "tx_bytes").write_text("56\n")
+            (root / "wg1" / "statistics").mkdir(parents=True)
+            (root / "wg1" / "statistics" / "rx_bytes").write_text("kaputt")
+            self.assertEqual(wireguard.linux_traffic("wg0", root), (1234, 56))
+            self.assertIsNone(wireguard.linux_traffic("wg1", root))
+            self.assertIsNone(wireguard.linux_traffic("fehlt", root))
+
+    def test_detect_on_linux_shows_traffic_without_wg_rights(self):
+        with mock.patch.object(wireguard, "IS_WINDOWS", False), mock.patch.object(wireguard.sys, "platform", "linux"), \
+                mock.patch.object(wireguard, "linux_interfaces", return_value=["VZS"]), \
+                mock.patch.object(wireguard, "linux_traffic", return_value=(100, 200)), \
+                mock.patch.object(wireguard, "_details", return_value=None), \
+                mock.patch.object(wireguard, "_linux_addresses", return_value=[]):
+            tunnel = wireguard.detect().tunnels[0]
+        self.assertEqual((tunnel.rx, tunnel.tx, tunnel.handshake_age), (100, 200, None))
 
     def test_run_survives_missing_program_and_timeout(self):
         self.assertIsNone(wireguard._run(["/nonexistent/programm"]))
@@ -182,8 +207,19 @@ class IndicatorTests(GuiTestCase):
         self.ind.set_status(Status(CONNECTED, [Tunnel("VZS")]))
         self.ind.click()
         text = " ".join(label.text() for label in self.ind._popup.findChildren(QLabel))
+        self.assertIn("Endpunkt und Handshake", text)
         self.assertIn("Administratorrechten", text)
         self.assertNotIn("Letzter Handshake", text)
+        self.ind._popup.close()
+
+    def test_rejected_sudo_password_is_explained(self):
+        from PySide6.QtWidgets import QLabel
+
+        self.ind.set_status(Status(CONNECTED, [Tunnel("VZS", rx=1, tx=2)], sudo_failed=True))
+        self.ind.click()
+        text = " ".join(label.text() for label in self.ind._popup.findChildren(QLabel))
+        self.assertIn("sudo-Passwort wurde nicht akzeptiert", text)
+        self.assertIn("Empfangen / Gesendet", text)  # die Datenmenge gibt es trotzdem
         self.ind._popup.close()
 
     def test_details_for_other_states(self):
@@ -207,7 +243,7 @@ class IndicatorTests(GuiTestCase):
         calls = []
         gate = __import__("threading").Event()
 
-        def slow():
+        def slow(_elevation=None):
             calls.append(1)
             gate.wait(2)
             return Status(OFF, [])
@@ -328,7 +364,7 @@ class SwitchTests(GuiTestCase):
     def test_switching_off_ignores_a_query_that_is_still_running(self):
         gate = threading.Event()
 
-        def slow():
+        def slow(_elevation=None):
             gate.wait(2)
             return Status(OFF, [])
 
@@ -400,3 +436,189 @@ class SwitchTests(GuiTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+SHOW = "\n".join([
+    "wg0-peer\t203.0.113.7:51820", "---",
+    f"wg0-peer\t{NOW - 20}", "---",
+    "wg0-peer\t3355443\t1153433", "---",
+    "wg0-peer\t10.8.0.0/24 192.168.0.0/16",
+]) + "\n"
+
+
+def _proc(stdout="", returncode=0):
+    return mock.Mock(stdout=stdout, returncode=returncode)
+
+
+class ElevationTests(unittest.TestCase):
+    """sudo-Passwort: Einzelheiten ohne Root, sicher übergeben und bei Fehlern ohne Wiederholungen."""
+
+    def setUp(self):
+        for target, value in (("sudo_available", lambda: True), ("_wg_executable", lambda: "/usr/bin/wg")):
+            patcher = mock.patch.object(wireguard, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_parse_show(self):
+        tunnel = wireguard.parse_show(SHOW, NOW)
+        self.assertEqual((tunnel.endpoint, tunnel.handshake_age, tunnel.rx, tunnel.tx), ("203.0.113.7:51820", 20, 3355443, 1153433))
+        self.assertEqual(tunnel.allowed_ips, ["10.8.0.0/24", "192.168.0.0/16"])
+        for junk in ("", "x", "a\n---\nb\n---\n", SHOW.replace("---", "+++")):
+            self.assertIsNone(wireguard.parse_show(junk, NOW), junk)
+        never = wireguard.parse_show(SHOW.replace(str(NOW - 20), "0"), NOW)
+        self.assertEqual(never.handshake_age, NEVER)
+
+    def test_password_goes_through_stdin_never_the_command_line(self):
+        with mock.patch.object(wireguard, "_run_full", return_value=_proc(SHOW)) as run:
+            tunnel = wireguard.Elevation("geheim").details("wg0", NOW)
+        args, kwargs = run.call_args
+        self.assertEqual(kwargs["input"], "geheim\n")
+        self.assertNotIn("geheim", " ".join(args[0]))
+        self.assertEqual(args[0][:5], ["sudo", "-S", "-p", "", "--"])
+        self.assertIn("endpoints", args[0][-1])
+        self.assertNotIn("dump", args[0][-1])  # kein privater Schlüssel in der Ausgabe
+        self.assertEqual(tunnel.endpoint, "203.0.113.7:51820")
+
+    def test_result_is_cached_and_ages(self):
+        elevation = wireguard.Elevation("pw")
+        with mock.patch.object(wireguard, "_run_full", return_value=_proc(SHOW)) as run:
+            elevation.details("wg0", NOW)
+            later = elevation.details("wg0", NOW + 10)
+            self.assertEqual((run.call_count, later.handshake_age), (1, 30))
+            elevation.details("wg0", NOW + wireguard.DETAIL_TTL + 1)
+            self.assertEqual(run.call_count, 2)
+
+    def test_dangerous_interface_names_are_never_passed_on(self):
+        with mock.patch.object(wireguard, "_run_full") as run:
+            for name in ("", "-n", "wg0; rm -rf /", "a b", "x" * 16, "$(id)"):
+                self.assertIsNone(wireguard.Elevation("pw").details(name, NOW), name)
+            run.assert_not_called()
+
+    def test_wrong_password_is_tried_once_and_then_never_again(self):
+        elevation = wireguard.Elevation("falsch")
+        with mock.patch.object(wireguard, "_run_full", return_value=_proc("", 1)) as run:
+            self.assertIsNone(elevation.details("wg0", NOW))
+            self.assertTrue(elevation.failed)
+            calls = run.call_count
+            self.assertIsNone(elevation.details("wg0", NOW + 100))
+            self.assertEqual(run.call_count, calls)  # sudo wird nicht weiter belästigt
+
+    def test_other_failure_pauses_but_keeps_the_password(self):
+        elevation = wireguard.Elevation("pw")
+        results = [_proc("", 1), _proc("", 0)]  # wg schlägt fehl, das Passwort stimmt aber
+        with mock.patch.object(wireguard, "_run_full", side_effect=results) as run:
+            self.assertIsNone(elevation.details("wg0", NOW))
+            self.assertFalse(elevation.failed)
+            self.assertIsNone(elevation.details("wg0", NOW + 5))  # Pause
+            self.assertEqual(run.call_count, 2)
+
+    def test_not_usable_without_password_or_sudo(self):
+        self.assertFalse(wireguard.Elevation("").usable)
+        with mock.patch.object(wireguard, "sudo_available", lambda: False):
+            self.assertFalse(wireguard.Elevation("pw").usable)
+            self.assertFalse(wireguard.verify_sudo_password("pw"))
+        self.assertFalse(wireguard.verify_sudo_password(""))
+
+    def test_verify_uses_stdin_and_ignores_cached_credentials(self):
+        with mock.patch.object(wireguard, "_run_full", return_value=_proc()) as run:
+            self.assertTrue(wireguard.verify_sudo_password("pw"))
+        args, kwargs = run.call_args
+        self.assertIn("-k", args[0])
+        self.assertNotIn("pw", args[0])
+        self.assertEqual(kwargs["input"], "pw\n")
+        with mock.patch.object(wireguard, "_run_full", return_value=_proc("", 1)):
+            self.assertFalse(wireguard.verify_sudo_password("pw"))
+        with mock.patch.object(wireguard, "_run_full", return_value=None):
+            self.assertFalse(wireguard.verify_sudo_password("pw"))
+
+    def test_detect_uses_sudo_only_when_wg_alone_fails(self):
+        elevation = wireguard.Elevation("pw")
+        with mock.patch.object(wireguard, "IS_WINDOWS", False), mock.patch.object(wireguard.sys, "platform", "linux"), \
+                mock.patch.object(wireguard, "linux_interfaces", return_value=["VZS"]), \
+                mock.patch.object(wireguard, "linux_traffic", return_value=(1, 2)), \
+                mock.patch.object(wireguard, "_linux_addresses", return_value=[]), \
+                mock.patch.object(wireguard, "_details", return_value=None), \
+                mock.patch.object(wireguard, "_run_full", return_value=_proc(SHOW)):
+            status = wireguard.detect(elevation)
+            tunnel = status.tunnels[0]
+            self.assertEqual((tunnel.endpoint, tunnel.rx, tunnel.tx, status.sudo_failed), ("203.0.113.7:51820", 3355443, 1153433, False))
+        with mock.patch.object(wireguard, "IS_WINDOWS", False), mock.patch.object(wireguard.sys, "platform", "linux"), \
+                mock.patch.object(wireguard, "linux_interfaces", return_value=["VZS"]), \
+                mock.patch.object(wireguard, "linux_traffic", return_value=(1, 2)), \
+                mock.patch.object(wireguard, "_linux_addresses", return_value=[]), \
+                mock.patch.object(wireguard, "_details", return_value=None), \
+                mock.patch.object(wireguard, "_run_full", return_value=_proc("", 1)):
+            status = wireguard.detect(wireguard.Elevation("falsch"))
+            self.assertEqual((status.state, status.sudo_failed, status.tunnels[0].rx, status.tunnels[0].endpoint),
+                             (CONNECTED, True, 1, ""))  # einfache Anzeige mit Datenmenge
+
+
+class SudoPromptTests(GuiTestCase):
+    """Beim Einschalten wird das sudo-Passwort gefragt; ohne oder mit falschem Passwort bleibt es bei der einfachen Anzeige."""
+
+    def setUp(self):
+        super().setUp()
+        storage.save(Config(), self.path)
+        self.store: dict[str, str] = {}
+        from sesam import passwords
+
+        for name, fake in (("set_password", lambda i, p: self.store.__setitem__(i, p)), ("get_password", self.store.get),
+                           ("delete_password", lambda i: self.store.pop(i, None))):
+            patcher = mock.patch.object(passwords, name, fake)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(wireguard, "sudo_available", lambda: True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.w = self._window()
+        self.addCleanup(self.w.close)
+
+    def _switch_on(self, answer, valid):
+        from PySide6.QtWidgets import QInputDialog
+
+        asked = []
+        with mock.patch.object(QInputDialog, "getText", lambda *a, **k: asked.append(a) or answer), \
+                mock.patch.object(wireguard, "verify_sudo_password", lambda pw: valid):
+            self.w.set_wireguard(True)
+        return asked
+
+    def test_correct_password_is_kept_and_used(self):
+        asked = self._switch_on(("richtig", True), True)
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(self.store, {wireguard.SUDO_KEY: "richtig"})
+        self.assertEqual(self.w.wg_indicator.elevation.password, "richtig")
+        self.assertTrue(self.w.cfg.wireguard)
+
+    def test_empty_cancelled_or_wrong_password_means_simple_display(self):
+        for answer, valid in ((("", True), True), (("x", False), True), (("falsch", True), False)):
+            self.w.set_wireguard(False)
+            self._switch_on(answer, valid)
+            self.assertIsNone(self.w.wg_indicator.elevation, answer)
+            self.assertEqual(self.store, {}, answer)
+            self.assertTrue(self.w.cfg.wireguard)  # die Anzeige bleibt an, nur einfacher
+            self.assertTrue(self.w.statusBar().currentMessage(), answer)
+
+    def test_switching_off_forgets_the_password(self):
+        self._switch_on(("richtig", True), True)
+        self.w.set_wireguard(False)
+        self.assertEqual(self.store, {})
+        self.assertIsNone(self.w.wg_indicator.elevation)
+
+    def test_no_second_prompt_when_already_on(self):
+        self._switch_on(("richtig", True), True)
+        self.assertEqual(self._switch_on(("richtig", True), True), [])
+
+    def test_stored_password_is_used_at_start(self):
+        self.store[wireguard.SUDO_KEY] = "gespeichert"
+        storage.save(Config(wireguard=True), self.path)
+        w = self._window()
+        self.addCleanup(w.close)
+        self.assertEqual(w.wg_indicator.elevation.password, "gespeichert")
+
+    def test_no_prompt_without_sudo(self):
+        from PySide6.QtWidgets import QInputDialog
+
+        with mock.patch.object(wireguard, "sudo_available", lambda: False), \
+                mock.patch.object(QInputDialog, "getText", side_effect=AssertionError("keine Abfrage")):
+            self.w.set_wireguard(True)
+        self.assertIsNone(self.w.wg_indicator.elevation)

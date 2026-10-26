@@ -45,7 +45,10 @@ class GuiTestCase(unittest.TestCase):
             self.addCleanup(patcher.stop)
         from sesam import wireguard
 
-        patcher = mock.patch.object(wireguard, "detect", lambda: wireguard.Status(wireguard.OFF, []))  # kein echter Systemaufruf in Tests
+        patcher = mock.patch.object(wireguard, "detect", lambda elevation=None: wireguard.Status(wireguard.OFF, []))  # kein echter Systemaufruf in Tests
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(wireguard, "sudo_available", lambda: False)  # keine Passwortabfrage, kein echtes sudo
         patcher.start()
         self.addCleanup(patcher.stop)
 

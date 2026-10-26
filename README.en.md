@@ -278,7 +278,9 @@ At the bottom right of the status bar, Sesam shows whether this computer is conn
 | gray, *disconnected* | No tunnel is active. |
 | dashed, *unavailable* | The state cannot be determined on this system. |
 
-Clicking the indicator shows details: endpoint, tunnel address, allowed IPs, last handshake and data volume. WireGuard (`wg show`) provides endpoint, handshake and data volume only with administrator rights. Without them, Sesam only detects *that* a tunnel is running and never shows “stale”. With several tunnels, the first name is shown with a suffix, such as `VZS +1`.
+Clicking the indicator shows details: endpoint, tunnel address, allowed IPs, last handshake and data volume. Sesam reads the data volume without administrator rights from the counters of the interface (Linux) or network adapter (Windows). WireGuard (`wg show`) provides endpoint and handshake only with administrator rights. Without them, Sesam only detects *that* a tunnel is running and never shows “stale”.
+
+**sudo password (Linux, optional):** When you switch the indicator on, Sesam asks for your sudo password. With a valid password Sesam reads endpoint and handshake via `sudo wg show` (at most every 30 seconds; the private key is never requested). The password is passed to sudo only through standard input and stored in the system keyring; switching the indicator off deletes it. If the field stays empty, you cancel or the password is wrong, Sesam shows the simple display; a rejected password is not tried again, so that sudo does not lock the account. With several tunnels, the first name is shown with a suffix, such as `VZS +1`.
 
 The state is checked in the background every 5 seconds (Windows: every 15 seconds). Linux: Sesam reads `/sys/class/net`. Windows: Sesam asks PowerShell for the “WireGuard Tunnel” network adapters. Sesam neither sets up nor disconnects tunnels itself.
 

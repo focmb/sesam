@@ -81,7 +81,11 @@ class WireGuardPopup(QWidget):
         for tunnel in status.tunnels:
             lay.addWidget(self._tunnel_box(tunnel, many=len(status.tunnels) > 1))
         if status.tunnels and not any(t.handshake_age is not None for t in status.tunnels):
-            lay.addWidget(self._muted(tr("Endpunkt, Handshake und Datenmenge liefert WireGuard nur mit Administratorrechten.")))
+            if status.sudo_failed:
+                lay.addWidget(self._muted(tr("Das sudo-Passwort wurde nicht akzeptiert. Schalte die WireGuard-Anzeige in den "
+                                             "Einstellungen aus und wieder ein, um es neu einzugeben.")))
+            else:
+                lay.addWidget(self._muted(tr("Endpunkt und Handshake liefert WireGuard nur mit Administratorrechten.")))
         self.setFixedWidth(max(340, self.sizeHint().width()))
 
     @staticmethod
@@ -141,6 +145,7 @@ class WireGuardIndicator(QPushButton):
         self._job: Job | None = None
         self._popup: WireGuardPopup | None = None
         self._stopped = False
+        self.elevation: wireguard.Elevation | None = None  # sudo-Passwort für Endpunkt und Handshake (nur Linux, optional)
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self.refresh)
@@ -159,6 +164,10 @@ class WireGuardIndicator(QPushButton):
         self._stopped = True
         self._timer.stop()
 
+    def set_elevation(self, elevation: wireguard.Elevation | None):
+        """Hinterlegt das sudo-Passwort (oder entfernt es); gilt ab der nächsten Abfrage."""
+        self.elevation = elevation
+
     def set_enabled(self, enabled: bool):
         """Aus: nicht mehr abfragen und nicht anzeigen. An: abfragen; sichtbar wird die Pille mit der ersten Antwort."""
         if enabled:
@@ -171,7 +180,8 @@ class WireGuardIndicator(QPushButton):
     def refresh(self):
         if self._stopped or (self._job is not None and self._job.isRunning()):
             return
-        job = Job(lambda _job: wireguard.detect(), self)
+        elevation = self.elevation
+        job = Job(lambda _job: wireguard.detect(elevation), self)
         job.result.connect(self.set_status)
         self._job = job
         job.start()
