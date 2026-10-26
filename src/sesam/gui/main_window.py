@@ -1221,13 +1221,20 @@ class MainWindow(QMainWindow):
             except passwords.PasswordError as exc:
                 clone.use_password = False
                 QMessageBox.warning(self, tr("Passwort nicht kopiert"), str(exc))
-        self.cfg.connections.append(clone)
-        self._save()
-        self.refresh()
-        # Die Kopie gleich zum Bearbeiten öffnen; bricht man ab, bleibt sie (ausgewählt) erhalten.
-        if self._select_connection(clone.id):
-            self.edit_selected(select_name=True)
-            self._select_connection(clone.id)  # das Speichern baut den Baum neu auf und verliert die Auswahl
+        # Die Kopie erst nach dem Bestätigen des Dialogs anlegen; bei „Abbrechen“ entsteht nichts.
+        dlg = ConnectionDialog(self.cfg, clone, parent=self, save_callback=self._save)
+        dlg.name.selectAll()  # der Name lässt sich sofort überschreiben
+        if dlg.exec():
+            self._apply_password(clone, dlg.password_change)
+            self.cfg.connections.append(clone)
+            self._save()
+            self.refresh()
+            self._select_connection(clone.id)
+        else:
+            try:
+                passwords.delete_password(clone.id)  # das vorab kopierte Passwort wieder entfernen
+            except passwords.PasswordError:
+                pass
 
     def _select_connection(self, conn_id: str, add: bool = False) -> bool:
         """Wählt die Verbindung im Baum aus (klappt übergeordnete Gruppen auf). Liefert False, wenn sie nicht sichtbar ist."""

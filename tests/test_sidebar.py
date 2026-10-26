@@ -191,7 +191,7 @@ class SidebarTests(unittest.TestCase):
         self.assertEqual((copy.host, copy.user, copy.group), (conn.host, conn.user, conn.group))
         self.assertEqual(w._selected().id, copy.id)  # die Kopie ist ausgewählt
 
-    def test_duplicate_cancel_keeps_the_copy_selected(self):
+    def test_duplicate_cancel_creates_no_copy(self):
         from sesam.gui.connection_dialog import ConnectionDialog
 
         w, conn = self._window_with_connection()
@@ -199,15 +199,15 @@ class SidebarTests(unittest.TestCase):
         with mock.patch.object(ConnectionDialog, "exec", lambda dlg: calls.append(dlg) or 0):
             w.duplicate_selected()
         self.assertEqual(len(calls), 1)
-        self.assertEqual(sorted(c.name for c in w.cfg.connections), ["web-01", "web-01 (Kopie)"])
-        self.assertEqual(w._selected().name, "web-01 (Kopie)")
+        self.assertEqual([c.name for c in w.cfg.connections], ["web-01"])  # Abbrechen legt nichts an
+        self.assertEqual(w._selected().name, "web-01")
 
     def test_duplicate_expands_collapsed_group_and_needs_selection(self):
         from sesam.gui.connection_dialog import ConnectionDialog
 
         w, conn = self._window_with_connection()
         w.tree.topLevelItem(0).setExpanded(False)  # Gruppe zugeklappt
-        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: 0):
+        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: dlg._accept() or 1):
             w.duplicate_selected()
         self.assertTrue(w.tree.topLevelItem(0).isExpanded())
         self.assertEqual(len(self._tree_ids(w)), 2)

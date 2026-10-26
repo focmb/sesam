@@ -108,7 +108,9 @@ class ColorTagTreeTests(GuiTestCase):
         from unittest import mock
 
         self.w.tree.setCurrentItem(self.item("web"))
-        with mock.patch.object(self.w, "edit_selected"):
+        from sesam.gui.connection_dialog import ConnectionDialog
+
+        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: dlg._accept() or 1):
             self.w.duplicate_selected()
         copy = next(c for c in self.w.cfg.connections if c.name == "web (Kopie)")
         self.assertEqual((copy.color, copy.tags), ("red", ["prod", "Web"]))

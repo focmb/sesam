@@ -99,6 +99,10 @@ class GuiTests(unittest.TestCase):
         w.tree.setCurrentItem(w.tree.topLevelItem(0))
         with mock.patch.object(ConnectionDialog, "exec", lambda dlg: 0):  # Bearbeiten-Dialog der Kopie abbrechen
             w.duplicate_selected()
+        self.assertEqual(len(w.cfg.connections), 1)  # Abbrechen legt keine Kopie an
+        self.assertEqual(self.store, {conn.id: "pw1"})  # und hinterlässt kein kopiertes Passwort
+        with mock.patch.object(ConnectionDialog, "exec", lambda dlg: dlg._accept() or 1):
+            w.duplicate_selected()
         self.assertEqual(len(w.cfg.connections), 2)
         self.assertEqual(self.store[w.cfg.connections[1].id], "pw1")
 
