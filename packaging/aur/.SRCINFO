@@ -1,6 +1,6 @@
 pkgbase = sesam
 	pkgdesc = SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen
-	pkgver = 1.5.5
+	pkgver = 1.5.6
 	pkgrel = 1
 	url = https://github.com/focmb/sesam
 	arch = any
@@ -18,7 +18,7 @@ pkgbase = sesam
 	depends = hicolor-icon-theme
 	optdepends = gnome-keyring: Passwörter im Schlüsselbund speichern
 	optdepends = kwallet: Passwörter im Schlüsselbund speichern
-	source = sesam-1.5.5.tar.gz::https://github.com/focmb/sesam/archive/v1.5.5.tar.gz
-	sha256sums = e420ca977baa8d18746a0ee164fee086a1fa708c301f080c728881439f2e61fc
+	source = sesam-1.5.6.tar.gz::https://github.com/focmb/sesam/archive/v1.5.6.tar.gz
+	sha256sums = 97b2eb57d6cbceca1d8bc422d0876ef4729c33deb2f81bfd677b85e7c92212d6
 
 pkgname = sesam
