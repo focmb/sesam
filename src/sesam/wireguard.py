@@ -299,7 +299,12 @@ class Elevation:
 
     def details(self, name: str, now: float | None = None) -> Tunnel | None:
         now = time.time() if now is None else now
-        if not self.usable or not _IFNAME.fullmatch(name or "") or now < self._retry_at:
+        if not self.usable:
+            return None
+        if not _IFNAME.fullmatch(name or ""):
+            self.error = f"ungültiger Schnittstellenname „{name}“"
+            return None
+        if now < self._retry_at:
             return None
         cached = self._cache.get(name)
         if cached and now - cached[0] < DETAIL_TTL:
@@ -309,6 +314,7 @@ class Elevation:
             return tunnel
         wg = _wg_executable()
         if not wg:
+            self.error = "Programm „wg“ nicht gefunden (Paket wireguard-tools?)"
             return None
         script = "; echo ---; ".join(f"{shlex.quote(wg)} show {name} {what}"
                                      for what in ("endpoints", "latest-handshakes", "transfer", "allowed-ips"))

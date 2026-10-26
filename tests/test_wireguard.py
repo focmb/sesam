@@ -212,6 +212,15 @@ class IndicatorTests(GuiTestCase):
         self.assertNotIn("Letzter Handshake", text)
         self.ind._popup.close()
 
+    def test_sudo_error_is_shown_in_the_details(self):
+        from PySide6.QtWidgets import QLabel
+
+        self.ind.set_status(Status(CONNECTED, [Tunnel("VZS", rx=1, tx=2)], sudo_error="Code 1: wg: nope"))
+        self.ind.click()
+        text = " ".join(label.text() for label in self.ind._popup.findChildren(QLabel))
+        self.assertIn("sudo wg show ist fehlgeschlagen: Code 1: wg: nope", text)
+        self.ind._popup.close()
+
     def test_rejected_sudo_password_is_explained(self):
         from PySide6.QtWidgets import QLabel
 
@@ -447,7 +456,7 @@ SHOW = "\n".join([
 
 
 def _proc(stdout="", returncode=0):
-    return mock.Mock(stdout=stdout, returncode=returncode)
+    return mock.Mock(stdout=stdout, stderr="", returncode=returncode)
 
 
 class ElevationTests(unittest.TestCase):
@@ -511,6 +520,25 @@ class ElevationTests(unittest.TestCase):
             self.assertFalse(elevation.failed)
             self.assertIsNone(elevation.details("wg0", NOW + 5))  # Pause
             self.assertEqual(run.call_count, 2)
+
+    def test_failure_reason_is_reported_without_the_password(self):
+        elevation = wireguard.Elevation("geheim")
+        proc = mock.Mock(stdout="", stderr="sudo: eine Zeile\nwg: Operation not permitted\n", returncode=1)
+        with mock.patch.object(wireguard, "_run_full", side_effect=[proc, _proc()]):  # wg scheitert, Passwort stimmt
+            self.assertIsNone(elevation.details("wg0", NOW))
+        self.assertEqual(elevation.error, "Code 1: wg: Operation not permitted")
+        self.assertNotIn("geheim", elevation.error)
+        with mock.patch.object(wireguard, "_run_full", side_effect=[None, _proc()]):
+            elevation._retry_at = 0
+            elevation.details("wg0", NOW)
+        self.assertIn("Zeitüberschreitung", elevation.error)
+
+    def test_missing_wg_and_odd_names_are_reported(self):
+        elevation = wireguard.Elevation("pw")
+        with mock.patch.object(wireguard, "_wg_executable", lambda: None):
+            self.assertIsNone(elevation.details("wg0", NOW))
+        self.assertIn("wg", elevation.error)
+        self.assertIn("ungültig", (lambda e: (e.details("a b", NOW), e.error)[1])(wireguard.Elevation("pw")))
 
     def test_not_usable_without_password_or_sudo(self):
         self.assertFalse(wireguard.Elevation("").usable)
