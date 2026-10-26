@@ -43,6 +43,11 @@ class GuiTestCase(unittest.TestCase):
             patcher = mock.patch.object(passwords, name, fake)
             patcher.start()
             self.addCleanup(patcher.stop)
+        from sesam import wireguard
+
+        patcher = mock.patch.object(wireguard, "detect", lambda: wireguard.Status(wireguard.OFF, []))  # kein echter Systemaufruf in Tests
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
         def boom(*_a, **_k):  # ein unerwartetes modales Fenster würde den Test endlos blockieren
             raise AssertionError("Unerwartetes modales Fenster im Test (würde hängen)")

@@ -32,6 +32,7 @@ Connections open in a **freely configurable terminal**.
 - [Docker containers](#docker-containers)
 - [Proxmox](#proxmox)
 - [Cisco devices](#cisco-devices)
+- [WireGuard indicator](#wireguard-indicator)
 - [Synchronization via Git](#synchronization-via-git)
 - [Data](#data)
 - [Building the program (Linux and Windows)](#building-the-program-linux-and-windows)
@@ -51,6 +52,7 @@ Connections open in a **freely configurable terminal**.
 - **Docker:** Show a host’s containers in the connection tree; start, stop, restart and delete them, and open a shell in a container with a double-click.
 - **Proxmox:** VMs and LXC containers in the tree, shell in LXC and VMs, start, shut down, stop and restart.
 - **Cisco switches:** Ports in the tree with state, VLAN and speed; switch them on and off, change descriptions, save the configuration.
+- **WireGuard indicator (optional):** The status bar shows whether the computer is connected to a WireGuard tunnel (tunnel name; connected, stale or disconnected); a click shows details.
 - **Git synchronization:** Sync connections, groups, identities, keys and snippets between several devices; passwords and private keys are stored encrypted only (AES-256-GCM).
 - **Windows and Linux:** The same experience on both systems, light and dark theme, adjustable font size, interface in German and English.
 
@@ -92,7 +94,7 @@ are stacked in a sidebar on the right edge (Ctrl+Q quits the program; *Import fr
 *Duplicate* creates a copy and opens it for editing right away with the name selected so you can overwrite it; if you cancel, the copy remains.
 
 At the bottom of the sidebar three icons switch between **Light** (sun), **Dark** (moon) and **Same as system** (monitor); the change takes effect immediately and is saved.
-Below them the **Settings** button opens the settings dialog (font size and language, see below).
+Below them the **Settings** button opens the settings dialog (font size, language and WireGuard indicator, see below).
 With *Same as system*, Sesam follows the operating system’s light/dark switch where Qt reports it (Windows, macOS, Linux depending on the desktop);
 otherwise you set it manually.
 
@@ -262,6 +264,23 @@ For switches running Cisco IOS, IOS-XE or NX-OS, Sesam shows the ports in the tr
 - **Description:** right-click → *Change description …* sets `description`; empty removes it.
 - **Save:** *Save configuration* (on the device or on a port) writes the running configuration permanently (`write memory`, on NX-OS `copy running-config startup-config`). Port changes take effect immediately, but without saving they only last until the device restarts.
 - Double-clicking a port opens the device in the terminal. As with Docker and Proxmox, the file browser and jump hosts only work for the device itself.
+
+## WireGuard indicator
+
+If you use WireGuard, switch the indicator on under **Settings › WireGuard**. It is off by default: Sesam then queries nothing and shows nothing.
+
+At the bottom right of the status bar, Sesam shows whether this computer is connected to a WireGuard tunnel, for example `WireGuard · VZS · connected`. The tunnel name is the name of the WireGuard interface (Linux) or of the tunnel (Windows).
+
+| Indicator | Meaning |
+|---|---|
+| green, *connected* | A tunnel is active. |
+| yellow, *stale* | A tunnel is active, but the last handshake is older than three minutes. The tunnel may be stuck. |
+| gray, *disconnected* | No tunnel is active. |
+| dashed, *unavailable* | The state cannot be determined on this system. |
+
+Clicking the indicator shows details: endpoint, tunnel address, allowed IPs, last handshake and data volume. WireGuard (`wg show`) provides endpoint, handshake and data volume only with administrator rights. Without them, Sesam only detects *that* a tunnel is running and never shows “stale”. With several tunnels, the first name is shown with a suffix, such as `VZS +1`.
+
+The state is checked in the background every 5 seconds (Windows: every 15 seconds). Linux: Sesam reads `/sys/class/net`. Windows: Sesam asks PowerShell for the “WireGuard Tunnel” network adapters. Sesam neither sets up nor disconnects tunnels itself.
 
 ## Synchronization via Git
 

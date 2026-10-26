@@ -32,6 +32,7 @@ from .sftp_window import SftpWindow
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
 from .terminals_dialog import TerminalsDialog
+from .wireguard_indicator import WireGuardIndicator
 
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
 GROUP_ROLE = ID_ROLE + 1  # Gruppenpfad
@@ -161,6 +162,8 @@ class MainWindow(QMainWindow):
         self.sync.finished.connect(self._sync_finished)
         self.sync_label = QLabel("")
         self.statusBar().addPermanentWidget(self.sync_label)
+        self.wg_indicator = WireGuardIndicator(self)  # ganz rechts: Zustand des WireGuard-Tunnels
+        self.statusBar().addPermanentWidget(self.wg_indicator)
         self.version_label = QLabel(tr("Version {__version__}", __version__=__version__))  # ganz links in der Statuszeile
         self.version_label.setObjectName("versionLabel")
         self.version_label.setToolTip("Sesam")
@@ -170,6 +173,7 @@ class MainWindow(QMainWindow):
 
         self._build_actions()
         self.refresh()
+        self.wg_indicator.set_enabled(self.cfg.wireguard)  # standardmäßig aus: dann wird nichts abgefragt
         if self.sync.enabled() and self.cfg.sync.auto:
             QTimer.singleShot(500, lambda: self.sync.sync())  # beim Start abgleichen
 
@@ -451,6 +455,7 @@ class MainWindow(QMainWindow):
                 pass
 
     def closeEvent(self, event):
+        self.wg_indicator.stop()
         self._flush_window_size()
         for window in list(self._sftp_windows):
             window.close()
@@ -1418,8 +1423,15 @@ class MainWindow(QMainWindow):
         self.cfg.language = i18n.normalize(code)
         self._save_no_sync()
 
+    def set_wireguard(self, enabled: bool):
+        """Schaltet die WireGuard-Anzeige ein oder aus (wirkt sofort, nur lokal gespeichert)."""
+        self.cfg.wireguard = bool(enabled)
+        self._save_no_sync()
+        self.wg_indicator.set_enabled(self.cfg.wireguard)
+
     def edit_settings(self):
-        dlg = SettingsDialog(self.cfg.font_scale, self.cfg.language, self.set_font_scale, self.set_language, self)
+        dlg = SettingsDialog(self.cfg.font_scale, self.cfg.language, self.set_font_scale, self.set_language, self,
+                             wireguard=self.cfg.wireguard, set_wireguard=self.set_wireguard)
         dlg.exec()
 
     def set_theme(self, mode: str):

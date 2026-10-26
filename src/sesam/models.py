@@ -193,6 +193,7 @@ class Config:
     theme: str = "system"  # "system", "light" oder "dark"
     language: str = "system"  # Oberflächensprache: "system", "de" oder "en" (nur lokal, wird nicht synchronisiert)
     font_scale: int = 100  # Schriftgröße der Oberfläche in Prozent (nur lokal, wird nicht synchronisiert)
+    wireguard: bool = False  # WireGuard-Anzeige in der Statuszeile; aus = gar nicht abfragen und nicht anzeigen (nur lokal, wird nicht synchronisiert)
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     window_size: list[int] = field(default_factory=list)  # [Breite, Höhe] des Hauptfensters beim Beenden (nur lokal)
     window_maximized: bool = False  # Hauptfenster war beim Beenden maximiert (nur lokal)

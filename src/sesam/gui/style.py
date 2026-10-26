@@ -26,6 +26,12 @@ TOKENS: dict[str, dict[str, str]] = {
         "hover": "rgba(29, 34, 48, 0.07)",
         "pressed": "rgba(29, 34, 48, 0.13)",
         "danger": "#d92d20",
+        "ok": "#166534",
+        "ok_bg": "#e3f5e9",
+        "ok_border": "#a7dcb7",
+        "warn": "#92400e",
+        "warn_bg": "#fdf2d6",
+        "warn_border": "#e8c777",
     },
     "dark": {
         "bg": "#1a1c22",
@@ -43,6 +49,12 @@ TOKENS: dict[str, dict[str, str]] = {
         "hover": "rgba(255, 255, 255, 0.07)",
         "pressed": "rgba(255, 255, 255, 0.12)",
         "danger": "#f97066",
+        "ok": "#4ade80",
+        "ok_bg": "rgba(74, 222, 128, 0.12)",
+        "ok_border": "rgba(74, 222, 128, 0.45)",
+        "warn": "#fbbf24",
+        "warn_bg": "rgba(251, 191, 36, 0.12)",
+        "warn_border": "rgba(251, 191, 36, 0.45)",
     },
 }
 
@@ -181,6 +193,19 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QStatusBar::item { border: none; }
     QStatusBar QLabel { color: @muted@; }
 
+    /* WireGuard-Anzeige in der Statuszeile und ihr Einzelheiten-Fenster */
+    QPushButton#wgIndicator { background: transparent; color: @muted@; border: 1px solid @border@; border-radius: 13px;
+        padding: 2px 12px 2px 8px; min-height: 20px; margin-right: 8px; font-weight: 600; }
+    QPushButton#wgIndicator:hover { background: @hover@; border-color: @muted@; }
+    QPushButton#wgIndicator:focus { border-color: @accent@; }
+    QPushButton#wgIndicator[wgState="connected"] { color: @ok@; background: @ok_bg@; border-color: @ok_border@; }
+    QPushButton#wgIndicator[wgState="stale"] { color: @warn@; background: @warn_bg@; border-color: @warn_border@; }
+    QPushButton#wgIndicator[wgState="unknown"] { border-style: dashed; }
+    QFrame#wgPopup { background: @surface@; border: 1px solid @border@; border-radius: 12px; }
+    QFrame#wgPopup QLabel { color: @text@; }
+    QFrame#wgPopup QLabel#wgPopupTitle { font-weight: 600; }
+    QFrame#wgPopup QLabel#wgPopupHint { color: @muted@; }
+
     /* Schmale Scrollleisten */
     QScrollBar:vertical { background: transparent; width: 12px; margin: 2px; }
     QScrollBar:horizontal { background: transparent; height: 12px; margin: 2px; }
@@ -250,6 +275,10 @@ _ICONS = {
     "home": '<path d="M4 11l8-6.5 8 6.5M6.5 9.5V19h11V9.5"/>',
     "transfer": '<path d="M8 20V6M4.500 9.500L8 6l3.500 3.500"/><path d="M16 4v14M12.500 14.500L16 18l3.500-3.500"/>',
     "search": '<circle cx="11" cy="11" r="6.500"/><path d="M16 16l4 4"/>',
+    "shield_ok": '<path d="M12 3l7.5 3v6c0 4.5-3.3 8.1-7.5 9.8C7.8 20.1 4.5 16.5 4.5 12V6z"/><path d="M8.5 12.2l2.5 2.5 4.6-5"/>',
+    "shield_warn": '<path d="M12 3l7.5 3v6c0 4.5-3.3 8.1-7.5 9.8C7.8 20.1 4.5 16.5 4.5 12V6z"/><path d="M12 8.5v4M12 15.7h.01"/>',
+    "shield_off": '<path stroke-dasharray="3 3" d="M12 3l7.5 3v6c0 4.5-3.3 8.1-7.5 9.8C7.8 20.1 4.5 16.5 4.5 12V6z"/>',
+    "shield_unknown": '<path stroke-dasharray="3 3" d="M12 3l7.5 3v6c0 4.5-3.3 8.1-7.5 9.8C7.8 20.1 4.5 16.5 4.5 12V6z"/><path d="M10 9.6a2 2 0 1 1 3 1.7c-.8.5-1 1-1 1.8M12 16h.01"/>',
 }
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from .. import i18n
 from ..i18n import tr
@@ -8,9 +8,10 @@ from . import theme
 
 
 class SettingsDialog(QDialog):
-    """Allgemeine Einstellungen: Schriftgröße (wirkt sofort) und Sprache (wirkt nach einem Neustart)."""
+    """Allgemeine Einstellungen: Schriftgröße und WireGuard-Anzeige (wirken sofort), Sprache (wirkt nach einem Neustart)."""
 
-    def __init__(self, font_scale: int, language: str, set_font_scale, set_language, parent=None):
+    def __init__(self, font_scale: int, language: str, set_font_scale, set_language, parent=None, *,
+                 wireguard: bool = False, set_wireguard=None):
         super().__init__(parent)
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(420)
@@ -45,10 +46,19 @@ class SettingsDialog(QDialog):
         self.restart_hint.setObjectName("hint")
         self.restart_hint.setVisible(False)
 
+        self.wireguard_box = QCheckBox(tr("Verbindungsstatus in der Statuszeile anzeigen"))
+        self.wireguard_box.setToolTip(tr("Zeigt unten rechts, ob dieser Rechner mit einem WireGuard-Tunnel verbunden ist."))
+        self.wireguard_box.setChecked(bool(wireguard))
+        if set_wireguard is not None:
+            self.wireguard_box.toggled.connect(lambda checked: set_wireguard(checked))
+        else:
+            self.wireguard_box.setEnabled(False)
+
         form = QFormLayout()
         form.setVerticalSpacing(10)
         form.addRow(tr("Schriftgröße"), size_row)
         form.addRow(tr("Sprache"), self.language_box)
+        form.addRow(tr("WireGuard"), self.wireguard_box)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close = buttons.button(QDialogButtonBox.StandardButton.Close)

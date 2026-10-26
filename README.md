@@ -32,6 +32,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - [Docker-Container](#docker-container)
 - [Proxmox](#proxmox)
 - [Cisco-Geräte](#cisco-geräte)
+- [WireGuard-Anzeige](#wireguard-anzeige)
 - [Synchronisation über Git](#synchronisation-über-git)
 - [Daten](#daten)
 - [Programm bauen (Linux und Windows)](#programm-bauen-linux-und-windows)
@@ -51,6 +52,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - **Docker:** Container eines Hosts im Verbindungsbaum anzeigen, starten, stoppen, neu starten, löschen und per Doppelklick eine Shell im Container öffnen.
 - **Proxmox:** VMs und LXC-Container im Baum, Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
 - **Cisco-Switches:** Ports im Baum mit Zustand, VLAN und Geschwindigkeit; ein- und ausschalten, Beschreibung ändern, Konfiguration speichern.
+- **WireGuard-Anzeige (optional):** Die Statuszeile zeigt, ob der Rechner mit einem WireGuard-Tunnel verbunden ist (Tunnelname, verbunden, veraltet oder getrennt); ein Klick zeigt Einzelheiten.
 - **Synchronisation über Git:** Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets zwischen mehreren Geräten abgleichen; Passwörter und private Schlüssel nur verschlüsselt (AES-256-GCM).
 - **Windows und Linux:** Gleiche Bedienung auf beiden Systemen, helles und dunkles Design, einstellbare Schriftgröße, Oberfläche auf Deutsch und Englisch.
 
@@ -90,7 +92,7 @@ stehen untereinander in einer Seitenleiste am rechten Rand (Strg+Q beendet das P
 *Duplizieren* legt eine Kopie an und öffnet sie sofort zum Bearbeiten, der Name ist markiert und lässt sich gleich überschreiben; bricht man ab, bleibt die Kopie bestehen.
 
 Ganz unten in der Seitenleiste schalten drei Symbole zwischen **Hell** (Sonne), **Dunkel** (Mond) und **Wie das System** (Monitor) um (wirkt sofort, wird gespeichert).
-Darunter öffnet der Knopf **Einstellungen** den Einstellungsdialog (Schriftgröße und Sprache, siehe unten).
+Darunter öffnet der Knopf **Einstellungen** den Einstellungsdialog (Schriftgröße, Sprache und WireGuard-Anzeige, siehe unten).
 Bei *Wie das System* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
 andernfalls stellst du es manuell ein.
 
@@ -260,6 +262,23 @@ Für Switches mit Cisco IOS, IOS-XE oder NX-OS zeigt Sesam die Ports im Baum. In
 - **Beschreibung:** Rechtsklick → *Beschreibung ändern …* setzt `description`; leer entfernt sie.
 - **Speichern:** *Konfiguration speichern* (am Gerät oder an einem Port) schreibt die laufende Konfiguration dauerhaft (`write memory`, auf NX-OS `copy running-config startup-config`). Änderungen an Ports wirken sofort, bleiben aber ohne Speichern nur bis zum Neustart des Geräts.
 - Doppelklick auf einen Port öffnet das Gerät im Terminal. Wie bei Docker und Proxmox gehen Dateibrowser und Jump-Hosts nur für das Gerät selbst.
+
+## WireGuard-Anzeige
+
+Wer WireGuard nutzt, schaltet die Anzeige unter **Einstellungen › WireGuard** ein. Standardmäßig ist sie aus: Sesam fragt dann nichts ab und zeigt nichts an.
+
+Unten rechts in der Statuszeile zeigt Sesam, ob dieser Rechner mit einem WireGuard-Tunnel verbunden ist, zum Beispiel `WireGuard · VZS · verbunden`. Der Tunnelname ist der Name der WireGuard-Schnittstelle (Linux) bzw. des Tunnels (Windows).
+
+| Anzeige | Bedeutung |
+|---|---|
+| grün, *verbunden* | Ein Tunnel ist aktiv. |
+| gelb, *veraltet* | Ein Tunnel ist aktiv, aber der letzte Handshake ist älter als drei Minuten. Der Tunnel hängt eventuell. |
+| grau, *getrennt* | Es ist kein Tunnel aktiv. |
+| gestrichelt, *nicht verfügbar* | Der Zustand lässt sich auf diesem System nicht ermitteln. |
+
+Ein Klick auf die Anzeige zeigt Einzelheiten: Endpunkt, Tunnel-Adresse, erlaubte IPs, letzter Handshake und Datenmenge. Endpunkt, Handshake und Datenmenge liefert WireGuard (`wg show`) nur mit Administratorrechten. Ohne sie erkennt Sesam nur, *dass* ein Tunnel läuft, und zeigt „veraltet“ nie an. Bei mehreren Tunneln steht der erste Name mit Zusatz, etwa `VZS +1`.
+
+Der Zustand wird alle 5 Sekunden im Hintergrund geprüft (Windows: alle 15 Sekunden). Linux: Sesam liest `/sys/class/net`. Windows: Sesam fragt per PowerShell die Netzwerkadapter „WireGuard Tunnel“ ab. Sesam baut selbst keine Tunnel auf und trennt keine.
 
 ## Synchronisation über Git
 
