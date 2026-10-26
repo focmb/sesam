@@ -1,6 +1,6 @@
 # Maintainer: Christian Leitzke <christian.leitzke@gmail.com>
 pkgname=sesam
-pkgver=1.5.6
+pkgver=1.6.0
 pkgrel=1
 pkgdesc="SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen"
 arch=('any')
@@ -12,7 +12,7 @@ makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel
 optdepends=('gnome-keyring: Passwörter im Schlüsselbund speichern'
             'kwallet: Passwörter im Schlüsselbund speichern')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('97b2eb57d6cbceca1d8bc422d0876ef4729c33deb2f81bfd677b85e7c92212d6')
+sha256sums=('24643032dc5ac272899451a0a4814ee12adddd0b061e989a32a5e598d3dd8d4f')
 
 build() {
   cd "$srcdir/$pkgname-$pkgver"
