@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .i18n import normalize as _normalize_language
 from .i18n import tr
-from .models import FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal
+from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal
 from .terminals import default_terminals
 
 
@@ -83,6 +83,13 @@ def _group_colors(value) -> dict[str, str]:
     return {k: v for k, v in value.items() if isinstance(k, str) and k and isinstance(v, str) and v}
 
 
+def _hidden_columns(value) -> list[str]:
+    """Reiner Anzeigezustand: ohne gültigen Wert gilt der Standard (Betriebssystem ausgeblendet)."""
+    if not isinstance(value, list):
+        return list(DEFAULT_HIDDEN_COLUMNS)
+    return [k for k in COLUMN_KEYS if k in value]
+
+
 def _window_size(value) -> list[int]:
     """[Breite, Höhe] oder leer; ein beschädigter Wert darf den Start nie verhindern."""
     if (isinstance(value, list) and len(value) == 2 and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
@@ -107,6 +114,7 @@ def _from_data(data: dict) -> Config:
         wireguard=data.get("wireguard") is True,
         window_size=_window_size(data.get("window_size")),
         window_maximized=data.get("window_maximized") is True,
+        hidden_columns=_hidden_columns(data.get("hidden_columns")),
         column_widths=[int(w) for w in data.get("column_widths", []) if isinstance(w, (int, float))],
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
         snippets=[Snippet.from_dict(s) for s in data.get("snippets", []) if isinstance(s, dict)] if isinstance(data.get("snippets"), list) else [],

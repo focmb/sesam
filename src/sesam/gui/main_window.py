@@ -17,9 +17,9 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import style, theme
-from .. import colors, docker, cisco, launcher, passwords, proxmox, sftp, snippets, storage, wireguard
+from .. import colors, docker, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, wireguard
 from .. import tags as tag_util
-from ..models import Config, Connection, Terminal, new_id
+from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
 from .connection_dialog import ConnectionDialog, swatch
 from .docker_dialog import DockerConnectDialog
@@ -105,6 +105,10 @@ class MainWindow(QMainWindow):
         self._docker_passwords: dict[str, str] = {}  # nachgefragte Passwörter, nur im Speicher
         self._docker_jobs: set[Job] = set()
         self._lost_key: tuple | None = None
+        self._os_jobs: set[Job] = set()
+        self._os_busy: set[str] = set()  # Verbindungen, deren Betriebssystem gerade abgefragt wird
+        self._os_tried: set[str] = set()  # in dieser Sitzung erfolglos abgefragt: nicht erneut versuchen
+        self._os_passwords: dict[str, str] = {}  # nachgefragte Passwörter, nur im Speicher
         self._rebuilding = 0  # >0, solange der Baum programmatisch umgebaut wird
         # zugeklappte Gruppen: aus der Konfiguration wiederherstellen, Verwaistes (gelöschte Gruppen) verwerfen
         self.collapsed: set[str] = set(cfg.collapsed_groups) & set(grp.all_groups(cfg))
@@ -117,7 +121,7 @@ class MainWindow(QMainWindow):
         self.search.textChanged.connect(self._search_text_changed)
 
         self.tree = ConnectionTree()
-        self.tree.setHeaderLabels([tr("Name"), tr("Ziel"), tr("Terminal"), tr("Tags")])
+        self.tree.setHeaderLabels([tr("Name"), tr("Ziel"), tr("Terminal"), tr("Tags"), tr("Betriebssystem")])
         self.tree.setAlternatingRowColors(False)
         self.tree.setIndentation(22)
         self.tree.setUniformRowHeights(True)
@@ -127,7 +131,11 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)  # Breite frei ziehbar
         header.setStretchLastSection(True)
         header.setMinimumSectionSize(60)
+        header.moveSection(4, 2)  # Betriebssystem steht optisch hinter dem Ziel (logische Spalte bleibt 4)
         self._apply_column_widths()
+        self._apply_column_visibility()
+        header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._header_menu)
         self._collapse_timer = QTimer(self)  # Einklapp-Zustand kurz nach dem Umschalten speichern
         self._collapse_timer.setSingleShot(True)
         self._collapse_timer.setInterval(600)
@@ -394,10 +402,13 @@ class MainWindow(QMainWindow):
         base = f"{conn.user}@{conn.host}" if conn.user else conn.host
         return f"{base}:{conn.port}" if conn.port != 22 else base
 
-    DEFAULT_WIDTHS = (250, 230, 150, 180)
+    DEFAULT_WIDTHS = (250, 230, 150, 180, 200)
+    COLUMN_INDEX = {"target": 1, "terminal": 2, "tags": 3, "os": 4}
 
     def _apply_column_widths(self):
-        widths = self.cfg.column_widths
+        widths = list(self.cfg.column_widths)
+        if len(widths) == len(self.DEFAULT_WIDTHS) - 1:  # Konfiguration aus der Zeit vor der Betriebssystem-Spalte
+            widths.append(self.DEFAULT_WIDTHS[-1])
         if len(widths) != len(self.DEFAULT_WIDTHS) or any(w < 30 for w in widths):
             widths = list(self.DEFAULT_WIDTHS)
         header = self.tree.header()
@@ -406,9 +417,39 @@ class MainWindow(QMainWindow):
             header.resizeSection(i, w)
         header.blockSignals(False)
 
+    def _apply_column_visibility(self):
+        header = self.tree.header()
+        hidden = set(self.cfg.hidden_columns)
+        for key, index in self.COLUMN_INDEX.items():
+            header.setSectionHidden(index, key in hidden)
+
+    def set_column_visible(self, key: str, visible: bool):
+        """Blendet eine Spalte der Hauptansicht ein oder aus (nur lokal gespeichert, der Name bleibt immer sichtbar)."""
+        if key not in COLUMN_KEYS:
+            return
+        hidden = [k for k in COLUMN_KEYS if k in self.cfg.hidden_columns and k != key]
+        if not visible:
+            hidden.append(key)
+        self.cfg.hidden_columns = [k for k in COLUMN_KEYS if k in hidden]
+        self._apply_column_visibility()
+        self._save_no_sync()  # reiner Anzeigezustand: kein Abgleich nötig
+
+    def _header_menu(self, pos):
+        """Rechtsklick auf die Spaltenköpfe: Spalten ein- und ausblenden."""
+        menu = QMenu(self)
+        labels = {"target": tr("Ziel"), "terminal": tr("Terminal"), "tags": tr("Tags"), "os": tr("Betriebssystem")}
+        for key in COLUMN_KEYS:
+            action = menu.addAction(labels[key])
+            action.setCheckable(True)
+            action.setChecked(key not in self.cfg.hidden_columns)
+            action.toggled.connect(lambda checked, k=key: self.set_column_visible(k, checked))
+        menu.exec(self.tree.header().mapToGlobal(pos))
+
     def _flush_widths(self):
         header = self.tree.header()
-        widths = [header.sectionSize(i) for i in range(header.count())]
+        old = list(self.cfg.column_widths) if len(self.cfg.column_widths) == header.count() else list(self.DEFAULT_WIDTHS)
+        # ausgeblendete Spalten behalten ihre Breite (Qt meldet für sie 0)
+        widths = [old[i] if header.isSectionHidden(i) else header.sectionSize(i) for i in range(header.count())]
         if widths != self.cfg.column_widths:
             self.cfg.column_widths = widths
             self._save_no_sync()  # reiner Anzeigezustand: kein Abgleich nötig
@@ -520,11 +561,12 @@ class MainWindow(QMainWindow):
             (parent or self.tree.invisibleRootItem()).addChild(item)
             nodes[path] = item
         for conn in matches:
-            item = QTreeWidgetItem([conn.name, self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags)])
+            item = QTreeWidgetItem([conn.name, self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags), conn.os_info])
             item.setData(0, ID_ROLE, conn.id)
             item.setIcon(0, tinted("server", conn.color, c["muted"]))
             item.setForeground(2, muted)
             item.setForeground(3, muted)
+            item.setForeground(4, muted)
             if conn.notes:
                 item.setToolTip(0, conn.notes)
             (nodes.get(conn.group) or self.tree.invisibleRootItem()).addChild(item)
@@ -638,6 +680,7 @@ class MainWindow(QMainWindow):
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
             menu.addAction(self.a_files)
+            menu.addAction(tr("Betriebssystem ermitteln")).triggered.connect(self.detect_os_selected)
             self._snippet_menu(menu, [conn])
             self._color_menu(menu, conn.color, lambda key: self.set_connection_color(conn, key))
             if conn.cisco:
@@ -1176,6 +1219,74 @@ class MainWindow(QMainWindow):
             launcher.launch(self.cfg, conn, terminal)
         except launcher.LaunchError as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
+            return
+        self._detect_os(conn)  # beim ersten Verbinden das Betriebssystem merken
+
+    # --- Betriebssystem des Hosts ---
+    OS_RETRY_MS = (20000, 60000)  # unbekannter Host: erst nach der Bestätigung im Terminal ist sein Schlüssel eingetragen
+
+    def _detect_os(self, conn: Connection, force: bool = False, attempt: int = 0):
+        """Fragt das Betriebssystem im Hintergrund ab, wenn es noch nicht bekannt ist (``force``: auf Wunsch, mit Rückfragen)."""
+        conn = self.cfg.connection_by_id(conn.id) or conn
+        if conn.id in self._os_busy or not conn.host.strip():
+            return
+        if not force and (conn.os_info or conn.id in self._os_tried or conn.jump_host.strip()):
+            return
+        self._os_busy.add(conn.id)
+        snapshot = replace(conn)
+        password = self._os_passwords.get(conn.id)
+
+        def work(job):
+            try:
+                found = osinfo.detect(self.cfg, snapshot, password=password, strict=not force)
+            except Exception as exc:  # jede Meldung wird unten ausgewertet
+                return job, conn.id, force, attempt, "", exc
+            return job, conn.id, force, attempt, found, None
+
+        job = Job(work, self)
+        self._os_jobs.add(job)
+        job.result.connect(self._os_detected)
+        job.start()
+
+    @Slot(object)
+    def _os_detected(self, res):
+        job, cid, force, attempt, found, exc = res
+        self._os_jobs.discard(job)
+        self._os_busy.discard(cid)
+        conn = self.cfg.connection_by_id(cid)
+        if conn is None:
+            return
+        if exc is None and found:
+            if found != conn.os_info:
+                conn.os_info = found
+                self._save()
+                item = self._find_item(cid)
+                if item is not None:
+                    item.setText(self.COLUMN_INDEX["os"], found)
+            return
+        if isinstance(exc, sftp.SftpUnknownHostKey) and attempt < len(self.OS_RETRY_MS):
+            QTimer.singleShot(self.OS_RETRY_MS[attempt], lambda: self._detect_os(conn, attempt=attempt + 1))
+            return
+        if force and isinstance(exc, sftp.SftpAuthError) and self._os_passwords.pop(cid, None) is None:
+            text, ok = QInputDialog.getText(
+                self, tr("Anmeldung"), tr("Passwort für {v}{host}:", v=conn.user + '@' if conn.user else '', host=conn.host),
+                QLineEdit.EchoMode.Password)
+            if ok and text:
+                self._os_passwords[cid] = text
+                self._detect_os(conn, force=True)
+                return
+        self._os_tried.add(cid)
+        if force:
+            self.statusBar().showMessage(
+                tr("Betriebssystem von {name} nicht ermittelt: {reason}", name=conn.name,
+                   reason=str(exc) if exc is not None else tr("keine verwertbare Antwort")), 10000)
+
+    def detect_os_selected(self):
+        """Kontextmenü: Betriebssystem der gewählten Verbindung (erneut) ermitteln."""
+        conn = self._selected()
+        if conn is not None:
+            self._os_tried.discard(conn.id)
+            self._detect_os(conn, force=True)
 
     def _apply_password(self, conn: Connection, change: str | None) -> None:
         if change is None:

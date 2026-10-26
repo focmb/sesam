@@ -14,6 +14,8 @@ def _from_dict(cls, data: dict[str, Any]):
     return cls(**{k: v for k, v in data.items() if k in names})
 
 
+COLUMN_KEYS = ("target", "terminal", "tags", "os")  # ausblendbare Spalten der Hauptansicht (der Name bleibt immer sichtbar)
+DEFAULT_HIDDEN_COLUMNS = ("os",)
 FONT_SCALE_MIN, FONT_SCALE_MAX = 70, 200  # erlaubter Bereich der Schriftgröße in Prozent
 
 
@@ -150,6 +152,7 @@ class Connection:
     group: str = ""
     terminal_id: str = ""  # leer = Standardterminal
     notes: str = ""
+    os_info: str = ""  # Betriebssystem des Hosts, bei der ersten Verbindung ermittelt (siehe sesam.osinfo)
     color: str = ""  # Schlüssel aus sesam.colors.PALETTE, leer = keine Farbe
     tags: list[str] = field(default_factory=list)
 
@@ -159,6 +162,8 @@ class Connection:
         if not isinstance(conn.color, str):
             conn.color = ""
         conn.tags = _clean_tags(conn.tags)
+        if not isinstance(conn.os_info, str):
+            conn.os_info = ""
         return conn
 
 
@@ -195,6 +200,7 @@ class Config:
     font_scale: int = 100  # Schriftgröße der Oberfläche in Prozent (nur lokal, wird nicht synchronisiert)
     wireguard: bool = False  # WireGuard-Anzeige in der Statuszeile; aus = gar nicht abfragen und nicht anzeigen (nur lokal, wird nicht synchronisiert)
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
+    hidden_columns: list[str] = field(default_factory=lambda: list(DEFAULT_HIDDEN_COLUMNS))  # ausgeblendete Spalten (nur lokal, wird nicht synchronisiert)
     window_size: list[int] = field(default_factory=list)  # [Breite, Höhe] des Hauptfensters beim Beenden (nur lokal)
     window_maximized: bool = False  # Hauptfenster war beim Beenden maximiert (nur lokal)
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)

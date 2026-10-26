@@ -26,6 +26,10 @@ class SftpError(Exception):
     """Fehler mit einer für Anwender lesbaren Meldung."""
 
 
+class SftpUnknownHostKey(SftpError):
+    """Der Host ist in known_hosts noch nicht eingetragen (nur bei ``strict_host_keys``)."""
+
+
 class SftpAuthError(SftpError):
     """Anmeldung abgelehnt (falsches oder fehlendes Passwort bzw. Schlüssel)."""
 
@@ -90,11 +94,13 @@ def open_client(
     known_hosts: Path | None = None,
     timeout: float = CONNECT_TIMEOUT,
     purpose: str | None = None,
+    strict_host_keys: bool = False,
 ):
     """Baut eine SSH-Verbindung mit den Daten einer Sesam-Verbindung auf (inkl. Identität und gespeichertem Passwort).
 
     ``password`` überschreibt das gespeicherte Passwort (z. B. nach einer Abfrage im Dialog).
     ``purpose`` erscheint in der Meldung, wenn die Verbindung einen Jump-Host nutzt (wird hier noch nicht unterstützt).
+    ``strict_host_keys``: unbekannte Host-Schlüssel nicht übernehmen, sondern ``SftpUnknownHostKey`` werfen.
     Liefert ``(SSHClient, effektive Verbindung)``; der Aufrufer schließt den Client.
     """
     if purpose is None:
@@ -126,7 +132,7 @@ def open_client(
             client.load_host_keys(str(known_hosts))
         except OSError:
             pass
-    client.set_missing_host_key_policy(_make_host_key_policy(known_hosts))
+    client.set_missing_host_key_policy(paramiko.RejectPolicy() if strict_host_keys else _make_host_key_policy(known_hosts))
 
     key_file = os.path.expanduser(eff.identity_file) if eff.identity_file else None
     # Mit Passwort und ohne Schlüsseldatei nur das Passwort versuchen: Jeder weitere Schlüssel aus ~/.ssh oder dem Agent zählt als
@@ -159,6 +165,8 @@ def open_client(
         raise SftpAuthError(tr("Der Schlüssel ist durch eine Passphrase geschützt.")) from exc
     except (paramiko.SSHException, OSError, EOFError) as exc:
         client.close()
+        if strict_host_keys and "not found in known_hosts" in str(exc):
+            raise SftpUnknownHostKey(tr("Der Host {host} ist noch nicht bekannt.", host=eff.host)) from exc
         if "No authentication methods" in str(exc):  # weder Passwort noch Schlüssel vorhanden
             raise SftpAuthError(tr("Es ist kein Passwort oder Schlüssel hinterlegt.")) from exc
         if "No existing session" in str(exc):  # die Gegenseite hat während der Anmeldung aufgelegt
