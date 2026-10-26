@@ -84,6 +84,8 @@ class WireGuardPopup(QWidget):
             if status.sudo_failed:
                 lay.addWidget(self._muted(tr("Das sudo-Passwort wurde nicht akzeptiert. Schalte die WireGuard-Anzeige in den "
                                              "Einstellungen aus und wieder ein, um es neu einzugeben.")))
+            elif status.sudo_error:
+                lay.addWidget(self._muted(tr("sudo wg show ist fehlgeschlagen: {error}", error=status.sudo_error)))
             else:
                 lay.addWidget(self._muted(tr("Endpunkt und Handshake liefert WireGuard nur mit Administratorrechten.")))
         self.setFixedWidth(max(340, self.sizeHint().width()))

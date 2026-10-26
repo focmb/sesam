@@ -61,6 +61,7 @@ class Status:
     state: str = UNKNOWN
     tunnels: list[Tunnel] = field(default_factory=list)
     sudo_failed: bool = False  # das hinterlegte sudo-Passwort wurde nicht akzeptiert
+    sudo_error: str = ""  # warum ``sudo wg show`` zuletzt scheiterte (für die Anzeige), obwohl das Passwort stimmt
 
 
 def status_of(tunnels: list[Tunnel]) -> Status:
@@ -267,6 +268,16 @@ def verify_sudo_password(password: str) -> bool:
     return proc is not None and proc.returncode == 0
 
 
+def _failure(proc: subprocess.CompletedProcess | None) -> str:
+    """Kurze Fehlerbeschreibung eines gescheiterten Aufrufs (erste Zeile von stderr, ohne das Passwort)."""
+    if proc is None:
+        return "Zeitüberschreitung oder sudo nicht startbar"
+    lines = [line.strip() for line in (proc.stderr or "").splitlines() if line.strip()]
+    if proc.returncode == 0:
+        return "unerwartete Ausgabe von wg"
+    return f"Code {proc.returncode}" + (f": {lines[-1][:160]}" if lines else "")
+
+
 class Elevation:
     """Optionales sudo-Passwort, mit dem ``wg show`` als root gefragt wird. Nur im Speicher; dauerhaft liegt es im Schlüsselbund.
 
@@ -278,6 +289,7 @@ class Elevation:
     def __init__(self, password: str = ""):
         self.password = password
         self.failed = False
+        self.error = ""
         self._cache: dict[str, tuple[float, Tunnel]] = {}
         self._retry_at = 0.0
 
@@ -303,11 +315,13 @@ class Elevation:
         proc = _run_full(["sudo", "-S", "-p", "", "--", "sh", "-c", script], input=self.password + "\n")
         tunnel = parse_show(proc.stdout, now) if proc is not None and proc.returncode == 0 else None
         if tunnel is None:
+            self.error = _failure(proc)
             if not verify_sudo_password(self.password):  # lag es am Passwort? Dann nicht weiter probieren
                 self.failed = True
             else:
                 self._retry_at = now + RETRY_AFTER
             return None
+        self.error = ""
         tunnel.name = name
         self._cache[name] = (now, tunnel)
         return replace(tunnel)
@@ -345,6 +359,7 @@ def detect(elevation: Elevation | None = None) -> Status:
             _fill(tunnel, elevation)
         status = status_of(tunnels)
         status.sudo_failed = bool(elevation is not None and elevation.failed)
+        status.sudo_error = elevation.error if elevation is not None and not status.sudo_failed else ""
         return status
     except Exception:  # noqa: BLE001 – eine Statusanzeige darf das Programm nie stören
         return Status(UNKNOWN, [])
