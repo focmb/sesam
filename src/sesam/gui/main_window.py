@@ -1466,8 +1466,8 @@ class MainWindow(QMainWindow):
         wird es wieder aus dem Schlüsselbund entfernt.
         """
         enabled = bool(enabled)
-        if enabled and not self.cfg.wireguard and wireguard.sudo_available():
-            self.wg_indicator.set_elevation(self._ask_sudo_password())
+        if enabled and not self.cfg.wireguard and wireguard.sudo_available() and wireguard._wg_executable():
+            self.wg_indicator.set_elevation(self._ask_sudo_password())  # ohne „wg“ gäbe es nichts zu entsperren
         elif not enabled:
             self.wg_indicator.set_elevation(None)
             try:

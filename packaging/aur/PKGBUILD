@@ -9,7 +9,8 @@ license=('MIT')
 depends=('python' 'pyside6' 'python-keyring' 'python-cryptography'
          'python-paramiko' 'openssh' 'hicolor-icon-theme')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
-optdepends=('gnome-keyring: Passwörter im Schlüsselbund speichern'
+optdepends=('wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige'
+            'gnome-keyring: Passwörter im Schlüsselbund speichern'
             'kwallet: Passwörter im Schlüsselbund speichern')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('f41f5d682936f1c64d17bb07dcbdf3d4fa18c882d2a0dd1851849ff998c6b890')

@@ -81,7 +81,9 @@ class WireGuardPopup(QWidget):
         for tunnel in status.tunnels:
             lay.addWidget(self._tunnel_box(tunnel, many=len(status.tunnels) > 1))
         if status.tunnels and not any(t.handshake_age is not None for t in status.tunnels):
-            if status.sudo_failed:
+            if status.wg_missing:
+                lay.addWidget(self._muted(tr("Endpunkt und Handshake brauchen das Programm „wg“ (Paket wireguard-tools).")))
+            elif status.sudo_failed:
                 lay.addWidget(self._muted(tr("Das sudo-Passwort wurde nicht akzeptiert. Schalte die WireGuard-Anzeige in den "
                                              "Einstellungen aus und wieder ein, um es neu einzugeben.")))
             elif status.sudo_error:

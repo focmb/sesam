@@ -243,6 +243,8 @@ EN: dict[str, str] = {
         "The sudo password was not accepted. Turn the WireGuard indicator off and on again in the settings to re-enter it.",
     "sudo-Passwort für Endpunkt und Handshake (optional).\nOhne Passwort zeigt Sesam die einfache Anzeige.":
         "sudo password for endpoint and handshake (optional).\nWithout a password Sesam shows the simple display.",
+    "Endpunkt und Handshake brauchen das Programm „wg“ (Paket wireguard-tools).":
+        "Endpoint and handshake need the “wg” program (package wireguard-tools).",
     "sudo wg show ist fehlgeschlagen: {error}": "sudo wg show failed: {error}",
     "WireGuard: einfache Anzeige (kein sudo-Passwort)": "WireGuard: simple display (no sudo password)",
     "WireGuard: sudo-Passwort nicht akzeptiert, einfache Anzeige": "WireGuard: sudo password not accepted, simple display",

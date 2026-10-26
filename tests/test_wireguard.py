@@ -221,6 +221,15 @@ class IndicatorTests(GuiTestCase):
         self.assertIn("sudo wg show ist fehlgeschlagen: Code 1: wg: nope", text)
         self.ind._popup.close()
 
+    def test_missing_wg_is_explained(self):
+        from PySide6.QtWidgets import QLabel
+
+        self.ind.set_status(Status(CONNECTED, [Tunnel("VZS", rx=1, tx=2)], wg_missing=True))
+        self.ind.click()
+        text = " ".join(label.text() for label in self.ind._popup.findChildren(QLabel))
+        self.assertIn("wireguard-tools", text)
+        self.ind._popup.close()
+
     def test_rejected_sudo_password_is_explained(self):
         from PySide6.QtWidgets import QLabel
 
@@ -595,9 +604,10 @@ class SudoPromptTests(GuiTestCase):
             patcher = mock.patch.object(passwords, name, fake)
             patcher.start()
             self.addCleanup(patcher.stop)
-        patcher = mock.patch.object(wireguard, "sudo_available", lambda: True)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for target, value in (("sudo_available", lambda: True), ("_wg_executable", lambda: "/usr/bin/wg")):
+            patcher = mock.patch.object(wireguard, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.w = self._window()
         self.addCleanup(self.w.close)
 
@@ -642,6 +652,14 @@ class SudoPromptTests(GuiTestCase):
         w = self._window()
         self.addCleanup(w.close)
         self.assertEqual(w.wg_indicator.elevation.password, "gespeichert")
+
+    def test_no_prompt_without_wg(self):
+        from PySide6.QtWidgets import QInputDialog
+
+        with mock.patch.object(wireguard, "_wg_executable", lambda: None), \
+                mock.patch.object(QInputDialog, "getText", side_effect=AssertionError("keine Abfrage")):
+            self.w.set_wireguard(True)
+        self.assertIsNone(self.w.wg_indicator.elevation)
 
     def test_no_prompt_without_sudo(self):
         from PySide6.QtWidgets import QInputDialog

@@ -61,6 +61,7 @@ class Status:
     state: str = UNKNOWN
     tunnels: list[Tunnel] = field(default_factory=list)
     sudo_failed: bool = False  # das hinterlegte sudo-Passwort wurde nicht akzeptiert
+    wg_missing: bool = False  # das Programm „wg“ (wireguard-tools) fehlt: Endpunkt und Handshake sind nicht erreichbar
     sudo_error: str = ""  # warum ``sudo wg show`` zuletzt scheiterte (für die Anzeige), obwohl das Passwort stimmt
 
 
@@ -364,6 +365,7 @@ def detect(elevation: Elevation | None = None) -> Status:
         for tunnel in tunnels:
             _fill(tunnel, elevation)
         status = status_of(tunnels)
+        status.wg_missing = _wg_executable() is None
         status.sudo_failed = bool(elevation is not None and elevation.failed)
         status.sudo_error = elevation.error if elevation is not None and not status.sudo_failed else ""
         return status
