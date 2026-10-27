@@ -130,6 +130,8 @@ Die Bilder zeigen Beispieldaten (erfundene Hosts) und wurden mit dem Qt-Plattfor
 
 ## Darstellung
 
+Der Dialog *Verbindung bearbeiten* ist in vier Reiter gegliedert: *Allgemein* (Name, Host, Gruppe, Farbe, Tags, Terminal, Notizen), *Zugang* (Identität, Benutzer, Port, Schlüssel, Passwort), *Erweitert* (Jump-Host, zusätzliche Optionen, Remote-Befehl, sudo) und *Baum-Erweiterungen* (Docker, Proxmox, Cisco). So passt er auch auf kleine Bildschirme.
+
 Es gibt keine Menüleiste: Alle Aktionen (Verbinden, Dateien, Neue Verbindung, Neue Gruppe, Bearbeiten, Duplizieren, Löschen, Synchronisieren, Synchronisation, Identitäten, Schlüssel, Terminals)
 stehen untereinander in einer Seitenleiste am rechten Rand (Strg+Q beendet das Programm, *Aus ~/.ssh/config importieren* steht im Rechtsklick-Menü der Verbindungsliste); die Tastenkürzel (Enter, Strg+N, F2, Entf, Strg+D, F5 …) gelten im ganzen Fenster.
 *Duplizieren* legt eine Kopie an und öffnet sie sofort zum Bearbeiten, der Name ist markiert und lässt sich gleich überschreiben; bricht man ab, bleibt die Kopie bestehen.
@@ -274,7 +276,7 @@ Beim Verbinden startet das Terminal `ssh` über einen kleinen Wrapper, der das P
 
 ## Docker-Container
 
-Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In der Verbindung (*Bearbeiten*) den Haken
+Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In der Verbindung (*Bearbeiten*, Reiter *Baum-Erweiterungen*) den Haken
 **Docker-Container dieses Hosts im Verbindungsbaum anzeigen** setzen; optional lassen sich Standard-Shell und -Benutzer für die Container festlegen.
 - **Im Baum:** Der Host bekommt einen Pfeil. Beim Aufklappen fragt Sesam den Host per SSH nach seinen Containern (`docker ps -a`) und zeigt sie als Unterelemente
   (Name, Image, Status). Gestoppte Container erscheinen ausgegraut. Erst beim Aufklappen wird verbunden; *Container aktualisieren* (Kontextmenü) lädt neu.
@@ -290,7 +292,7 @@ Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In 
 
 ## Proxmox
 
-Ist ein Host ein Proxmox-VE-Server, zeigt Sesam seine Gäste im Baum. In der Verbindung (*Bearbeiten*) den Haken
+Ist ein Host ein Proxmox-VE-Server, zeigt Sesam seine Gäste im Baum. In der Verbindung (*Bearbeiten*, Reiter *Baum-Erweiterungen*) den Haken
 **Proxmox-Gäste (VMs und LXC) dieses Hosts im Verbindungsbaum anzeigen** setzen (ersetzt die Docker-Anzeige); optional den Benutzer für VMs eintragen (Standard `root`).
 - **Im Baum:** Beim Aufklappen fragt Sesam den Host per SSH als `root` mit `pvesh` nach allen VMs und LXC-Containern (auch anderer Cluster-Knoten). Laufende Gäste sind farbig, gestoppte grau; Vorlagen werden ausgeblendet.
 - **LXC-Container:** Doppelklick öffnet im Terminal `pct enter <ID>` über den Host (bei Gästen anderer Knoten per SSH über diesen Knoten).
@@ -300,7 +302,7 @@ Ist ein Host ein Proxmox-VE-Server, zeigt Sesam seine Gäste im Baum. In der Ver
 
 ## Cisco-Geräte
 
-Für Switches mit Cisco IOS, IOS-XE oder NX-OS zeigt Sesam die Ports im Baum. In der Verbindung (*Bearbeiten*) den Haken
+Für Switches mit Cisco IOS, IOS-XE oder NX-OS zeigt Sesam die Ports im Baum. In der Verbindung (*Bearbeiten*, Reiter *Baum-Erweiterungen*) den Haken
 **Ports dieses Cisco-Geräts … im Verbindungsbaum anzeigen** setzen (ersetzt die Docker- und Proxmox-Anzeige). Der Benutzer braucht Privilegstufe 15.
 - **Im Baum:** Beim Aufklappen öffnet Sesam per SSH eine Shell auf dem Gerät und liest `show interfaces status`. Jeder Port zeigt Zustand (*verbunden*, *notconnect*, *aus*, *err-disabled* …), Beschreibung, VLAN und Geschwindigkeit.
 - **Ein-/Ausschalten:** Rechtsklick → *Port ausschalten* (`shutdown`, mit Rückfrage) bzw. *Port einschalten* (`no shutdown`).
@@ -340,7 +342,13 @@ Fensterbreiten bleiben pro Gerät). Das Tool nutzt das installierte `git`. Die A
 - **Automatisch:** beim Start und kurz nach jeder Änderung. *F5* bzw. *Jetzt synchronisieren* löst den Abgleich manuell aus; der Status steht rechts unten.
 - **Repository-Aufbau:** eine JSON-Datei pro Eintrag (`connections/`, `identities/`, `ssh_keys/`, `snippets/`), `groups.json`, `meta.json`. Das Repository darf privat sein, ist aber für Klartext-Daten wie Hostnamen und Benutzer sichtbar.
 - **Passwörter** werden nur verschlüsselt abgelegt (scrypt + AES-256-GCM) und auf jedem Gerät in den Schlüsselbund geschrieben. Das **Sync-Passwort** legst du auf dem ersten Gerät fest und gibst es auf jedem weiteren ein. Es lässt sich nicht wiederherstellen und auch nicht ohne Weiteres ändern. Ohne Passwort-Sync bleiben vorhandene verschlüsselte Einträge im Repository erhalten.
-- **Zusammenführen:** je Eintrag ein Dreiwege-Vergleich mit dem Stand des letzten Abgleichs. Änderungen an verschiedenen Einträgen werden kombiniert, Löschungen übernommen. Wurde derselbe Eintrag auf zwei Geräten unterschiedlich geändert, fragt Sesam, welche Version gelten soll: die lokale (wird danach auf den Server hochgeladen) oder die Server-Version (ersetzt die lokale). Es entstehen keine Kopien.
+- **Zusammenführen:** je Eintrag ein Dreiwege-Vergleich mit dem Stand des letzten Abgleichs. Änderungen an verschiedenen Einträgen werden kombiniert, Löschungen übernommen. Wurde derselbe Eintrag auf zwei Geräten unterschiedlich geändert, fragt Sesam, welche Version gelten soll: die lokale (wird danach auf den Server hochgeladen) oder die Server-Version (ersetzt die lokale). Es entstehen keine Kopien. Mit *Abbrechen* wird der Abgleich ohne Änderung beendet und beim nächsten Mal erneut gefragt.
+
+
+  | Hell | Dunkel |
+  |---|---|
+  | ![Konflikt-Dialog (hell)](docs/screenshots/sync-konflikt-hell.png) | ![Konflikt-Dialog (dunkel)](docs/screenshots/sync-konflikt-dunkel.png) |
+
 - Wird eine Identität oder ein Schlüssel gelöscht, verlieren Verbindungen, die sie nutzen, den Verweis.
 - Leeres Repository anlegen (z. B. bei GitHub/GitLab/Gitea) genügt, das Tool erstellt den Branch selbst.
 

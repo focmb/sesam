@@ -132,6 +132,8 @@ The images show sample data (made-up hosts) and were created with the Qt platfor
 
 ## Appearance
 
+The *Edit connection* dialog is split into four tabs: *General* (name, host, group, color, tags, terminal, notes), *Access* (identity, user, port, key, password), *Advanced* (jump host, extra options, remote command, sudo) and *Tree extensions* (Docker, Proxmox, Cisco). This keeps it usable on small screens.
+
 There is no menu bar: all actions (Connect, Files, New connection, New group, Edit, Duplicate, Delete, Sync now, Synchronization, Identities, Keys, Terminals)
 are stacked in a sidebar on the right edge (Ctrl+Q quits the program; *Import from ~/.ssh/config* is in the right-click menu of the connection list); the keyboard shortcuts (Enter, Ctrl+N, F2, Del, Ctrl+D, F5 …) work in the whole window.
 *Duplicate* creates a copy and opens it for editing right away with the name selected so you can overwrite it; if you cancel, the copy remains.
@@ -276,7 +278,7 @@ When connecting, the terminal starts `ssh` through a small wrapper that supplies
 
 ## Docker containers
 
-If Docker runs on a host, you can connect straight into a container. In the connection (*Edit*) tick
+If Docker runs on a host, you can connect straight into a container. In the connection (*Edit*, tab *Tree extensions*) tick
 **Show this host’s Docker containers in the connection tree**; optionally set a default shell and user for the containers.
 - **In the tree:** the host gets an arrow. On expanding, Sesam asks the host over SSH for its containers (`docker ps -a`) and shows them as child items
   (name, image, status). Stopped containers are greyed out. It only connects on expanding; *Refresh containers* (context menu) reloads.
@@ -292,7 +294,7 @@ If Docker runs on a host, you can connect straight into a container. In the conn
 
 ## Proxmox
 
-If a host is a Proxmox VE server, Sesam shows its guests in the tree. In the connection (*Edit*) tick
+If a host is a Proxmox VE server, Sesam shows its guests in the tree. In the connection (*Edit*, tab *Tree extensions*) tick
 **Show this host’s Proxmox guests (VMs and LXC) in the connection tree** (replaces the Docker view); optionally enter the user for VMs (default `root`).
 - **In the tree:** on expanding, Sesam asks the host over SSH as `root` with `pvesh` for all VMs and LXC containers (including other cluster nodes). Running guests are coloured, stopped ones grey; templates are hidden.
 - **LXC containers:** double-click opens `pct enter <ID>` in the terminal through the host (for guests on other nodes via SSH through that node).
@@ -302,7 +304,7 @@ If a host is a Proxmox VE server, Sesam shows its guests in the tree. In the con
 
 ## Cisco devices
 
-For switches running Cisco IOS, IOS-XE or NX-OS, Sesam shows the ports in the tree. In the connection (*Edit*) tick
+For switches running Cisco IOS, IOS-XE or NX-OS, Sesam shows the ports in the tree. In the connection (*Edit*, tab *Tree extensions*) tick
 **Show this Cisco device’s ports … in the connection tree** (replaces the Docker and Proxmox views). The user needs privilege level 15.
 - **In the tree:** on expanding, Sesam opens an SSH shell on the device and reads `show interfaces status`. Each port shows its state (*connected*, *notconnect*, *off*, *err-disabled* …), description, VLAN and speed.
 - **Switch on/off:** right-click → *Shut down port* (`shutdown`, with confirmation) or *Enable port* (`no shutdown`).
@@ -342,7 +344,13 @@ window widths stay per device). The tool uses the installed `git`. Login runs in
 - **Automatic:** at startup and shortly after every change. *F5* or *Sync now* triggers the sync manually; the status is shown at the bottom right.
 - **Repository layout:** one JSON file per entry (`connections/`, `identities/`, `ssh_keys/`, `snippets/`), `groups.json`, `meta.json`. The repository may be private, but plain-text data such as host names and users is visible in it.
 - **Passwords** are stored only encrypted (scrypt + AES-256-GCM) and written to the keyring on every device. You set the **sync password** on the first device and enter it on every further one. It cannot be recovered and cannot easily be changed. Without password sync, existing encrypted entries in the repository are kept.
-- **Merging:** a three-way comparison per entry against the state of the last sync. Changes to different entries are combined, deletions are applied. If the same entry was changed differently on two devices, Sesam asks which version to use: the local one (uploaded to the server afterwards) or the server version (replaces the local one). No copies are created.
+- **Merging:** a three-way comparison per entry against the state of the last sync. Changes to different entries are combined, deletions are applied. If the same entry was changed differently on two devices, Sesam asks which version to use: the local one (uploaded to the server afterwards) or the server version (replaces the local one). No copies are created. *Cancel* ends the sync without any change and asks again next time.
+
+
+  | Light | Dark |
+  |---|---|
+  | ![Conflict dialog (light)](docs/screenshots/sync-konflikt-hell.png) | ![Conflict dialog (dark)](docs/screenshots/sync-konflikt-dunkel.png) |
+
 - If an identity or key is deleted, connections that use it lose the reference.
 - Creating an empty repository (e.g. on GitHub/GitLab/Gitea) is enough; the tool creates the branch itself.
 

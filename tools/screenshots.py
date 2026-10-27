@@ -33,7 +33,7 @@ from sesam.gui import style, theme  # noqa: E402
 from sesam.models import Config, Connection, Snippet, Terminal  # noqa: E402
 
 MODES = (("light", "hell"), ("dark", "dunkel"))
-PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets")
+PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets", "synckonflikt")
 
 
 def demo_config() -> tuple[Config, dict[str, Connection]]:
@@ -127,6 +127,22 @@ def connection_dialog(cfg, conns, out: Path) -> None:
     d.close()
 
 
+def sync_conflict_dialog(cfg, conns, out: Path, label: str) -> None:
+    from dataclasses import replace
+
+    from sesam.gui.sync_conflict_dialog import SyncConflictDialog
+    from sesam.syncing import Conflict, item_from_obj
+
+    def conflict(key: str, **remote_changes) -> Conflict:
+        local = conns[key]
+        return Conflict(("c", local.id), item_from_obj("c", local, None), item_from_obj("c", replace(local, **remote_changes), None), local.id)
+
+    d = SyncConflictDialog([conflict("nas", port=22, user="admin"), conflict("web1", host="web-01.example.org")])
+    d.adjustSize()
+    grab(d, out / f"sync-konflikt-{label}.png")
+    d.close()
+
+
 def snippets_dialog(cfg, conns, out: Path, label: str) -> None:
     from sesam.gui.snippets_dialog import SnippetsDialog
 
@@ -208,6 +224,8 @@ def main() -> int:
                 connection_dialog(cfg, conns, out)
             if "snippets" in parts:
                 snippets_dialog(cfg, conns, out, label)
+            if "synckonflikt" in parts:
+                sync_conflict_dialog(cfg, conns, out, label)
             if "dateibrowser" in parts:
                 sftp_window(cfg, conns, tmp, out, label)
     return 0
