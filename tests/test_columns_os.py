@@ -72,6 +72,10 @@ class ParseTests(unittest.TestCase):
             "Linux 6.1.0-18-amd64\n": "Linux 6.1.0-18-amd64",
             "\nMicrosoft Windows [Version 10.0.19045.4291]\n": "Windows 10.0.19045.4291",
             "": "", "   \n": "",
+            "Cisco IOS Software, C3560CX Software (C3560CX-UNIVERSALK9-M), Version 15.2(7)E14, RELEASE SOFTWARE (fc6)\n":
+                "Cisco IOS 15.2(7)E14 (C3560CX)",
+            "Cisco IOS XE Software, Version 17.09.04a\nCisco IOS Software [Cupertino], X\n":
+                "Cisco IOS XE Software, Version 17.09.04a",
             "% Invalid input detected at '^' marker.": "",
             "sh: 1: sw_vers: not found": "",
             "Ubuntu\x1b[31m 24\x00": "Ubuntu [31m 24",
@@ -106,7 +110,7 @@ class DetectTests(unittest.TestCase):
         self.assertEqual((found, client.commands),
                          ("Cisco IOS XE Software, Version 17.09.04a",
                           [osinfo.COMMAND, osinfo.WINDOWS_COMMAND, osinfo.CISCO_COMMAND]))
-        self.assertEqual(osinfo.CISCO_COMMAND, "show version | include ^Cisco IOS XE")
+        self.assertEqual(osinfo.CISCO_COMMAND, "show version | include ^Cisco IOS")
 
     def test_cisco_closes_session_on_unknown_command(self):
         """IOS XE kappt die Sitzung nach ``sh -c``: es wird neu verbunden und der Cisco-Befehl trotzdem versucht."""

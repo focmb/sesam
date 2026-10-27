@@ -1,4 +1,4 @@
-"""Betriebssystem eines Hosts ermitteln (``/etc/os-release``, macOS, ``uname``, Windows ``ver``, Cisco IOS XE ``show version``).
+"""Betriebssystem eines Hosts ermitteln (``/etc/os-release``, macOS, ``uname``, Windows ``ver``, Cisco IOS/IOS XE ``show version``).
 
 Läuft über eine zweite SSH-Verbindung im Hintergrund (paramiko), nicht im Terminal des Anwenders. Das Ergebnis steht danach in
 ``Connection.os_info`` und wird mitgespeichert, damit es bei jedem Start sofort da ist.
@@ -23,9 +23,10 @@ SCRIPT = (
 )
 COMMAND = "sh -c " + shlex.quote(SCRIPT)  # unabhängig von der Login-Shell des Benutzers (fish, csh, …)
 WINDOWS_COMMAND = "ver"  # OpenSSH unter Windows (cmd)
-CISCO_COMMAND = "show version | include ^Cisco IOS XE"  # Cisco-Switches (IOS XE): "sh -c" ist dort ungültig
+CISCO_COMMAND = "show version | include ^Cisco IOS"  # Cisco-Switches (IOS und IOS XE): "sh -c" ist dort ungültig
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_CISCO_IOS = re.compile(r"cisco ios software, (?P<model>\S+) software .*?version (?P<version>[^\s,]+)", re.IGNORECASE)
 _ERROR_WORDS = ("not found", "invalid", "unknown command", "not recognized", "nicht gefunden", "syntax error")
 
 
@@ -41,6 +42,9 @@ def parse(output: str) -> str:
         windows = re.match(r"microsoft windows \[(?:version|versie)\s+([\d.]+)\]", low)
         if windows:
             return f"Windows {windows.group(1)}"
+        ios = _CISCO_IOS.match(line)
+        if ios:  # "Cisco IOS Software, C3560CX Software (…), Version 15.2(7)E14, RELEASE SOFTWARE" ist zu lang
+            return f"Cisco IOS {ios.group('version')} ({ios.group('model')})"[:MAX_LENGTH]
         return line[:MAX_LENGTH]
     return ""
 
