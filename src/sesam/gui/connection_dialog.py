@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QCompleter, QDialog, QLabel, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
-    QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from .. import colors
@@ -48,7 +48,7 @@ class ConnectionDialog(QDialog):
         self.save_callback = save_callback or (lambda: None)
         self.conn = conn or Connection(name="", host="")
         self.setWindowTitle(tr("Verbindung bearbeiten") if conn else tr("Neue Verbindung"))
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(700)
 
         self.name = QLineEdit(self.conn.name)
         self.host = QLineEdit(self.conn.host)
@@ -187,36 +187,56 @@ class ConnectionDialog(QDialog):
         self.notes = QPlainTextEdit(self.conn.notes)
         self.notes.setFixedHeight(70)
 
-        form = QFormLayout()
+        def make_form() -> QFormLayout:
+            f = QFormLayout()
+            f.setVerticalSpacing(8)
+            return f
 
-        form.setVerticalSpacing(8)
-        form.addRow(tr("Name*"), self.name)
-        form.addRow(tr("Host*"), self.host)
-        form.addRow(tr("Identität"), identity_pick)
-        form.addRow("", self.identity_info)
-        form.addRow(tr("Benutzer"), self.user)
-        form.addRow(tr("Port"), self.port)
-        form.addRow(tr("Gespeicherter Schlüssel"), self.key_combo)
-        form.addRow(tr("Schlüsseldatei"), identity_row)
-        form.addRow(tr("Passwort"), self.password)
-        form.addRow("", self.clear_password)
-        form.addRow(tr("Jump-Host"), self.jump)
-        form.addRow(tr("Zusätzliche Optionen"), self.extra)
-        form.addRow(tr("Remote-Befehl"), self.remote)
-        form.addRow(tr("Mit sudo"), self.sudo_mode)
-        form.addRow(tr("sudo als Benutzer"), self.sudo_user)
-        form.addRow("", self.sudo_pw)
-        form.addRow(tr("Docker"), self.docker)
-        form.addRow(tr("Shell im Container"), self.docker_shell)
-        form.addRow(tr("Benutzer im Container"), self.docker_user)
-        form.addRow(tr("Proxmox"), self.proxmox)
-        form.addRow(tr("Benutzer in VMs"), self.proxmox_vm_user)
-        form.addRow(tr("Cisco"), self.cisco)
-        form.addRow(tr("Gruppe"), self.group)
-        form.addRow(tr("Farbe"), self.color)
-        form.addRow(tr("Tags"), self.tags)
-        form.addRow(tr("Terminal"), self.terminal)
-        form.addRow(tr("Notizen"), self.notes)
+        def make_page(f: QFormLayout) -> QWidget:
+            page = QWidget()
+            page.setLayout(f)
+            return page
+
+        general = make_form()
+        general.addRow(tr("Name*"), self.name)
+        general.addRow(tr("Host*"), self.host)
+        general.addRow(tr("Gruppe"), self.group)
+        general.addRow(tr("Farbe"), self.color)
+        general.addRow(tr("Tags"), self.tags)
+        general.addRow(tr("Terminal"), self.terminal)
+        general.addRow(tr("Notizen"), self.notes)
+
+        access = make_form()
+        access.addRow(tr("Identität"), identity_pick)
+        access.addRow("", self.identity_info)
+        access.addRow(tr("Benutzer"), self.user)
+        access.addRow(tr("Port"), self.port)
+        access.addRow(tr("Gespeicherter Schlüssel"), self.key_combo)
+        access.addRow(tr("Schlüsseldatei"), identity_row)
+        access.addRow(tr("Passwort"), self.password)
+        access.addRow("", self.clear_password)
+
+        advanced = make_form()
+        advanced.addRow(tr("Jump-Host"), self.jump)
+        advanced.addRow(tr("Zusätzliche Optionen"), self.extra)
+        advanced.addRow(tr("Remote-Befehl"), self.remote)
+        advanced.addRow(tr("Mit sudo"), self.sudo_mode)
+        advanced.addRow(tr("sudo als Benutzer"), self.sudo_user)
+        advanced.addRow("", self.sudo_pw)
+
+        tree = make_form()
+        tree.addRow(tr("Docker"), self.docker)
+        tree.addRow(tr("Shell im Container"), self.docker_shell)
+        tree.addRow(tr("Benutzer im Container"), self.docker_user)
+        tree.addRow(tr("Proxmox"), self.proxmox)
+        tree.addRow(tr("Benutzer in VMs"), self.proxmox_vm_user)
+        tree.addRow(tr("Cisco"), self.cisco)
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(make_page(general), tr("Allgemein"))
+        self.tabs.addTab(make_page(access), tr("Zugang"))
+        self.tabs.addTab(make_page(advanced), tr("Erweitert"))
+        self.tabs.addTab(make_page(tree), tr("Baum-Erweiterungen"))
 
         self._identity_changed()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -225,7 +245,7 @@ class ConnectionDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 18, 20, 18)
         layout.setSpacing(12)
-        layout.addLayout(form)
+        layout.addWidget(self.tabs)
         layout.addWidget(buttons)
 
     def _fill_identities(self, select: str = ""):
@@ -272,6 +292,8 @@ class ConnectionDialog(QDialog):
 
     def _accept(self):
         if not self.name.text().strip() or not self.host.text().strip():
+            self.tabs.setCurrentIndex(0)
+            (self.name if not self.name.text().strip() else self.host).setFocus()
             QMessageBox.warning(self, tr("Eingabe unvollständig"), tr("Name und Host sind Pflichtfelder."))
             return
         c = self.conn
