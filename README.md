@@ -17,6 +17,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 
 - [Funktionen](#funktionen)
 - [Start](#start)
+- [Aus dem Release-Archiv installieren (Linux)](#aus-dem-release-archiv-installieren-linux)
 - [Screenshots](#screenshots)
 - [Darstellung](#darstellung)
 - [Im Anwendungsmenü / Dash installieren (Linux)](#im-anwendungsmenü--dash-installieren-linux)
@@ -65,7 +66,49 @@ pip install -e .
 sesam                            # oder: python -m sesam
 ```
 
-Für einen Starter im Anwendungsmenü/Dash siehe „Im Anwendungsmenü / Dash installieren“.
+Ohne Python-Umgebung: siehe „Aus dem Release-Archiv installieren“. Für einen Starter im Anwendungsmenü/Dash siehe „Im Anwendungsmenü / Dash installieren“.
+
+## Aus dem Release-Archiv installieren (Linux)
+
+Auf der [Release-Seite](https://github.com/focmb/sesam/releases) liegt zu jeder Version `sesam-<Version>-linux-x86_64.tar.gz`: ein fertig
+gebautes Programm, das ohne installiertes Python läuft (gebaut auf Ubuntu 22.04). Nicht zu verwechseln mit dem Archiv „Source code (tar.gz)“,
+das GitHub automatisch anbietet und das nur den Quelltext enthält.
+
+**Voraussetzungen:** die üblichen Qt-Bibliotheken sowie `openssh-client` und `git`. Unter Debian/Ubuntu:
+
+```bash
+sudo apt install libxcb-cursor0 libegl1 openssh-client git
+```
+
+Optional vorher die Prüfsumme kontrollieren (Archiv und `SHA256SUMS` aus demselben Release im selben Ordner):
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+**Variante A: mit Starter im Anwendungsmenü/Dash (empfohlen).** Das Skript `install.sh` liegt im Quelltext, nicht im Archiv. Es erwartet das
+entpackte Programm im Ordner `dist/` des Repositorys:
+
+```bash
+git clone https://github.com/focmb/sesam.git && cd sesam
+mkdir -p dist && tar -xzf ~/Downloads/sesam-<Version>-linux-x86_64.tar.gz -C dist
+./packaging/linux/install.sh
+```
+
+Das Programm liegt danach in `~/.local/share/sesam-app`, der Befehl `sesam` in `~/.local/bin` (bei manchen Distributionen muss der Ordner erst
+im `PATH` stehen), dazu kommen Starter und Icon. Für ein Update: im Repository `git pull`, `rm -rf dist/sesam`, das neue Archiv wie oben
+entpacken und `install.sh` erneut ausführen. Entfernen mit `./packaging/linux/install.sh --uninstall`; die Konfiguration in `~/.config/sesam` bleibt erhalten.
+
+**Variante B: nur entpacken und starten (ohne Menüeintrag).**
+
+```bash
+mkdir -p ~/opt && tar -xzf ~/Downloads/sesam-<Version>-linux-x86_64.tar.gz -C ~/opt
+~/opt/sesam/sesam                                  # starten
+ln -s ~/opt/sesam/sesam ~/.local/bin/sesam         # optional: Befehl „sesam“ im Terminal
+```
+
+Ein Update ist dasselbe noch einmal mit dem neuen Archiv (vorher `rm -rf ~/opt/sesam`). Fehlt beim Start eine Bibliothek, zeigt
+`QT_DEBUG_PLUGINS=1 ~/opt/sesam/sesam`, welche. Unter Arch Linux/Manjaro ist das Pacman-Paket aus `packaging/aur` bequemer (siehe „Programm bauen“).
 
 ## Screenshots
 
@@ -114,7 +157,7 @@ Ein Skript legt Sesam für deinen Benutzer an (ohne root): Starter im Anwendungs
 
 ```bash
 ./packaging/linux/install.sh --dev        # startet direkt aus dem Projektordner (.venv), immer aktueller Code
-./packaging/linux/install.sh              # oder: aus dem gebauten Programm (dist/sesam, siehe „Programm bauen“)
+./packaging/linux/install.sh              # oder: aus dem gebauten Programm (dist/sesam, siehe „Programm bauen“ und „Aus dem Release-Archiv installieren“)
 ./packaging/linux/install.sh --uninstall  # entfernt alles wieder; ~/.config/sesam bleibt erhalten
 ```
 
