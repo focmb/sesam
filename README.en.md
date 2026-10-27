@@ -342,7 +342,7 @@ window widths stay per device). The tool uses the installed `git`. Login runs in
 - **Automatic:** at startup and shortly after every change. *F5* or *Sync now* triggers the sync manually; the status is shown at the bottom right.
 - **Repository layout:** one JSON file per entry (`connections/`, `identities/`, `ssh_keys/`, `snippets/`), `groups.json`, `meta.json`. The repository may be private, but plain-text data such as host names and users is visible in it.
 - **Passwords** are stored only encrypted (scrypt + AES-256-GCM) and written to the keyring on every device. You set the **sync password** on the first device and enter it on every further one. It cannot be recovered and cannot easily be changed. Without password sync, existing encrypted entries in the repository are kept.
-- **Merging:** a three-way comparison per entry against the state of the last sync. Changes to different entries are combined, deletions are applied. If the same entry was changed differently on two devices, your local version stays and the other appears as “… (conflict)”.
+- **Merging:** a three-way comparison per entry against the state of the last sync. Changes to different entries are combined, deletions are applied. If the same entry was changed differently on two devices, Sesam asks which version to use: the local one (uploaded to the server afterwards) or the server version (replaces the local one). No copies are created.
 - If an identity or key is deleted, connections that use it lose the reference.
 - Creating an empty repository (e.g. on GitHub/GitLab/Gitea) is enough; the tool creates the branch itself.
 

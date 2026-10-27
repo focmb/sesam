@@ -162,7 +162,7 @@ class EngineTests(unittest.TestCase):
         self.assertFalse(repB.pushed)
         self.assertEqual(sB.get(c.id), "neu")
 
-    def test_conflict_keeps_local_and_remote_copy(self):
+    def conflict_setup(self):
         cfgA, A, sA = self.device("A")
         a = self.add_conn(cfgA, sA, "gemeinsam")
         A.run(cfgA)
@@ -171,12 +171,49 @@ class EngineTests(unittest.TestCase):
         a.host = "von-a"
         A.run(cfgA)
         next(c for c in cfgB.connections).host = "von-b"
+        return cfgA, A, cfgB, B
+
+    def test_conflict_without_resolver_keeps_local_and_makes_no_copy(self):
+        cfgA, A, cfgB, B = self.conflict_setup()
         rep = B.run(cfgB)
         self.assertEqual(rep.conflicts, ["gemeinsam"])
-        hosts = {c.name: c.host for c in cfgB.connections}
-        self.assertEqual(hosts, {"gemeinsam": "von-b", "gemeinsam (Konflikt)": "von-a"})
+        self.assertEqual({c.name: c.host for c in cfgB.connections}, {"gemeinsam": "von-b"})
+        A.run(cfgA)  # lokale Version von B wurde hochgeladen
+        self.assertEqual({c.name: c.host for c in cfgA.connections}, {"gemeinsam": "von-b"})
+
+    def test_conflict_choose_local_uploads_local_version(self):
+        cfgA, A, cfgB, B = self.conflict_setup()
+        asked = []
+
+        def resolve(conflicts):
+            asked.append([(c.name, c.kind, c.differences()) for c in conflicts])
+            return {c.token: "local" for c in conflicts}
+
+        rep = B.run(cfgB, resolve=resolve)
+        self.assertEqual(asked, [[("gemeinsam", "c", [("host", "von-b", "von-a")])]])
+        self.assertTrue(rep.pushed)
+        self.assertEqual(rep.kept_remote, [])
+        self.assertEqual({c.name: c.host for c in cfgB.connections}, {"gemeinsam": "von-b"})
         A.run(cfgA)
-        self.assertEqual(len(cfgA.connections), 2)
+        self.assertEqual({c.name: c.host for c in cfgA.connections}, {"gemeinsam": "von-b"})
+
+    def test_conflict_choose_remote_replaces_local_version(self):
+        cfgA, A, cfgB, B = self.conflict_setup()
+        rep = B.run(cfgB, resolve=lambda cs: {c.token: "remote" for c in cs})
+        self.assertEqual(rep.kept_remote, ["gemeinsam"])
+        self.assertEqual({c.name: c.host for c in cfgB.connections}, {"gemeinsam": "von-a"})
+        rep = A.run(cfgA)
+        self.assertFalse(rep.pushed)
+        self.assertEqual({c.name: c.host for c in cfgA.connections}, {"gemeinsam": "von-a"})
+        self.assertFalse(B.run(cfgB).conflicts)  # danach kein Konflikt mehr
+
+    def test_conflict_cancel_changes_nothing(self):
+        cfgA, A, cfgB, B = self.conflict_setup()
+        with self.assertRaises(SyncError):
+            B.run(cfgB, resolve=lambda cs: None)
+        self.assertEqual({c.name: c.host for c in cfgB.connections}, {"gemeinsam": "von-b"})
+        rep = B.run(cfgB, resolve=lambda cs: {c.token: "local" for c in cs})  # Konflikt besteht weiter
+        self.assertTrue(rep.pushed)
 
     def test_wrong_passphrase_and_missing_passphrase(self):
         cfgA, A, sA = self.device("A")

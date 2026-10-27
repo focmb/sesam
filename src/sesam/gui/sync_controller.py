@@ -6,7 +6,7 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal
 
 from .. import passwords, syncing
 from ..models import Config
-from ..syncing import SyncEngine, SyncError, SyncRetry
+from ..syncing import Conflict, SyncEngine, SyncError, SyncRetry
 from ..i18n import tr
 
 
@@ -42,11 +42,14 @@ class SyncController(QObject):
         save_cfg: Callable[[], None],
         parent=None,
         engine_factory: Callable[[], SyncEngine] | None = None,
+        resolver: Callable[[list[Conflict]], dict[str, str] | None] | None = None,
     ):
         super().__init__(parent)
         self.cfg = cfg
         self.save_cfg = save_cfg
         self.engine_factory = engine_factory or self._default_engine
+        self.resolver = resolver  # fragt bei Konflikten, welche Version gelten soll (None = lokal behalten)
+        self._decisions: dict[str, str] = {}  # Antworten dieses Abgleichs, damit ein Wiederholungsversuch nicht erneut fragt
         self.busy = False
         self.pending = False
         self._manual = False
@@ -91,6 +94,7 @@ class SyncController(QObject):
         self.busy = True
         self._manual = manual
         self._retries = 0
+        self._decisions = {}
         self._start()
 
     # ---- Ablauf ----
@@ -116,7 +120,7 @@ class SyncController(QObject):
             return
         self._applying = True
         try:
-            report = self._engine.merge(self.cfg, remote)
+            report = self._engine.merge(self.cfg, remote, self._resolve if self.resolver else None)
         except Exception as err:  # noqa: BLE001
             self._finish(None, err)
             return
@@ -125,6 +129,15 @@ class SyncController(QObject):
         if report.local_changed:
             self.cfg_changed.emit()
         self._run_job(self._engine.push, lambda pushed, err: self._after_push(report, pushed, err))
+
+    def _resolve(self, conflicts: list[Conflict]):
+        open_ = [c for c in conflicts if c.token not in self._decisions]
+        if open_:
+            answer = self.resolver(open_)
+            if answer is None:
+                return None
+            self._decisions.update(answer)
+        return dict(self._decisions)
 
     def _after_push(self, report, pushed, exc) -> None:
         if isinstance(exc, SyncRetry) and self._retries < self.MAX_RETRIES:

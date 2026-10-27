@@ -8,8 +8,10 @@ verschlüsselt im jeweiligen Eintrag (``password_enc``). Das lokale Git-Verzeich
 und wird bei jedem Abgleich auf den Stand des Servers gesetzt.
 
 Zusammenführung: Dreiwege-Vergleich je Eintrag (lokal / Server / Stand des letzten erfolgreichen Abgleichs).
-Löschungen werden übernommen; wurde derselbe Eintrag auf beiden Seiten verschieden geändert, gewinnt die lokale
-Version und die Server-Version bleibt als „… (Konflikt)“ erhalten.
+Löschungen werden übernommen; wurde derselbe Eintrag auf beiden Seiten verschieden geändert, ist das ein Konflikt:
+merge() fragt dann über den Rückruf ``resolve`` je Eintrag, ob die lokale oder die Server-Version gelten soll.
+Die lokale Version wird danach erneut auf den Server hochgeladen, die Server-Version ersetzt die lokale.
+Ohne Rückruf (z. B. ohne Oberfläche) bleibt die lokale Version.
 
 Ablauf: fetch() (Netzwerk) -> merge() (lokal, verändert die Konfiguration) -> push() (Netzwerk).
 """
@@ -30,7 +32,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from . import keystore, passwords, runtime, storage
-from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings, new_id
+from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings
 from .i18n import tr
 
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
@@ -165,6 +167,38 @@ def merge_items(base: dict, local: dict, remote: dict, h: Callable[[Item], str])
     return result, conflicts
 
 
+LOCAL, REMOTE = "local", "remote"
+
+
+@dataclass
+class Conflict:
+    """Ein Eintrag, der lokal und auf dem Server unterschiedlich geändert wurde."""
+
+    key: tuple[str, str]
+    local: Item
+    remote: Item
+    token: str  # identifiziert genau diese Konstellation (Eintrag und beide Stände)
+
+    @property
+    def kind(self) -> str:
+        return self.key[0]
+
+    @property
+    def name(self) -> str:
+        return str(self.local.data.get("name") or self.remote.data.get("name") or self.key[1])
+
+    def differences(self) -> list[tuple[str, object, object]]:
+        """(Feld, lokaler Wert, Server-Wert) der unterschiedlichen Felder; Passwörter nur als Feld ohne Werte."""
+        out: list[tuple[str, object, object]] = []
+        for f in sorted(set(self.local.data) | set(self.remote.data)):
+            lv, rv = self.local.data.get(f), self.remote.data.get(f)
+            if lv != rv:
+                out.append((f, lv, rv))
+        if self.local.pw != self.remote.pw:
+            out.append(("password", None, None))
+        return out
+
+
 def merge_sets(base: set, local: set, remote: set) -> set:
     return (base | (local - base) | (remote - base)) - (base - local) - (base - remote)
 
@@ -266,6 +300,7 @@ class SyncReport:
     updated: int = 0
     removed: int = 0
     conflicts: list[str] = field(default_factory=list)
+    kept_remote: list[str] = field(default_factory=list)  # Konflikte, bei denen die Server-Version gewählt wurde
     local_changed: bool = False
     committed: bool = False
     pushed: bool = False
@@ -410,7 +445,14 @@ class SyncEngine:
                 items[(kind, o.id)] = item
         return items
 
-    def merge(self, cfg: Config, remote: RemoteState | None = None) -> SyncReport:
+    def merge(
+        self,
+        cfg: Config,
+        remote: RemoteState | None = None,
+        resolve: Callable[[list[Conflict]], dict[str, str] | None] | None = None,
+    ) -> SyncReport:
+        """Führt lokal und Server zusammen. ``resolve`` bekommt die Konflikte und liefert je ``Conflict.token``
+        ``LOCAL`` oder ``REMOTE`` (fehlend = lokal) oder ``None`` zum Abbrechen."""
         remote = remote or self._remote
         if remote is None:
             raise SyncError("fetch() muss vor merge() laufen.")
@@ -431,14 +473,24 @@ class SyncEngine:
             # Passwort fehlt lokal im Schlüsselbund: nicht als „gelöscht“ auf den Server übertragen, sondern wiederherstellen
             if it.pw_missing and k in remote.items and remote.items[k].pw is not None:
                 it.pw = remote.items[k].pw
-        result, conflicts = merge_items(base_key, local, remote.items, lambda it: item_hash(it, hkey))
+        result, raw_conflicts = merge_items(base_key, local, remote.items, lambda it: item_hash(it, hkey))
         report = SyncReport()
-        for k, loc, rem in conflicts:
-            copy_id = new_id()
-            data = dict(rem.data, id=copy_id)
-            data["name"] = tr("{v} (Konflikt)", v=data.get('name', ''))
-            result[(k[0], copy_id)] = Item(k[0], copy_id, data, rem.pw)
-            report.conflicts.append(loc.data.get("name", loc.id))
+        conflicts = [
+            Conflict(k, loc, rem, f"{k[0]}:{k[1]}:{item_hash(loc, hkey)}:{item_hash(rem, hkey)}")
+            for k, loc, rem in raw_conflicts
+        ]
+        choices: dict[str, str] = {}
+        if conflicts and resolve is not None:
+            answer = resolve(conflicts)
+            if answer is None:
+                raise SyncError(tr("Abgleich abgebrochen."))
+            choices = answer
+        for c in sorted(conflicts, key=lambda c: c.name.lower()):
+            report.conflicts.append(c.name)
+            if choices.get(c.token, LOCAL) == REMOTE:
+                result[c.key] = c.remote  # Server-Version übernehmen; lokal wird sie durch _apply_local ersetzt
+                report.kept_remote.append(c.name)
+            # sonst bleibt die lokale Version im Ergebnis und geht beim Hochladen an den Server
 
         merged_groups = merge_sets(base_groups, set(cfg.groups), remote.groups)
         merged_colors = merge_map(base_colors, cfg.group_colors, remote.group_colors)
@@ -580,11 +632,11 @@ class SyncEngine:
         self._next_state = None
         return pushed
 
-    def run(self, cfg: Config, retries: int = 3) -> SyncReport:
+    def run(self, cfg: Config, retries: int = 3, resolve=None) -> SyncReport:
         """Kompletter Abgleich in einem Aufruf (blockierend)."""
         for attempt in range(retries):
             remote = self.fetch()
-            report = self.merge(cfg, remote)
+            report = self.merge(cfg, remote, resolve)
             try:
                 report.pushed = self.push()
                 return report

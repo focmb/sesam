@@ -30,6 +30,7 @@ from .settings_dialog import SettingsDialog
 from .snippets_dialog import SnippetsDialog
 from .jobs import Job
 from .sftp_window import SftpWindow
+from .sync_conflict_dialog import SyncConflictDialog
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
 from .terminals_dialog import TerminalsDialog
@@ -165,7 +166,7 @@ class MainWindow(QMainWindow):
         self._outer_layout = outer  # die Seitenleiste kommt rechts dazu, sobald die Aktionen existieren
         self.setCentralWidget(central)
 
-        self.sync = SyncController(self.cfg, lambda: storage.save(self.cfg, self.path), self)
+        self.sync = SyncController(self.cfg, lambda: storage.save(self.cfg, self.path), self, resolver=self._ask_sync_conflicts)
         self.sync.status.connect(self._sync_status)
         self.sync.cfg_changed.connect(self._sync_changed_config)
         self.sync.finished.connect(self._sync_finished)
@@ -1512,13 +1513,10 @@ class MainWindow(QMainWindow):
     def _sync_finished(self, report, error, manual: bool):
         if error and manual:
             QMessageBox.warning(self, tr("Synchronisation fehlgeschlagen"), str(error))
-        elif report is not None and report.conflicts:
-            QMessageBox.information(
-                self,
-                tr("Synchronisation"),
-                tr("Es gab widersprüchliche Änderungen an: {names}.\nDeine Version blieb erhalten, die andere steht als „… (Konflikt)“ daneben.",
-                   names=", ".join(report.conflicts)),
-            )
+
+    def _ask_sync_conflicts(self, conflicts):
+        dlg = SyncConflictDialog(conflicts, self)
+        return dlg.choices() if dlg.exec() else None
 
     def edit_sync(self):
         dlg = SyncDialog(self.cfg, self)
