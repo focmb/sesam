@@ -108,6 +108,35 @@ class DetectTests(unittest.TestCase):
                           [osinfo.COMMAND, osinfo.WINDOWS_COMMAND, osinfo.CISCO_COMMAND]))
         self.assertEqual(osinfo.CISCO_COMMAND, "show version | include ^Cisco IOS XE")
 
+    def test_cisco_closes_session_on_unknown_command(self):
+        """IOS XE kappt die Sitzung nach ``sh -c``: es wird neu verbunden und der Cisco-Befehl trotzdem versucht."""
+        clients = []
+
+        def make(*_a, **_k):
+            client = FakeClient([("", 1), ("", 1), ("Cisco IOS XE Software, Version 17.12.1\n", 0)])
+            if not clients:
+                def boom(command, timeout=None):
+                    client.commands.append(command)
+                    raise EOFError("Channel closed")
+                client.exec_command = boom
+            clients.append(client)
+            return client, None
+
+        with mock.patch.object(sftp, "open_client", side_effect=make):
+            found = osinfo.detect(Config(), Connection("x", "h"))
+        self.assertEqual(found, "Cisco IOS XE Software, Version 17.12.1")
+        self.assertTrue(all(c.closed for c in clients))
+
+    def test_all_commands_fail_raises(self):
+        def make(*_a, **_k):
+            client = FakeClient([])
+            client.exec_command = mock.Mock(side_effect=EOFError("Channel closed"))
+            return client, None
+
+        with mock.patch.object(sftp, "open_client", side_effect=make):
+            with self.assertRaises(sftp.SftpError):
+                osinfo.detect(Config(), Connection("x", "h"))
+
     def test_nothing_usable(self):
         found, client, _ = self._detect([("% Invalid input", 0), ("% Invalid input", 0), ("% Invalid input", 0)])
         self.assertEqual((found, client.closed), ("", True))

@@ -59,20 +59,28 @@ def detect(cfg: Config, conn: Connection, password: str | None = None, known_hos
     übernehmen (``sftp.SftpUnknownHostKey``), damit die Abfrage nie die Bestätigung im Terminal vorwegnimmt.
     Weitere Fehler: ``sftp.SftpAuthError``, ``sftp.SftpError``.
     """
-    client, _eff = sftp.open_client(cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout,
-                                    purpose=tr("die Erkennung des Betriebssystems"), strict_host_keys=strict)
+    def connect():
+        return sftp.open_client(cfg, conn, password=password, known_hosts=known_hosts, timeout=timeout,
+                                purpose=tr("die Erkennung des Betriebssystems"), strict_host_keys=strict)[0]
+
+    client = connect()
+    found, last_error, answered = "", None, False
     try:
-        try:
-            status, text = _exec(client, COMMAND)
+        for command in (COMMAND, WINDOWS_COMMAND, CISCO_COMMAND):
+            try:
+                status, text = _exec(client, command)
+            except (OSError, EOFError, sftp._paramiko().SSHException) as exc:
+                # Manche Netzwerkgeräte (Cisco) beenden die Sitzung bei einem unbekannten Befehl: neu verbinden, nächster Befehl
+                last_error = exc
+                client.close()
+                client = connect()
+                continue
+            answered = True
             found = parse(text) if status == 0 else ""
-            if not found:
-                status, text = _exec(client, WINDOWS_COMMAND)
-                found = parse(text) if status == 0 else ""
-            if not found:
-                status, text = _exec(client, CISCO_COMMAND)
-                found = parse(text) if status == 0 else ""
-        except (OSError, EOFError, sftp._paramiko().SSHException) as exc:
-            raise sftp.SftpError(tr("Abfrage des Betriebssystems fehlgeschlagen: {exc}", exc=exc)) from exc
+            if found:
+                break
     finally:
         client.close()
+    if not found and not answered and last_error is not None:
+        raise sftp.SftpError(tr("Abfrage des Betriebssystems fehlgeschlagen: {exc}", exc=last_error)) from last_error
     return found
