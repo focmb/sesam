@@ -42,18 +42,29 @@ def demo_config() -> tuple[Config, dict[str, Connection]]:
     def add(key, name, host, **kw):
         c[key] = Connection(name=name, host=host, user=kw.pop("user", "admin"), **kw)
 
-    add("web1", "web-01", "web-01.example.com", group="Produktion/Webserver", color="green", tags=["prod", "nginx"], use_password=True)
-    add("web2", "web-02", "web-02.example.com", group="Produktion/Webserver", color="green", tags=["prod", "nginx"])
-    add("db", "db-01", "db-01.example.com", group="Produktion", color="red", tags=["prod", "postgres"], sudo_mode="login")
-    add("docker", "docker-host", "docker.example.com", group="Produktion", color="blue", tags=["docker"], docker=True, docker_shell="/bin/bash")
-    add("pve", "pve-01", "pve.example.com", group="Labor", color="purple", tags=["proxmox"], proxmox=True, user="root")
-    add("sw", "switch-keller", "10.0.0.2", group="Labor", color="orange", tags=["netz"], cisco=True)
-    add("nas", "nas", "nas.example.com", group="Privat", color="teal", port=2222, user="christian")
-    add("pi", "raspberry", "192.168.1.20", group="Privat", user="pi", tags=["iot"])
+    stamp = time.time()  # frisch ermittelt: die Spalte „Betriebssystem“ zeigt die Werte, ohne dass eine Abfrage startet
+    add("web1", "web-01", "web-01.example.com", group="Produktion/Webserver", color="green", tags=["prod", "nginx"], use_password=True,
+        os_info="Debian GNU/Linux 12 (bookworm)", os_checked=stamp)
+    add("web2", "web-02", "web-02.example.com", group="Produktion/Webserver", color="green", tags=["prod", "nginx"],
+        os_info="Debian GNU/Linux 12 (bookworm)", os_checked=stamp)
+    add("db", "db-01", "db-01.example.com", group="Produktion", color="red", tags=["prod", "postgres"], sudo_mode="login",
+        os_info="Ubuntu 24.04.1 LTS", os_checked=stamp)
+    add("docker", "docker-host", "docker.example.com", group="Produktion", color="blue", tags=["docker"], docker=True,
+        docker_shell="/bin/bash", os_info="Ubuntu 24.04.1 LTS", os_checked=stamp)
+    add("pve", "pve-01", "pve.example.com", group="Labor", color="purple", tags=["proxmox"], proxmox=True, user="root",
+        os_info="Debian GNU/Linux 12 (bookworm)", os_checked=stamp)
+    add("sw", "switch-keller", "10.0.0.2", group="Labor", color="orange", tags=["netz"], cisco=True,
+        os_info="Cisco IOS 15.2(7)E14 (C3560CX)", os_checked=stamp)
+    add("nas", "nas", "nas.example.com", group="Privat", color="teal", port=2222, user="christian",
+        os_info="Alpine Linux v3.20", os_checked=stamp)
+    add("pi", "raspberry", "192.168.1.20", group="Privat", user="pi", tags=["iot"],
+        os_info="Debian GNU/Linux 12 (bookworm)", os_checked=stamp)
     cfg = Config(connections=list(c.values()))
     term = Terminal("Windows Terminal", "wt.exe new-tab --title {title} {ssh_args}", platform="windows")
     cfg.terminals = [term, Terminal("GNOME Terminal", "gnome-terminal --title {title} -- {ssh_args}", platform="linux")]
     cfg.default_terminal_id = term.id
+    cfg.hidden_columns = ["terminal"]  # Platz für die Spalte „Betriebssystem“ (sonst standardmäßig ausgeblendet)
+    cfg.column_widths = [250, 230, 150, 150, 260]  # Name, Ziel, Terminal, Tags, Betriebssystem: lange Werte ungekürzt
     cfg.groups = ["Produktion", "Produktion/Webserver", "Labor", "Privat"]
     cfg.group_colors = {"Produktion": "red", "Labor": "purple"}
     cfg.snippets = [
@@ -81,7 +92,7 @@ def main_window(cfg, conns, tmp: Path, out: Path, label: str) -> None:
     from sesam.gui.main_window import MainWindow
 
     w = MainWindow(cfg, tmp / "config.json")
-    w.resize(1000, 680)
+    w.resize(1180, 680)
     w.show()
     QApplication.processEvents()
     boxes = [
@@ -102,7 +113,7 @@ def main_window(cfg, conns, tmp: Path, out: Path, label: str) -> None:
     item = w._find_item(conns["web1"].id)
     if item is not None:
         w.tree.setCurrentItem(item)
-    w.resize(1000, 680)
+    w.resize(1180, 680)
     grab(w, out / f"hauptfenster-{label}.png")
     w.close()
 
