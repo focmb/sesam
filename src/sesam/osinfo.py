@@ -1,4 +1,4 @@
-"""Betriebssystem eines Hosts ermitteln (``/etc/os-release``, macOS, ``uname``, Windows ``ver``).
+"""Betriebssystem eines Hosts ermitteln (``/etc/os-release``, macOS, ``uname``, Windows ``ver``, Cisco IOS XE ``show version``).
 
 Läuft über eine zweite SSH-Verbindung im Hintergrund (paramiko), nicht im Terminal des Anwenders. Das Ergebnis steht danach in
 ``Connection.os_info`` und wird mitgespeichert, damit es bei jedem Start sofort da ist.
@@ -23,6 +23,7 @@ SCRIPT = (
 )
 COMMAND = "sh -c " + shlex.quote(SCRIPT)  # unabhängig von der Login-Shell des Benutzers (fish, csh, …)
 WINDOWS_COMMAND = "ver"  # OpenSSH unter Windows (cmd)
+CISCO_COMMAND = "show version | include ^Cisco IOS XE"  # Cisco-Switches (IOS XE): "sh -c" ist dort ungültig
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _ERROR_WORDS = ("not found", "invalid", "unknown command", "not recognized", "nicht gefunden", "syntax error")
@@ -66,6 +67,9 @@ def detect(cfg: Config, conn: Connection, password: str | None = None, known_hos
             found = parse(text) if status == 0 else ""
             if not found:
                 status, text = _exec(client, WINDOWS_COMMAND)
+                found = parse(text) if status == 0 else ""
+            if not found:
+                status, text = _exec(client, CISCO_COMMAND)
                 found = parse(text) if status == 0 else ""
         except (OSError, EOFError, sftp._paramiko().SSHException) as exc:
             raise sftp.SftpError(tr("Abfrage des Betriebssystems fehlgeschlagen: {exc}", exc=exc)) from exc

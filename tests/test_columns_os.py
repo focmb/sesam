@@ -35,7 +35,8 @@ class FakeClient:
 
     def exec_command(self, command, timeout=None):
         self.commands.append(command)
-        text, status = self.answers[0 if command == osinfo.COMMAND else 1]
+        index = {osinfo.COMMAND: 0, osinfo.WINDOWS_COMMAND: 1, osinfo.CISCO_COMMAND: 2}[command]
+        text, status = self.answers[index] if index < len(self.answers) else ("", 1)
         return None, FakeStream(text, status), FakeStream("")
 
     def close(self):
@@ -99,8 +100,16 @@ class DetectTests(unittest.TestCase):
         found, client, _ = self._detect([("", 1), ("\nMicrosoft Windows [Version 10.0.1]\n", 0)])
         self.assertEqual((found, client.commands), ("Windows 10.0.1", [osinfo.COMMAND, osinfo.WINDOWS_COMMAND]))
 
+    def test_cisco_fallback(self):
+        found, client, _ = self._detect([("% Invalid input detected at '^' marker.", 0), ("% Invalid input", 0),
+                                         ("Cisco IOS XE Software, Version 17.09.04a\n", 0)])
+        self.assertEqual((found, client.commands),
+                         ("Cisco IOS XE Software, Version 17.09.04a",
+                          [osinfo.COMMAND, osinfo.WINDOWS_COMMAND, osinfo.CISCO_COMMAND]))
+        self.assertEqual(osinfo.CISCO_COMMAND, "show version | include ^Cisco IOS XE")
+
     def test_nothing_usable(self):
-        found, client, _ = self._detect([("% Invalid input", 0), ("% Invalid input", 0)])
+        found, client, _ = self._detect([("% Invalid input", 0), ("% Invalid input", 0), ("% Invalid input", 0)])
         self.assertEqual((found, client.closed), ("", True))
 
     def test_strict_is_passed_on(self):
