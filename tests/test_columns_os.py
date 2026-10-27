@@ -187,6 +187,9 @@ class StorageTests(unittest.TestCase):
         data = {"connections": [{"name": "a", "host": "h", "os_info": "Debian 12"}, {"name": "b", "host": "h", "os_info": 5},
                                 {"name": "c", "host": "h"}]}
         self.assertEqual([c.os_info for c in storage._from_data(data).connections], ["Debian 12", "", ""])
+        junk = {"connections": [{"name": "a", "host": "h", "os_checked": 12.5}, {"name": "b", "host": "h", "os_checked": "x"},
+                                {"name": "c", "host": "h", "os_checked": True}, {"name": "d", "host": "h"}]}
+        self.assertEqual([c.os_checked for c in storage._from_data(junk).connections], [12.5, 0.0, 0.0, 0.0])
 
 
 class ColumnTests(GuiTestCase):
@@ -313,13 +316,43 @@ class DetectOsTests(GuiTestCase):
         self.assertEqual(self.calls, [(self.conn.id, True, None)])  # unbekannte Host-Schlüssel nie stillschweigend übernehmen
 
     def test_known_os_is_not_queried_again(self):
-        self.w.cfg.connection_by_id(self.conn.id).os_info = "Alpine Linux v3.20"
+        conn = self.w.cfg.connection_by_id(self.conn.id)
+        conn.os_info, conn.os_checked = "Alpine Linux v3.20", time.time() - 6 * 24 * 3600  # jünger als 7 Tage
         with self._detect("anderes"):
             self._select()
             self.w.connect_selected()
             time.sleep(0.1)
             self.app.processEvents()
         self.assertEqual(self.calls, [])
+
+    def test_old_os_is_refreshed_on_connect(self):
+        conn = self.w.cfg.connection_by_id(self.conn.id)
+        conn.os_info, conn.os_checked = "Cisco IOS XE Software, Version 17.09.04a", time.time() - 8 * 24 * 3600
+        with self._detect("Cisco IOS XE Software, Version 17.12.1"):
+            self._select()
+            self.w.connect_selected()
+            self.assertTrue(self._wait(lambda: self.w.cfg.connection_by_id(self.conn.id).os_info.endswith("17.12.1")))
+        saved = storage.load(self.path).connections[0]
+        self.assertEqual(saved.os_info, "Cisco IOS XE Software, Version 17.12.1")
+        self.assertLess(time.time() - saved.os_checked, 60)
+
+    def test_unchanged_os_still_stores_the_check_time(self):
+        conn = self.w.cfg.connection_by_id(self.conn.id)
+        conn.os_info, conn.os_checked = "Alpine Linux v3.20", 1.0
+        with self._detect("Alpine Linux v3.20"):
+            self._select()
+            self.w.connect_selected()
+            self.assertTrue(self._wait(lambda: self.w.cfg.connection_by_id(self.conn.id).os_checked > 1.0))
+        self.assertGreater(storage.load(self.path).connections[0].os_checked, 1.0)
+
+    def test_failed_refresh_keeps_the_old_value(self):
+        conn = self.w.cfg.connection_by_id(self.conn.id)
+        conn.os_info, conn.os_checked = "Alpine Linux v3.20", 1.0
+        with self._detect(sftp.SftpError("Zeitüberschreitung")):
+            self._select()
+            self.w.connect_selected()
+            self.assertTrue(self._wait(lambda: self.conn.id in self.w._os_tried))
+        self.assertEqual((conn.os_info, conn.os_checked), ("Alpine Linux v3.20", 1.0))
 
     def test_failure_is_tried_once_per_session_and_stays_quiet(self):
         with self._detect(sftp.SftpAuthError("nein")):

@@ -153,6 +153,7 @@ class Connection:
     terminal_id: str = ""  # leer = Standardterminal
     notes: str = ""
     os_info: str = ""  # Betriebssystem des Hosts, bei der ersten Verbindung ermittelt (siehe sesam.osinfo)
+    os_checked: float = 0.0  # Zeitpunkt der letzten erfolgreichen Abfrage (Unix-Zeit); danach alle 7 Tage beim Verbinden erneuert
     color: str = ""  # Schlüssel aus sesam.colors.PALETTE, leer = keine Farbe
     tags: list[str] = field(default_factory=list)
 
@@ -164,6 +165,8 @@ class Connection:
         conn.tags = _clean_tags(conn.tags)
         if not isinstance(conn.os_info, str):
             conn.os_info = ""
+        if isinstance(conn.os_checked, bool) or not isinstance(conn.os_checked, (int, float)):
+            conn.os_checked = 0.0
         return conn
 
 

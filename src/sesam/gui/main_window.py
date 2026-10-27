@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -1223,6 +1224,7 @@ class MainWindow(QMainWindow):
         self._detect_os(conn)  # beim ersten Verbinden das Betriebssystem merken
 
     # --- Betriebssystem des Hosts ---
+    OS_REFRESH_SECONDS = 7 * 24 * 3600  # bekanntes Betriebssystem beim Verbinden erneuern, wenn die Abfrage älter ist
     OS_RETRY_MS = (20000, 60000)  # unbekannter Host: erst nach der Bestätigung im Terminal ist sein Schlüssel eingetragen
 
     def _detect_os(self, conn: Connection, force: bool = False, attempt: int = 0):
@@ -1230,7 +1232,9 @@ class MainWindow(QMainWindow):
         conn = self.cfg.connection_by_id(conn.id) or conn
         if conn.id in self._os_busy or not conn.host.strip():
             return
-        if not force and (conn.os_info or conn.id in self._os_tried or conn.jump_host.strip()):
+        if not force and (conn.id in self._os_tried or conn.jump_host.strip()):
+            return
+        if not force and conn.os_info and time.time() - conn.os_checked < self.OS_REFRESH_SECONDS:
             return
         self._os_busy.add(conn.id)
         snapshot = replace(conn)
@@ -1257,9 +1261,10 @@ class MainWindow(QMainWindow):
         if conn is None:
             return
         if exc is None and found:
-            if found != conn.os_info:
-                conn.os_info = found
-                self._save()
+            changed = found != conn.os_info
+            conn.os_info, conn.os_checked = found, time.time()
+            self._save()  # auch bei gleichem Wert: der Zeitpunkt der Abfrage steuert die nächste Auffrischung
+            if changed:
                 item = self._find_item(cid)
                 if item is not None:
                     item.setText(self.COLUMN_INDEX["os"], found)
