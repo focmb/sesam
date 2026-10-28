@@ -6,6 +6,7 @@ from gui_base import GuiTestCase
 
 from sesam import snippets, storage
 from sesam.models import Config, Connection, Snippet, Terminal
+from ssh_helper import wrapped_ssh
 
 
 class DialogBase(GuiTestCase):
@@ -222,8 +223,9 @@ class MainWindowSnippetTests(GuiTestCase):
     def test_clicking_a_snippet_in_menu_opens_one_terminal(self):
         self.menu_texts(["b"], lambda menu: next(a for a in self.snippet_submenu(menu).actions() if a.text() == "Up").trigger())
         self.assertEqual(self.mock_popen.call_count, 1)
-        self.assertEqual(self.mock_popen.call_args.args[0][-1], "sh -c uptime; exec \"${SHELL:-sh}\" -l")
-        self.assertIn("b.example", self.mock_popen.call_args.args[0])
+        ssh = wrapped_ssh(self.mock_popen.call_args.args[0], self.conns[1])  # läuft über den Wrapper
+        self.assertEqual(ssh[-1], "sh -c uptime; exec \"${SHELL:-sh}\" -l")
+        self.assertIn("b.example", ssh)
 
     def test_menu_for_several_selected_connections_runs_on_all_after_confirmation(self):
         from PySide6.QtWidgets import QMessageBox
