@@ -18,7 +18,7 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import style, theme
-from .. import colors, docker, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, wireguard
+from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self.a_sync = act(tr("Jetzt synchronisieren"), lambda: self.sync.sync(manual=True), "F5")
         self.a_sync_settings = act(tr("Synchronisation …"), self.edit_sync)
         self.a_import = act(tr("Aus ~/.ssh/config importieren"), self.import_ssh_config)
+        self.a_dedupe = act(tr("Doppelte Verbindungen zusammenführen …"), self.merge_duplicates)
 
         self.a_quit = act(tr("Beenden"), self.close, "Ctrl+Q")
         self.addAction(self.a_quit)  # kein Menü mehr: das Kürzel hängt direkt am Fenster
@@ -704,6 +705,7 @@ class MainWindow(QMainWindow):
         menu.addAction(self.a_new)
         menu.addAction(tr("Neue Gruppe (oberste Ebene) …")).triggered.connect(lambda: self.new_group(""))
         menu.addAction(self.a_import)
+        menu.addAction(self.a_dedupe)
         self._popup(menu, pos)
 
     def _popup(self, menu: QMenu, pos):
@@ -1415,6 +1417,27 @@ class MainWindow(QMainWindow):
         self.refresh()
         if failed:
             QMessageBox.warning(self, tr("Passwort nicht gelöscht"), "\n".join(failed))
+
+    def merge_duplicates(self):
+        """Findet gleiche Verbindungen (Name, Host, Port, Benutzer, Gruppe) mit verschiedenen IDs und lässt je eine übrig."""
+        groups = duplicates.find_duplicate_connections(self.cfg)
+        if not groups:
+            QMessageBox.information(self, tr("Doppelte Verbindungen"), tr("Keine doppelten Verbindungen gefunden."))
+            return
+        lines = "\n".join(f"• {g[0].name} ({launcher.destination(g[0])}) – {len(g)}×" for g in groups[:10])
+        more = tr("\n… und {v} weitere", v=len(groups) - 10) if len(groups) > 10 else ""
+        text = tr("{n} Verbindung(en) sind mehrfach vorhanden:\n\n{lines}{more}\n\nJeweils eine bleibt erhalten (bevorzugt die mit gespeichertem Passwort), die übrigen werden gelöscht. Fortfahren?",
+                  n=len(groups), lines=lines, more=more)
+        if QMessageBox.question(self, tr("Doppelte Verbindungen"), text) != QMessageBox.StandardButton.Yes:
+            return
+        removed, failures = duplicates.remove_duplicates(self.cfg, groups, passwords.delete_password)
+        for conn in removed:
+            self._docker_forget(conn.id)
+            self._docker_expanded.discard(conn.id)
+        self._save()
+        self.refresh()
+        if failures:
+            QMessageBox.warning(self, tr("Passwort nicht gelöscht"), "\n".join(failures))
 
     # --- Gruppen ---
     def new_group(self, parent: str | None = None):

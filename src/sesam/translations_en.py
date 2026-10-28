@@ -34,6 +34,12 @@ EN: dict[str, str] = {
     "Keine": "None",
     # connect_cli
     "Enter zum Schließen …": "Press Enter to close …",
+    "{n} doppelte(r) Eintrag/Einträge zusammengeführt": "{n} duplicate entry/entries merged",
+    "Doppelte Verbindungen zusammenführen …": "Merge duplicate connections …",
+    "Doppelte Verbindungen": "Duplicate connections",
+    "Keine doppelten Verbindungen gefunden.": "No duplicate connections found.",
+    "{n} Verbindung(en) sind mehrfach vorhanden:\n\n{lines}{more}\n\nJeweils eine bleibt erhalten (bevorzugt die mit gespeichertem Passwort), die übrigen werden gelöscht. Fortfahren?":
+        "{n} connection(s) exist more than once:\n\n{lines}{more}\n\nOne of each is kept (preferably the one with a stored password), the others are deleted. Continue?",
     "Der Schlüssel von {host} hat sich geändert, z. B. weil dort ein neuer Server mit gleicher Adresse läuft. Es könnte aber auch ein Angriff sein.":
         "The key of {host} has changed, e.g. because a new server with the same address is running there. It could also be an attack.",
     "ssh-keygen wurde nicht gefunden. Entferne den Eintrag von Hand aus known_hosts.":

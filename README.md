@@ -357,6 +357,7 @@ Fensterbreiten bleiben pro Gerät). Das Tool nutzt das installierte `git`. Die A
   |---|---|
   | ![Konflikt-Dialog (hell)](docs/screenshots/sync-konflikt-hell.png) | ![Konflikt-Dialog (dunkel)](docs/screenshots/sync-konflikt-dunkel.png) |
 
+- **Doppelte Einträge:** Dieselbe Verbindung (gleicher Name, Host, Port, Benutzer und Gruppe) oder Identität (Name und Benutzer), die auf zwei Geräten getrennt angelegt wurde (z. B. durch *Aus ~/.ssh/config importieren* auf beiden), erkennt Sesam beim Abgleich als einen Eintrag: Die ID vom Server gilt, das lokale Passwort wandert mit, es entsteht keine zweite Verbindung. Unterscheiden sich die Einträge in weiteren Feldern, fragt Sesam wie bei einem Konflikt. Das gilt nur für Einträge, die beide Seiten noch nicht aus einem früheren Abgleich kennen. Bereits vorhandene Duplikate entfernt *Doppelte Verbindungen zusammenführen …* im Kontextmenü der Liste (je Gruppe bleibt eine, bevorzugt die mit gespeichertem Passwort).
 - Wird eine Identität oder ein Schlüssel gelöscht, verlieren Verbindungen, die sie nutzen, den Verweis.
 - Leeres Repository anlegen (z. B. bei GitHub/GitLab/Gitea) genügt, das Tool erstellt den Branch selbst.
 

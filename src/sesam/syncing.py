@@ -26,12 +26,12 @@ import os
 import socket
 import subprocess
 import sys
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
 
-from . import keystore, passwords, runtime, storage
+from . import duplicates, keystore, passwords, runtime, storage
 from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings
 from .i18n import tr
 
@@ -122,6 +122,7 @@ class Item:
     pw: str | None = None
     blob: dict | None = field(default=None, compare=False)  # vorhandener verschlüsselter Block im Repository
     pw_missing: bool = field(default=False, compare=False)  # lokal als gespeichert markiert, aber nicht im Schlüsselbund
+    renamed_from: str | None = field(default=None, compare=False)  # lokale ID, die auf die ID des gleichen Servereintrags umgestellt wurde
 
     @property
     def key(self) -> tuple[str, str]:
@@ -136,6 +137,44 @@ def item_from_obj(kind: str, obj, pw: str | None) -> Item:
 def item_hash(item: Item, hkey: bytes) -> str:
     canonical = json.dumps({"k": item.kind, "d": item.data, "p": item.pw}, sort_keys=True, ensure_ascii=False)
     return hmac.new(hkey or b"-", canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def match_duplicates(base: dict, local: dict, remote: dict) -> dict:
+    """Lokal neue Einträge, die auf dem Server schon (mit anderer ID) stehen: dieselbe Verbindung bzw. Identität, getrennt angelegt
+    (z. B. Import aus ~/.ssh/config auf beiden Geräten). Liefert {lokaler Schlüssel: Schlüssel des Servereintrags}."""
+    by_sig: dict = {}
+    for k in sorted(remote):
+        if k in local or k in base:
+            continue
+        sig = duplicates.signature(k[0], remote[k].data)
+        if sig is not None:
+            by_sig.setdefault((k[0], sig), []).append(k)
+    mapping: dict = {}
+    for k in sorted(local):
+        if k in remote or k in base:
+            continue
+        sig = duplicates.signature(k[0], local[k].data)
+        candidates = by_sig.get((k[0], sig)) if sig is not None else None
+        if candidates:
+            mapping[k] = candidates.pop(0)
+    return mapping
+
+
+def adopt_remote_ids(local: dict, mapping: dict) -> dict:
+    """Stellt die zugeordneten lokalen Einträge auf die IDs der Servereinträge um (und Verweise auf umbenannte Identitäten)."""
+    out: dict = {}
+    for k, item in local.items():
+        if k in mapping:
+            new_id = mapping[k][1]
+            out[mapping[k]] = replace(item, id=new_id, data=dict(item.data, id=new_id), blob=None, renamed_from=k[1])
+        else:
+            out[k] = item
+    ident_ids = {k[1]: v[1] for k, v in mapping.items() if k[0] == "i"}
+    if ident_ids:
+        for k, item in out.items():
+            if k[0] == "c" and item.data.get("identity_id") in ident_ids:
+                out[k] = replace(item, data=dict(item.data, identity_id=ident_ids[item.data["identity_id"]]))
+    return out
 
 
 def merge_items(base: dict, local: dict, remote: dict, h: Callable[[Item], str]):
@@ -299,6 +338,7 @@ class SyncReport:
     added: int = 0
     updated: int = 0
     removed: int = 0
+    merged: int = 0  # doppelte Einträge (gleiche Verbindung mit verschiedenen IDs), die zusammengeführt wurden
     conflicts: list[str] = field(default_factory=list)
     kept_remote: list[str] = field(default_factory=list)  # Konflikte, bei denen die Server-Version gewählt wurde
     local_changed: bool = False
@@ -309,6 +349,8 @@ class SyncReport:
         parts = []
         if self.added or self.updated or self.removed:
             parts.append(tr("lokal: {added} neu, {updated} geändert, {removed} entfernt", added=self.added, updated=self.updated, removed=self.removed))
+        if self.merged:
+            parts.append(tr("{n} doppelte(r) Eintrag/Einträge zusammengeführt", n=self.merged))
         if self.pushed:
             parts.append(tr("Änderungen hochgeladen"))
         if self.conflicts:
@@ -469,6 +511,7 @@ class SyncEngine:
 
         before = copy.deepcopy(asdict(cfg))
         local = self._local_items(cfg, key)
+        local = adopt_remote_ids(local, match_duplicates(base_key, local, remote.items))
         for k, it in local.items():
             # Passwort fehlt lokal im Schlüsselbund: nicht als „gelöscht“ auf den Server übertragen, sondern wiederherstellen
             if it.pw_missing and k in remote.items and remote.items[k].pw is not None:
@@ -526,10 +569,20 @@ class SyncEngine:
         new_idents: list[Identity] = []
         new_keys: list[SshKey] = []
         new_snippets: list[Snippet] = []
+        moved_old = {(k[0], it.renamed_from) for k, it in local.items() if it.renamed_from}
         for k, item in result.items():
             _folder, cls = KINDS[k[0]]
             obj = cls.from_dict(dict(item.data, id=item.id))
             existing = old.get(k)
+            moved_from = local[k].renamed_from if k in local else None
+            moved_obj = old.get((k[0], moved_from)) if moved_from else None
+            if moved_obj is not None and moved_obj.use_password:  # Passwort wandert zur neuen ID; unter der alten wird es unten gelöscht
+                try:
+                    secret = self._store_for(k[0]).get(moved_from)
+                    if secret is not None:
+                        self._store_for(k[0]).set(item.id, secret)
+                except passwords.PasswordError as exc:
+                    raise SyncError(str(exc)) from exc
             if pw_on:
                 local_pw = local[k].pw if k in local else None
                 if item.pw != local_pw or (k in local and local[k].pw_missing and item.pw is not None):
@@ -542,9 +595,13 @@ class SyncEngine:
                         raise SyncError(str(exc)) from exc
                 obj.use_password = item.pw is not None
             else:
-                obj.use_password = bool(existing.use_password) if existing else False
+                source = existing or moved_obj
+                obj.use_password = bool(source.use_password) if source else False
             if existing is None:
-                report.added += 1
+                if moved_obj is not None:
+                    report.merged += 1
+                else:
+                    report.added += 1
             else:
                 if item_from_obj(k[0], existing, None).data != item.data or (pw_on and local[k].pw != item.pw):
                     report.updated += 1
@@ -554,8 +611,9 @@ class SyncEngine:
             {"c": new_conns, "i": new_idents, "k": new_keys, "s": new_snippets}[k[0]].append(obj)
         for k, o in old.items():
             if k not in result:
-                report.removed += 1
-                if pw_on and o.use_password:
+                if k not in moved_old:
+                    report.removed += 1
+                if o.use_password and (pw_on or k in moved_old):
                     try:
                         self._store_for(k[0]).delete(o.id)
                     except passwords.PasswordError as exc:

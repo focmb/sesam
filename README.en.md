@@ -359,6 +359,7 @@ window widths stay per device). The tool uses the installed `git`. Login runs in
   |---|---|
   | ![Conflict dialog (light)](docs/screenshots/sync-konflikt-hell.png) | ![Conflict dialog (dark)](docs/screenshots/sync-konflikt-dunkel.png) |
 
+- **Duplicate entries:** the same connection (same name, host, port, user and group) or identity (name and user) that was created separately on two devices (e.g. by *Import from ~/.ssh/config* on both) is recognised as one entry during sync: the server’s ID wins, the local password moves along, and no second connection appears. If the entries differ in other fields, Sesam asks like for a conflict. This only applies to entries that neither side knows from an earlier sync. Duplicates that already exist are removed with *Merge duplicate connections …* in the list’s context menu (one per group is kept, preferably the one with a stored password).
 - If an identity or key is deleted, connections that use it lose the reference.
 - Creating an empty repository (e.g. on GitHub/GitLab/Gitea) is enough; the tool creates the branch itself.
 
