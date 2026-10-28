@@ -28,6 +28,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - [SSH-Schlüssel](#ssh-schlüssel)
 - [sudo](#sudo)
 - [Passwörter](#passwörter)
+- [Verbindungsfehler und geänderte Host-Schlüssel](#verbindungsfehler-und-geänderte-host-schlüssel)
 - [Snippets](#snippets)
 - [Dateien übertragen (SFTP)](#dateien-übertragen-sftp)
 - [Docker-Container](#docker-container)
@@ -249,6 +250,13 @@ Beim Verbinden startet das Terminal `ssh` über einen kleinen Wrapper, der das P
 (OpenSSH ≥ 8.4). Hinweise:
 - Auf Passwortabfragen wird automatisch geantwortet, auf andere Abfragen (Passphrase, 2FA-Code) nicht.
 - Unbekannte Hosts werden automatisch in `known_hosts` aufgenommen (`StrictHostKeyChecking=accept-new`), geänderte Schlüssel werden weiterhin abgelehnt. Setzt du die Option selbst unter „Zusätzliche Optionen“, hat sie Vorrang.
+
+## Verbindungsfehler und geänderte Host-Schlüssel
+
+Jede Verbindung startet im Terminal über einen kleinen Wrapper (auch ohne gespeichertes Passwort), der `ssh` als Unterprozess ausführt.
+- **Verbindung klappt nicht** (Server abgeschaltet, Zeitüberschreitung, Anmeldung abgelehnt …): Das Terminal bleibt mit der Meldung von `ssh` offen, bis du Enter drückst. Normal beendete Sitzungen schließen sich wie gewohnt.
+- **Schlüssel des Servers hat sich geändert** (z. B. neuer Server mit gleicher IP): Nach der Meldung fragt der Wrapper, ob der alte Eintrag per `ssh-keygen -R` aus `known_hosts` entfernt und neu verbunden werden soll. Bei „j“ wird der neue Schlüssel übernommen, bei „N“ (Standard) bleibt alles unverändert. Der Eintrag sollte nur entfernt werden, wenn die Änderung erwartet war – sonst könnte es ein Angriff sein.
+- Terminal-Vorlagen ohne `{ssh_args}`/`{ssh_command}` (z. B. PuTTY) starten die Verbindung selbst und laufen nicht über den Wrapper.
 
 ## Snippets
 

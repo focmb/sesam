@@ -34,6 +34,16 @@ EN: dict[str, str] = {
     "Keine": "None",
     # connect_cli
     "Enter zum Schließen …": "Press Enter to close …",
+    "Der Schlüssel von {host} hat sich geändert, z. B. weil dort ein neuer Server mit gleicher Adresse läuft. Es könnte aber auch ein Angriff sein.":
+        "The key of {host} has changed, e.g. because a new server with the same address is running there. It could also be an attack.",
+    "ssh-keygen wurde nicht gefunden. Entferne den Eintrag von Hand aus known_hosts.":
+        "ssh-keygen was not found. Remove the entry from known_hosts by hand.",
+    "Alten Eintrag aus known_hosts entfernen und neu verbinden? [j/N]":
+        "Remove the old entry from known_hosts and reconnect? [y/N]",
+    "Der Eintrag konnte nicht entfernt werden: {exc}": "The entry could not be removed: {exc}",
+    "Eintrag entfernt, verbinde neu …": "Entry removed, reconnecting …",
+    "Die Verbindung zu {host} konnte nicht aufgebaut werden oder wurde beendet (ssh-Exit-Code {code}).":
+        "The connection to {host} could not be established or was closed (ssh exit code {code}).",
     "Verbindung nicht gefunden.": "Connection not found.",
     "Die Konfiguration ist beschädigt ({reason}).\nStarte Sesam, um sie zu sichern, oder repariere {path}.":
         "The configuration is damaged ({reason}).\nStart Sesam to back it up, or repair {path}.",

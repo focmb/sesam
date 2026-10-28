@@ -139,6 +139,11 @@ def resolve_terminal(cfg: Config, conn: Connection) -> Terminal:
     return term
 
 
+def uses_ssh_command(terminal: Terminal) -> bool:
+    """Setzt die Befehlsvorlage den ssh-Befehl ein? (PuTTY o. ä. startet die Verbindung selbst.)"""
+    return "{ssh_args}" in terminal.command or "{ssh_command}" in terminal.command
+
+
 def is_windows_terminal(program: str) -> bool:
     return os.path.basename(program.replace("\\", "/")).lower() in ("wt", "wt.exe")
 
@@ -187,7 +192,9 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remo
         conn = replace(conn, remote_command=remote_command, sudo_mode="login" if sudo else "",
                        sudo_user=conn.sudo_user if sudo else "")
     terminal = terminal or resolve_terminal(cfg, conn)
-    cmd = build_terminal_command(terminal, conn, wrapper_args(conn, remote_command) if conn.use_password else None)
+    # Immer über den Wrapper: Er hält das Fenster bei Verbindungsfehlern offen (sonst verschwindet die Meldung mit dem Terminal)
+    # und kann einen geänderten Host-Schlüssel nach Rückfrage aus known_hosts entfernen.
+    cmd = build_terminal_command(terminal, conn, wrapper_args(conn, remote_command) if uses_ssh_command(terminal) else None)
     if shutil.which(cmd[0]) is None:
         raise LaunchError(tr("Programm „{v}“ wurde nicht gefunden (Terminal „{name}“).", v=cmd[0], name=terminal.name))
     kwargs: dict = {}

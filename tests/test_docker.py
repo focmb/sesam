@@ -12,6 +12,7 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(__file__))
 
 from sesam import connect_cli, docker, launcher
+from ssh_helper import wrapped_ssh
 from sesam.models import Config, Connection, Terminal
 
 try:
@@ -130,7 +131,8 @@ class LaunchTests(unittest.TestCase):
         c, cmd = docker.container_target(self.conn, "web")
         argv = self.launch(c, cmd)
         self.assertEqual(argv[:4], ["xterm", "-T", "Server · web", "-e"])
-        ssh = argv[4:]
+        self.assertIn("--connect", argv)  # läuft über den Wrapper, der Verbindungsfehler sichtbar hält
+        ssh = wrapped_ssh(argv[4:], self.conn)
         self.assertEqual(ssh[0], "ssh")
         self.assertIn("-t", ssh)
         self.assertEqual(ssh[-2:], ["u@h.example", cmd])
@@ -139,7 +141,7 @@ class LaunchTests(unittest.TestCase):
 
     def test_without_remote_command_nothing_changes(self):
         argv = self.launch(self.conn, None)
-        self.assertEqual(argv[-1], "sudo -i tmux attach")
+        self.assertEqual(wrapped_ssh(argv, self.conn)[-1], "sudo -i tmux attach")
 
     def test_saved_password_goes_through_wrapper_with_override(self):
         conn = replace(self.conn, use_password=True)

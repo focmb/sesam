@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import os
+import re
+import shutil
+import signal
 import subprocess
 import sys
+import threading
 from dataclasses import replace
 
 from . import askpass, launcher, passwords, runtime, storage
@@ -29,6 +33,101 @@ def prepare(conn: Connection, password: str | None, askpass_script: str, base_en
         if "stricthostkeychecking" not in conn.extra_args.lower():
             args[1:1] = ["-o", "StrictHostKeyChecking=accept-new"]
     return args, env
+
+
+SSH_ERROR = 255  # Exit-Code von ssh bei eigenen Fehlern (Verbindung, Host-Key, Anmeldung)
+HOSTKEY_CHANGED = "REMOTE HOST IDENTIFICATION HAS CHANGED"
+_CAPTURE_LIMIT = 64 * 1024
+
+
+def host_key_changed(stderr: str) -> bool:
+    """Hat ssh die Verbindung wegen eines geänderten Host-Schlüssels abgelehnt?"""
+    return HOSTKEY_CHANGED in stderr
+
+
+def known_hosts_name(conn: Connection, stderr: str = "") -> str:
+    """Name, unter dem der Host in known_hosts steht. Bei einem Sprunghost nennt ssh den betroffenen Host selbst."""
+    m = re.search(r"Host key for (\S+) has changed", stderr)
+    if m:
+        return m.group(1)
+    host = conn.host.strip()
+    return host if (conn.port or 22) == 22 else f"[{host}]:{conn.port}"
+
+
+def forget_command(name: str) -> list[str]:
+    return ["ssh-keygen", "-R", name]
+
+
+def run_ssh(args: list[str], env: dict[str, str]) -> tuple[int, str]:
+    """Startet ssh als Unterprozess. Eingabe und Ausgabe bleiben am Terminal, stderr wird angezeigt und zugleich mitgelesen."""
+    proc = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
+    captured = bytearray()
+
+    def pump():
+        fd = proc.stderr.fileno()
+        out = getattr(sys.stderr, "buffer", None)
+        while True:
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            if len(captured) < _CAPTURE_LIMIT:
+                captured.extend(chunk)
+            try:
+                if out is not None:
+                    out.write(chunk)
+                    out.flush()
+                else:
+                    sys.stderr.write(chunk.decode("utf-8", "replace"))
+                    sys.stderr.flush()
+            except (OSError, ValueError):
+                pass
+
+    thread = threading.Thread(target=pump, daemon=True)
+    thread.start()
+    old = signal.signal(signal.SIGINT, lambda *_: None)  # Strg+C gilt ssh bzw. der Sitzung, nicht dem Wrapper (Handler statt SIG_IGN, damit ssh ihn erbt)
+    try:
+        code = proc.wait()
+    finally:
+        signal.signal(signal.SIGINT, old)
+    thread.join(timeout=2)
+    return code, captured.decode("utf-8", "replace")
+
+
+def _ask(question: str) -> bool:
+    try:
+        answer = input(question + " ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return answer in ("j", "ja", "y", "yes")
+
+
+def _wait_for_enter() -> None:
+    try:
+        input(tr("Enter zum Schließen …"))
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+
+def forget_host_key(conn: Connection, stderr: str) -> bool:
+    """Fragt, ob der alte known_hosts-Eintrag entfernt werden soll, und entfernt ihn. True = entfernt, neu verbinden."""
+    name = known_hosts_name(conn, stderr)
+    print(file=sys.stderr)
+    print(tr("Der Schlüssel von {host} hat sich geändert, z. B. weil dort ein neuer Server mit gleicher Adresse läuft. "
+             "Es könnte aber auch ein Angriff sein.", host=name), file=sys.stderr)
+    if not shutil.which("ssh-keygen"):
+        print(tr("ssh-keygen wurde nicht gefunden. Entferne den Eintrag von Hand aus known_hosts."), file=sys.stderr)
+        return False
+    if not _ask(tr("Alten Eintrag aus known_hosts entfernen und neu verbinden? [j/N]")):
+        return False
+    result = subprocess.run(forget_command(name), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        print(tr("Der Eintrag konnte nicht entfernt werden: {exc}", exc=(result.stderr or "").strip()), file=sys.stderr)
+        return False
+    print(tr("Eintrag entfernt, verbinde neu …"), file=sys.stderr)
+    return True
 
 
 def _fail(message: str) -> int:
@@ -75,9 +174,12 @@ def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
             print(tr("Hinweis: Kein Passwort im Schlüsselbund gefunden, ssh fragt selbst."), file=sys.stderr)
     args, env = prepare(conn, password, askpass.askpass_path() if password is not None else "")
     try:
-        if sys.platform.startswith("win"):
-            return subprocess.call(args, env=env)
-        os.execvpe(args[0], args, env)
+        code, err = run_ssh(args, env)
+        if code == SSH_ERROR and host_key_changed(err) and forget_host_key(conn, err):
+            code, err = run_ssh(args, env)  # nur ein zweiter Versuch
     except FileNotFoundError:
         return _fail(tr("ssh wurde nicht gefunden."))
-    return 0
+    if code == SSH_ERROR:  # ssh selbst ist gescheitert (oder die Sitzung wurde getrennt): Fenster offen lassen, damit die Meldung lesbar bleibt
+        print("\n" + tr("Die Verbindung zu {host} konnte nicht aufgebaut werden oder wurde beendet (ssh-Exit-Code {code}).", host=conn.host, code=code), file=sys.stderr)
+        _wait_for_enter()
+    return code

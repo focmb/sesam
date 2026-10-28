@@ -28,6 +28,7 @@ Connections open in a **freely configurable terminal**.
 - [SSH keys](#ssh-keys)
 - [sudo](#sudo)
 - [Passwords](#passwords)
+- [Connection errors and changed host keys](#connection-errors-and-changed-host-keys)
 - [Snippets](#snippets)
 - [Transferring files (SFTP)](#transferring-files-sftp)
 - [Docker containers](#docker-containers)
@@ -251,6 +252,13 @@ When connecting, the terminal starts `ssh` through a small wrapper that supplies
 (OpenSSH ≥ 8.4). Notes:
 - Password prompts are answered automatically, other prompts (passphrase, 2FA code) are not.
 - Unknown hosts are added to `known_hosts` automatically (`StrictHostKeyChecking=accept-new`); changed keys are still rejected. If you set the option yourself under “Additional options”, yours takes precedence.
+
+## Connection errors and changed host keys
+
+Every connection starts in the terminal through a small wrapper (even without a stored password) that runs `ssh` as a subprocess.
+- **The connection fails** (server switched off, timeout, login refused …): the terminal stays open with the message from `ssh` until you press Enter. Sessions that end normally close as usual.
+- **The server’s key has changed** (e.g. a new server with the same IP): after the message the wrapper asks whether to remove the old entry from `known_hosts` with `ssh-keygen -R` and reconnect. On “y” the new key is accepted, on “N” (default) nothing is changed. Only remove the entry if the change was expected – otherwise it could be an attack.
+- Terminal templates without `{ssh_args}`/`{ssh_command}` (e.g. PuTTY) start the connection themselves and do not go through the wrapper.
 
 ## Snippets
 

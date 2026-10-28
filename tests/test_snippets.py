@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from sesam import launcher, snippets, storage
 from sesam.models import Config, Connection, Snippet, Terminal
+from ssh_helper import wrapped_ssh
 
 
 class ModelTests(unittest.TestCase):
@@ -123,18 +124,19 @@ class RunTests(unittest.TestCase):
         self.assertEqual((rep.started, rep.errors), (["a", "b"], []))
         first, second = self.commands()
         self.assertEqual(first[:2], ["xterm", "-e"])
-        self.assertIn("u@a.example", first)
-        self.assertEqual(first[-1], "sh -c 'df -h'")
-        self.assertIn("-t", first)
-        self.assertIn("2222", second)
-        self.assertEqual(second[-1], "sh -c 'df -h'")  # ohne sudo: das sudo der Verbindung gilt nicht
+        ssh_a, ssh_b = wrapped_ssh(first, self.a), wrapped_ssh(second, self.b)
+        self.assertIn("u@a.example", ssh_a)
+        self.assertEqual(ssh_a[-1], "sh -c 'df -h'")
+        self.assertIn("-t", ssh_a)
+        self.assertIn("2222", ssh_b)
+        self.assertEqual(ssh_b[-1], "sh -c 'df -h'")  # ohne sudo: das sudo der Verbindung gilt nicht
 
     def test_sudo_snippet_runs_sudo_only_around_the_command(self):
         sn = Snippet("Dienst", command="systemctl restart nginx && echo ok", sudo=True, after="shell")
         snippets.run(self.cfg, sn, [self.a, self.b])
         first, second = self.commands()
-        self.assertEqual(first[-1], "sudo -i sh -c 'systemctl restart nginx && echo ok'; exec \"${SHELL:-sh}\" -l")
-        self.assertEqual(second[-1], "sudo -u admin -i sh -c 'systemctl restart nginx && echo ok'; exec \"${SHELL:-sh}\" -l")
+        self.assertEqual(wrapped_ssh(first, self.a)[-1], "sudo -i sh -c 'systemctl restart nginx && echo ok'; exec \"${SHELL:-sh}\" -l")
+        self.assertEqual(wrapped_ssh(second, self.b)[-1], "sudo -u admin -i sh -c 'systemctl restart nginx && echo ok'; exec \"${SHELL:-sh}\" -l")
 
     def test_stored_password_is_used_via_wrapper_for_connections_with_password(self):
         self.a.use_password = True
@@ -160,11 +162,11 @@ class RunTests(unittest.TestCase):
     def test_connection_remote_command_and_sudo_of_the_host_are_replaced(self):
         self.b.remote_command = "tmux attach"
         snippets.run(self.cfg, Snippet("x", command="id", after="close"), [self.b])
-        self.assertNotIn("tmux", self.commands()[0][-1])
+        self.assertNotIn("tmux", wrapped_ssh(self.commands()[0], self.b)[-1])
 
     def test_launch_without_sudo_flag_keeps_old_behaviour_for_docker(self):
         launcher.launch(self.cfg, self.b, remote_command="docker exec -it c bash")
-        self.assertEqual(self.commands()[0][-1], "docker exec -it c bash")
+        self.assertEqual(wrapped_ssh(self.commands()[0], self.b)[-1], "docker exec -it c bash")
 
 
 class SyncTests(unittest.TestCase):
