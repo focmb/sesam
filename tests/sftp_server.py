@@ -15,7 +15,6 @@ from paramiko import AUTH_FAILED, AUTH_SUCCESSFUL, OPEN_SUCCEEDED, SFTP_OK, SFTP
 logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)  # Abbrüche beim Test-Aufräumen sind erwartet, kein Lärm
 
 
-_sftp.host_key_confirmer = lambda *args: True  # Der Testserver gilt als vertrauenswürdig (Rückfragen gibt es nur in der GUI)
 
 class _Auth(paramiko.ServerInterface):
     def __init__(self, user: str, password: str, exec_handler=None, shell_handler=None):
@@ -151,6 +150,7 @@ class _Files(SFTPServerInterface):
 
 class SftpTestServer:
     def __init__(self, root: str, user: str = "tester", password: str = "geheim", host_key=None, exec_handler=None, shell_handler=None):
+        _sftp.host_key_confirmer = lambda *args: True  # Der Testserver gilt als vertrauenswürdig (Rückfragen gibt es nur in der GUI)
         self.user, self.password = user, password
         self._shell_handler = shell_handler
         self.commands: list[str] = []  # alle per exec ausgeführten Befehle (für Prüfungen in Tests)
