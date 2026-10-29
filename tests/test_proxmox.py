@@ -86,7 +86,7 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(proxmox.pick_address("x"), "")
 
     def test_vm_command(self):
-        self.assertEqual(proxmox.vm_command("10.0.0.5"), "ssh -t -o StrictHostKeyChecking=accept-new root@10.0.0.5")
+        self.assertEqual(proxmox.vm_command("10.0.0.5"), "ssh -t root@10.0.0.5")
         self.assertIn("admin@10.0.0.5", proxmox.vm_command("10.0.0.5", " admin "))
 
     def test_guest_target_titles_the_connection(self):
@@ -224,7 +224,7 @@ class TreeTests(GuiTestCase):
             self.w.connect_selected()
             self.wait(lambda: launch.called)
         self.assertEqual(launch.call_args.kwargs["remote_command"],
-                         "ssh -t -o StrictHostKeyChecking=accept-new admin@10.0.0.7")
+                         "ssh -t admin@10.0.0.7")
 
     def test_stopped_vm_is_not_connected(self):
         self.expand()

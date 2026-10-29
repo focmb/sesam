@@ -188,7 +188,7 @@ def shell_command(guest: Guest, local_node: bool | None = None) -> str:
 def vm_command(address: str, user: str = "") -> str:
     """Befehl für den Proxmox-Host, der von dort per SSH in die VM springt."""
     target = f"{user.strip()}@{address}" if user.strip() else f"root@{address}"
-    return shlex.join(["ssh", "-t", "-o", "StrictHostKeyChecking=accept-new", target])
+    return shlex.join(["ssh", "-t", target])  # unbekannter Host: ssh fragt im Terminal mit Fingerabdruck nach
 
 
 def guest_target(conn: Connection, guest: Guest, command: str) -> tuple[Connection, str]:
