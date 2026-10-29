@@ -503,14 +503,14 @@ EN: dict[str, str] = {
     "Passwort / Token": "Password / token",
     "Sync-Passwort": "Sync password",
     "Passwort oder Zugriffstoken": "Password or access token",
-    "mind. 8 Zeichen": "at least 8 characters",
+    "mind. 12 Zeichen": "at least 12 characters",
     "Letzter Abgleich: {last_sync}": "Last sync: {last_sync}",
     "Noch nicht abgeglichen.": "Not synchronized yet.",
     "Bitte zuerst eine URL eintragen.": "Please enter a URL first.",
     "Bitte eine Repository-URL eintragen.": "Please enter a repository URL.",
     "Zum Passwort fehlt der Benutzername.": "The username is missing for the password.",
     "Repository-Passwort": "Repository password",
-    "Das Sync-Passwort braucht mindestens 8 Zeichen.": "The sync password needs at least 8 characters.",
+    "Das Sync-Passwort braucht mindestens 12 Zeichen.": "The sync password needs at least 12 characters.",
     "Die beiden Sync-Passwörter stimmen nicht überein.": "The two sync passwords do not match.",
     "Bitte ein Sync-Passwort für die Verschlüsselung festlegen.": "Please set a sync password for encryption.",
     # syncing
@@ -658,4 +658,8 @@ EN: dict[str, str] = {
     "meta.json im Repository wurde verändert (Integritätsprüfung fehlgeschlagen).": "meta.json in the repository was changed (integrity check failed).",
     "{n} Eintrag/Einträge im Repository abgelehnt (nicht mit dem Sync-Passwort signiert): ":
         "{n} entry/entries in the repository rejected (not signed with the sync password): ",
+    "Das Argument {value} enthält Zeichen, die cmd.exe nicht sicher weitergeben kann. Bitte PowerShell oder Windows Terminal verwenden.": "The argument {value} contains characters that cmd.exe cannot pass on safely. Please use PowerShell or Windows Terminal.",
+    "Unbekannter Host-Schlüssel": "Unknown host key",
+    "Schlüsseltyp: {type}\nFingerabdruck: {fp}\n\nNur fortfahren, wenn der Fingerabdruck stimmt. Das Passwort wird sonst an einen Fremden gesendet.": "Key type: {type}\nFingerprint: {fp}\n\nOnly continue if the fingerprint is correct. Otherwise the password is sent to a stranger.",
+    "Vertrauen und verbinden": "Trust and connect",
 }

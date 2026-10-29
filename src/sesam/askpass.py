@@ -8,6 +8,7 @@ import sys
 from . import runtime, storage
 
 ENV_VAR = "SSHV_PASSWORD"
+HOST_VAR = "SSHV_HOST"  # Zielhost: nur dessen Passwortabfragen werden beantwortet (nicht die eines Jump-Hosts)
 
 
 def answer(prompt: str, env: dict[str, str] | None = None) -> str | None:
@@ -15,6 +16,9 @@ def answer(prompt: str, env: dict[str, str] | None = None) -> str | None:
     env = os.environ if env is None else env
     p = prompt.lower()
     if "passphrase" in p or not ("password" in p or "passwort" in p):
+        return None
+    h = env.get(HOST_VAR, "").lower()  # „user@host's password:“ bzw. „(user@host) Password:“ – andere Hosts bekommen nichts
+    if not h or (f"@{h}'s " not in p and f"@{h}) " not in p):
         return None
     return env.get(ENV_VAR)
 
@@ -41,7 +45,7 @@ def askpass_path() -> str:
             "#!/bin/sh\n"
             'case "$1" in\n'
             "  *[Pp]assphrase*) exit 1 ;;\n"
-            f'  *[Pp]assword*|*[Pp]asswort*) printf \'%s\\n\' "${ENV_VAR}" ;;\n'
+            f'  *"@${HOST_VAR}\'s "*[Pp]ass*|*"@${HOST_VAR}) "*[Pp]ass*) printf \'%s\\n\' "${ENV_VAR}" ;;\n'
             "  *) exit 1 ;;\n"
             "esac\n",
             encoding="utf-8",

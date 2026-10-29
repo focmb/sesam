@@ -251,7 +251,7 @@ A password can be stored per connection. It is saved in the operating system’s
 When connecting, the terminal starts `ssh` through a small wrapper that supplies the password via `SSH_ASKPASS`
 (OpenSSH ≥ 8.4). Notes:
 - Password prompts are answered automatically, other prompts (passphrase, 2FA code) are not.
-- Unknown hosts are added to `known_hosts` automatically (`StrictHostKeyChecking=accept-new`); changed keys are still rejected. If you set the option yourself under “Additional options”, yours takes precedence.
+- Unknown hosts are added to `known_hosts` automatically (`StrictHostKeyChecking=accept-new`); changed keys are still rejected. Automatic password entry only answers prompts of the target host, not those of a jump host. If you set the option yourself under “Additional options”, yours takes precedence.
 
 ## Connection errors and changed host keys
 
@@ -279,7 +279,7 @@ Every connection starts in the terminal through a small wrapper (even without a 
 - **Existing files:** if the target already has entries with the same name, Sesam asks: *Overwrite*, *Skip* or *Cancel*. The choice applies to top-level entries; files inside transferred folders are replaced on *Overwrite*.
 - **Manage:** *New folder*, *Rename* (F2) on both sides, *Delete* (Del) on the server (after confirmation, folders including their contents). Path bar (Ctrl+L), “Up one level”, Home folder and Refresh (F5) exist per side; the columns are sortable.
 - **Login:** as with the terminal, i.e. with user, key file or the password saved in the keyring (also via an identity). If nothing is stored or it is rejected, Sesam asks once; this password only applies to the open window and is not saved.
-  Unknown hosts are added to `known_hosts` as with ssh; changed keys are rejected.
+  Unknown hosts are added to `known_hosts` only after you confirm the fingerprint (SHA256); changed keys are rejected.
 - **Limits:** connections with a **jump host** are not supported yet; “Additional options” and *With sudo* do not apply to file transfer (it works as the connection’s user, not as root).
   Links to folders are not followed on download (protection against loops); links to files are transferred as files.
 - The transfer uses the Python library *paramiko*, so it needs no `sftp`/`scp` on the machine.
@@ -351,7 +351,7 @@ window widths stay per device). The tool uses the installed `git`. Login runs in
 
 - **Automatic:** at startup and shortly after every change. *F5* or *Sync now* triggers the sync manually; the status is shown at the bottom right.
 - **Repository layout:** one JSON file per entry (`connections/`, `identities/`, `ssh_keys/`, `snippets/`), `groups.json`, `meta.json`. The repository may be private, but plain-text data such as host names and users is visible in it.
-- **Passwords** are stored only encrypted (scrypt + AES-256-GCM) and written to the keyring on every device. You set the **sync password** on the first device and enter it on every further one. It cannot be recovered and cannot easily be changed. Without password sync, existing encrypted entries in the repository are kept.
+- **Passwords** are stored only encrypted (scrypt + AES-256-GCM) and written to the keyring on every device. You set the **sync password** (at least 12 characters, scrypt with N=2¹⁷ for new repositories) on the first device and enter it on every further one. It cannot be recovered and cannot easily be changed. Without password sync, existing encrypted entries in the repository are kept.
 - **Tamper protection:** With a sync password every entry is also signed (HMAC-SHA-256). Entries changed directly in the repository (e.g. host or `ProxyCommand`) are rejected: Sesam keeps the local version, writes it back correctly signed and reports “rejected”. Existing repositories are converted automatically on the first sync with a sync password – update all devices for this. Devices without a sync password cannot sign; their changes are rejected by devices with a password. Not covered: deleting entries and replaying older, validly signed states.
 - **Merging:** a three-way comparison per entry against the state of the last sync. Changes to different entries are combined, deletions are applied. If the same entry was changed differently on two devices, Sesam asks which version to use: the local one (uploaded to the server afterwards) or the server version (replaces the local one). No copies are created. *Cancel* ends the sync without any change and asks again next time.
 

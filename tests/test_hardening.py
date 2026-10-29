@@ -232,6 +232,8 @@ class HostileServerTests(unittest.TestCase):
         self.dest.mkdir()
         self.server = SftpTestServer(str(self.remote), host_key=self.host_key)
         self.addCleanup(self.server.close)
+        self.addCleanup(setattr, sftp, "host_key_confirmer", sftp.host_key_confirmer)
+        sftp.host_key_confirmer = lambda *args: True  # Testserver: Host-Schlüssel gilt als bestätigt
 
     def serve_names(self, *names):
         """Der Server nennt in „/sub“ Einträge mit den angegebenen (bösartigen) Namen."""
@@ -282,3 +284,63 @@ class HostileServerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowsQuotingTests(unittest.TestCase):
+    def test_powershell_quotes_everything_literally(self):
+        from sesam.launcher import powershell_join
+        out = powershell_join(["ssh", "-t", "u@h", "echo $(calc); `id` 'x' ‘y’ \"z\""])
+        self.assertEqual(out, "& 'ssh' '-t' 'u@h' 'echo $(calc); `id` ''x'' ‘‘y’’ \"z\"'")
+
+    def test_cmd_rejects_metacharacters(self):
+        from sesam.launcher import LaunchError, cmd_join
+        self.assertEqual(cmd_join(["ssh", "u@h", "ls -l"]), 'ssh u@h "ls -l"')
+        for bad in ("a&calc", "a|b", "a>b", "%PATH%", "^x", 'a"b', "a\nb"):
+            with self.assertRaises(LaunchError, msg=bad):
+                cmd_join(["ssh", bad])
+
+    def test_terminal_template_picks_the_quoting_by_program(self):
+        from sesam.launcher import build_terminal_command
+        from sesam.models import Connection, Terminal
+        conn = Connection("n", "h")
+        ps = build_terminal_command(Terminal("p", "powershell.exe -NoExit -Command {ssh_command}"), conn, ["sesam", "--remote-command", "x; calc"])
+        self.assertEqual(ps[-1], "& 'sesam' '--remote-command' 'x; calc'")
+        cmd = build_terminal_command(Terminal("c", "cmd.exe /k {ssh_command}"), conn, ["sesam", "--connect", "id"])
+        self.assertEqual(cmd[-1], "sesam --connect id")
+
+
+class HostKeyConfirmationTests(unittest.TestCase):
+    def setUp(self):
+        import paramiko
+        from sesam import sftp
+        self.sftp, self.paramiko = sftp, paramiko
+        self.key = paramiko.RSAKey.generate(1024)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.hosts = Path(self.tmp.name) / "known_hosts"
+        self.addCleanup(setattr, sftp, "host_key_confirmer", sftp.host_key_confirmer)
+
+    def _missing(self):
+        client = self.paramiko.SSHClient()
+        self.sftp._make_host_key_policy(self.hosts).missing_host_key(client, "h.example", self.key)
+        return client
+
+    def test_unknown_host_is_rejected_without_confirmer(self):
+        self.sftp.host_key_confirmer = None
+        with self.assertRaises(self.paramiko.SSHException):
+            self._missing()
+        self.assertFalse(self.hosts.exists())
+
+    def test_declined_confirmation_rejects_and_writes_nothing(self):
+        self.sftp.host_key_confirmer = lambda *a: False
+        with self.assertRaises(self.paramiko.SSHException):
+            self._missing()
+        self.assertFalse(self.hosts.exists())
+
+    def test_accepted_confirmation_is_remembered_with_fingerprint(self):
+        seen = []
+        self.sftp.host_key_confirmer = lambda host, kind, fp: seen.append((host, kind, fp)) or True
+        self._missing()
+        self.assertEqual(seen[0][:2], ("h.example", "ssh-rsa"))
+        self.assertTrue(seen[0][2].startswith("SHA256:") and "=" not in seen[0][2])
+        self.assertIn("h.example ssh-rsa", self.hosts.read_text(encoding="utf-8"))

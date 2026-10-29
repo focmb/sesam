@@ -24,6 +24,7 @@ from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
 from .connection_dialog import ConnectionDialog, swatch
 from .docker_dialog import DockerConnectDialog
+from .hostkey import HostKeyAsker
 from .identities_dialog import IdentitiesDialog
 from .keys_dialog import KeysDialog
 from .settings_dialog import SettingsDialog
@@ -99,6 +100,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.cfg = cfg
         self.path = path
+        self._hostkey_asker = HostKeyAsker(self)
+        sftp.host_key_confirmer = self._hostkey_asker.confirm  # unbekannte Host-Schlüssel nur nach Bestätigung merken
         self._sftp_windows: list[SftpWindow] = []  # offene Dateibrowser (SFTP)
         # Docker-Container je Host (nur zur Laufzeit): ID → Liste, Fehlertext oder None (= wird geladen)
         self._containers: dict[str, list[docker.Container] | str | None] = {}

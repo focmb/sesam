@@ -46,7 +46,7 @@ class SyncDialog(QDialog):
         self.passwords.setChecked(s.passwords)
         self.phrase = QLineEdit()
         self.phrase.setEchoMode(QLineEdit.EchoMode.Password)
-        self.phrase.setPlaceholderText(tr("gespeichert – leer lassen zum Beibehalten") if s.passphrase_saved else tr("mind. 8 Zeichen"))
+        self.phrase.setPlaceholderText(tr("gespeichert – leer lassen zum Beibehalten") if s.passphrase_saved else tr("mind. 12 Zeichen"))
         self.phrase2 = QLineEdit()
         self.phrase2.setEchoMode(QLineEdit.EchoMode.Password)
         self.phrase2.setPlaceholderText(tr("zur Kontrolle wiederholen"))
@@ -137,8 +137,8 @@ class SyncDialog(QDialog):
                 return
             if self.passwords.isChecked():
                 if new_phrase:
-                    if len(new_phrase) < 8:
-                        QMessageBox.warning(self, tr("Synchronisation"), tr("Das Sync-Passwort braucht mindestens 8 Zeichen."))
+                    if len(new_phrase) < 12:
+                        QMessageBox.warning(self, tr("Synchronisation"), tr("Das Sync-Passwort braucht mindestens 12 Zeichen."))
                         return
                     if new_phrase != self.phrase2.text():
                         QMessageBox.warning(self, tr("Synchronisation"), tr("Die beiden Sync-Passwörter stimmen nicht überein."))

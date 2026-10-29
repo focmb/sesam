@@ -102,7 +102,7 @@ def _b64d(s: str) -> bytes:
 
 
 def new_kdf() -> dict:
-    return {"name": "scrypt", "n": 2**15, "r": 8, "p": 1, "salt": _b64e(os.urandom(16))}
+    return {"name": "scrypt", "n": 2**17, "r": 8, "p": 1, "salt": _b64e(os.urandom(16))}
 
 
 def derive_key(passphrase: str, kdf: dict) -> bytes:

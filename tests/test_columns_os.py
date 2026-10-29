@@ -158,9 +158,8 @@ class DetectTests(unittest.TestCase):
         with mock.patch.object(paramiko.SSHClient, "connect", side_effect=error):
             with self.assertRaises(sftp.SftpUnknownHostKey):
                 sftp.open_client(Config(), Connection("x", "h"), strict_host_keys=True)
-            with self.assertRaises(sftp.SftpError) as ctx:  # ohne strict bleibt es eine gewöhnliche Fehlermeldung
+            with self.assertRaises(sftp.SftpUnknownHostKey):  # auch ohne strict: abgelehnte Rückfrage = unbekannter Host
                 sftp.open_client(Config(), Connection("x", "h"))
-            self.assertNotIsInstance(ctx.exception, sftp.SftpUnknownHostKey)
 
     def test_strict_uses_reject_policy(self):
         import paramiko

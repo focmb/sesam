@@ -25,6 +25,7 @@ def prepare(conn: Connection, password: str | None, askpass_script: str, base_en
         env[launcher.SUDO_ENV] = password
     if password is not None:
         env[ENV_VAR] = password
+        env[askpass.HOST_VAR] = conn.host
         env["SSH_ASKPASS"] = askpass_script
         env["SSH_ASKPASS_REQUIRE"] = "force"
         env.setdefault("DISPLAY", "sesam")

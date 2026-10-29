@@ -96,6 +96,7 @@ class PasswordTests(unittest.TestCase):
         self.assertEqual(env["SSHV_PASSWORD"], "geheim")
         self.assertEqual(env["SSH_ASKPASS_REQUIRE"], "force")
         self.assertEqual(env["SSH_ASKPASS"], "/x/askpass.sh")
+        self.assertEqual(env["SSHV_HOST"], c.host)
 
     def test_prepare_respects_user_hostkey_option(self):
         from sesam.connect_cli import prepare
@@ -110,8 +111,12 @@ class PasswordTests(unittest.TestCase):
 
     def test_askpass_answers_only_password_prompts(self):
         from sesam.askpass import answer
-        env = {"SSHV_PASSWORD": "pw"}
+        env = {"SSHV_PASSWORD": "pw", "SSHV_HOST": "h"}
         self.assertEqual(answer("u@h's password: ", env), "pw")
+        self.assertEqual(answer("(u@H) Password: ", env), "pw")                 # Keyboard-Interactive
+        self.assertIsNone(answer("admin@bastion's password: ", env))             # Jump-Host
+        self.assertIsNone(answer("Password: ", env))                             # vom Server formulierte Abfrage
+        self.assertIsNone(answer("u@h's password: ", {"SSHV_PASSWORD": "pw"}))   # kein Zielhost bekannt
         self.assertIsNone(answer("Are you sure you want to continue connecting (yes/no)? ", env))
         self.assertIsNone(answer("Enter passphrase for key '/k': ", env))
 
@@ -122,11 +127,14 @@ class PasswordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             with mock.patch.object(askpass.storage, "config_dir", return_value=Path(d)):
                 script = askpass.askpass_path()
-            env = {**os.environ, "SSHV_PASSWORD": "p&ss $x'\"w"}
+            env = {**os.environ, "SSHV_PASSWORD": "p&ss $x'\"w", "SSHV_HOST": "h"}
             r = subprocess.run([script, "user@h's password: "], env=env, capture_output=True, text=True)
             self.assertEqual(r.stdout, "p&ss $x'\"w\n")
-            r = subprocess.run([script, "Are you sure (yes/no)?"], env=env, capture_output=True, text=True)
-            self.assertEqual(r.returncode, 1)
+            for prompt in ("Are you sure (yes/no)?", "admin@bastion's password: ", "Password: "):
+                r = subprocess.run([script, prompt], env=env, capture_output=True, text=True)
+                self.assertEqual((r.returncode, r.stdout), (1, ""), prompt)
+            r = subprocess.run([script, "(u@h) Password: "], env=env, capture_output=True, text=True)
+            self.assertEqual(r.stdout, "p&ss $x'\"w\n")
 
 
 class TemplateTests(unittest.TestCase):

@@ -36,6 +36,31 @@ def join_command(args: list[str]) -> str:
     return subprocess.list2cmdline(args) if IS_WINDOWS else shlex.join(args)
 
 
+_PS_QUOTES = "'\u2018\u2019\u201a\u201b"  # PowerShell behandelt auch typografische Apostrophe als Anführungszeichen
+_CMD_UNSAFE = re.compile(r'[&|<>^%!"\r\n\x00]')
+
+
+def _shell_kind(program: str) -> str:
+    name = os.path.basename(program.replace("\\", "/")).lower()
+    name = name[:-4] if name.endswith(".exe") else name
+    return name if name in ("powershell", "pwsh", "cmd") else ""
+
+
+def powershell_join(args: list[str]) -> str:
+    """Befehl für ``powershell -Command``: jedes Argument als wörtliche ('…') Zeichenkette, keine Auswertung von $(…), ; oder Backticks."""
+    def quote(arg: str) -> str:
+        return "'" + "".join(c * 2 if c in _PS_QUOTES else c for c in arg) + "'"
+    return "& " + " ".join(quote(a) for a in args)
+
+
+def cmd_join(args: list[str]) -> str:
+    """Befehl für ``cmd /k``: cmd lässt sich nicht zuverlässig quoten, daher werden Metazeichen abgelehnt."""
+    for a in args:
+        if _CMD_UNSAFE.search(a):
+            raise LaunchError(tr("Das Argument {value} enthält Zeichen, die cmd.exe nicht sicher weitergeben kann. Bitte PowerShell oder Windows Terminal verwenden.", value=repr(a)))
+    return subprocess.list2cmdline(args)
+
+
 def destination(conn: Connection) -> str:
     return f"{conn.user}@{conn.host}" if conn.user else conn.host
 
@@ -188,7 +213,8 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
         "{user}": conn.user,
         "{port}": str(conn.port),
         "{destination}": destination(conn),
-        "{ssh_command}": join_command(ssh_args),
+        "{ssh_command}": {"powershell": powershell_join, "pwsh": powershell_join, "cmd": cmd_join}.get(
+            _shell_kind(split_command(terminal.command)[0]) if terminal.command.strip() else "", join_command)(ssh_args),
     }
     if wt:
         ctx = {key: _wt_escape(value) if key != "{ssh_command}" else value for key, value in ctx.items()}

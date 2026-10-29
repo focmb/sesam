@@ -8,11 +8,14 @@ import threading
 import time
 
 import paramiko
+from sesam import sftp as _sftp
 from paramiko import AUTH_FAILED, AUTH_SUCCESSFUL, OPEN_SUCCEEDED, SFTP_OK, SFTPAttributes, SFTPHandle, SFTPServer, SFTPServerInterface
 
 
 logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)  # Abbrüche beim Test-Aufräumen sind erwartet, kein Lärm
 
+
+_sftp.host_key_confirmer = lambda *args: True  # Der Testserver gilt als vertrauenswürdig (Rückfragen gibt es nur in der GUI)
 
 class _Auth(paramiko.ServerInterface):
     def __init__(self, user: str, password: str, exec_handler=None, shell_handler=None):

@@ -249,7 +249,7 @@ Pro Verbindung kann ein Passwort hinterlegt werden. Es wird im Schlüsselbund de
 Beim Verbinden startet das Terminal `ssh` über einen kleinen Wrapper, der das Passwort per `SSH_ASKPASS` übergibt
 (OpenSSH ≥ 8.4). Hinweise:
 - Auf Passwortabfragen wird automatisch geantwortet, auf andere Abfragen (Passphrase, 2FA-Code) nicht.
-- Unbekannte Hosts werden automatisch in `known_hosts` aufgenommen (`StrictHostKeyChecking=accept-new`), geänderte Schlüssel werden weiterhin abgelehnt. Setzt du die Option selbst unter „Zusätzliche Optionen“, hat sie Vorrang.
+- Unbekannte Hosts werden automatisch in `known_hosts` aufgenommen (`StrictHostKeyChecking=accept-new`), geänderte Schlüssel werden weiterhin abgelehnt. Die automatische Passwort-Eingabe antwortet nur auf Abfragen des Zielhosts, nicht auf die eines Jump-Hosts. Setzt du die Option selbst unter „Zusätzliche Optionen“, hat sie Vorrang.
 
 ## Verbindungsfehler und geänderte Host-Schlüssel
 
@@ -277,7 +277,7 @@ Jede Verbindung startet im Terminal über einen kleinen Wrapper (auch ohne gespe
 - **Vorhandene Dateien:** Gibt es am Ziel schon gleichnamige Einträge, fragt Sesam: *Überschreiben*, *Überspringen* oder *Abbrechen*. Die Wahl gilt für die Einträge der obersten Ebene; Dateien in übertragenen Ordnern werden bei *Überschreiben* ersetzt.
 - **Verwalten:** *Neuer Ordner*, *Umbenennen* (F2) auf beiden Seiten, *Löschen* (Entf) auf dem Server (nach Rückfrage, Ordner samt Inhalt). Pfadzeile (Strg+L), „Eine Ebene höher“, Persönlicher Ordner und Aktualisieren (F5) gibt es je Seite; die Spalten lassen sich sortieren.
 - **Anmeldung:** wie beim Terminal, also mit Benutzer, Schlüsseldatei oder dem im Schlüsselbund gespeicherten Passwort (auch über eine Identität). Ist nichts hinterlegt oder wird es abgelehnt, fragt Sesam einmal nach; dieses Passwort gilt nur für das geöffnete Fenster und wird nicht gespeichert.
-  Unbekannte Hosts werden wie bei ssh in `known_hosts` aufgenommen, geänderte Schlüssel abgelehnt.
+  Unbekannte Hosts werden erst nach Bestätigung des Fingerabdrucks (SHA256) in `known_hosts` aufgenommen, geänderte Schlüssel abgelehnt.
 - **Grenzen:** Verbindungen mit **Jump-Host** werden noch nicht unterstützt, „Zusätzliche Optionen“ und *Mit sudo* gelten nicht für die Dateiübertragung (es wird mit dem Benutzer der Verbindung gearbeitet, nicht als root).
   Verknüpfungen auf Ordner werden beim Herunterladen nicht verfolgt (Schutz vor Schleifen), Verknüpfungen auf Dateien als Datei übertragen.
 - Die Übertragung nutzt die Python-Bibliothek *paramiko*, braucht also kein `sftp`/`scp` auf dem Rechner.
@@ -349,7 +349,7 @@ Fensterbreiten bleiben pro Gerät). Das Tool nutzt das installierte `git`. Die A
 
 - **Automatisch:** beim Start und kurz nach jeder Änderung. *F5* bzw. *Jetzt synchronisieren* löst den Abgleich manuell aus; der Status steht rechts unten.
 - **Repository-Aufbau:** eine JSON-Datei pro Eintrag (`connections/`, `identities/`, `ssh_keys/`, `snippets/`), `groups.json`, `meta.json`. Das Repository darf privat sein, ist aber für Klartext-Daten wie Hostnamen und Benutzer sichtbar.
-- **Passwörter** werden nur verschlüsselt abgelegt (scrypt + AES-256-GCM) und auf jedem Gerät in den Schlüsselbund geschrieben. Das **Sync-Passwort** legst du auf dem ersten Gerät fest und gibst es auf jedem weiteren ein. Es lässt sich nicht wiederherstellen und auch nicht ohne Weiteres ändern. Ohne Passwort-Sync bleiben vorhandene verschlüsselte Einträge im Repository erhalten.
+- **Passwörter** werden nur verschlüsselt abgelegt (scrypt + AES-256-GCM) und auf jedem Gerät in den Schlüsselbund geschrieben. Das **Sync-Passwort** (mindestens 12 Zeichen, scrypt mit N=2¹⁷ bei neuen Repositories) legst du auf dem ersten Gerät fest und gibst es auf jedem weiteren ein. Es lässt sich nicht wiederherstellen und auch nicht ohne Weiteres ändern. Ohne Passwort-Sync bleiben vorhandene verschlüsselte Einträge im Repository erhalten.
 - **Manipulationsschutz:** Mit Sync-Passwort wird jeder Eintrag zusätzlich signiert (HMAC-SHA-256). Einträge, die jemand direkt im Repository ändert (z. B. Host oder `ProxyCommand`), lehnt Sesam ab, behält die lokale Version, schreibt sie korrekt signiert zurück und meldet „abgelehnt“. Bestehende Repositories werden beim ersten Abgleich mit Sync-Passwort automatisch umgestellt – dafür auf allen Geräten aktualisieren. Geräte ohne Sync-Passwort können nicht signieren; ihre Änderungen werden von Geräten mit Passwort abgelehnt. Nicht abgedeckt: das Löschen von Einträgen und das Zurückspielen älterer, gültig signierter Stände.
 - **Zusammenführen:** je Eintrag ein Dreiwege-Vergleich mit dem Stand des letzten Abgleichs. Änderungen an verschiedenen Einträgen werden kombiniert, Löschungen übernommen. Wurde derselbe Eintrag auf zwei Geräten unterschiedlich geändert, fragt Sesam, welche Version gelten soll: die lokale (wird danach auf den Server hochgeladen) oder die Server-Version (ersetzt die lokale). Es entstehen keine Kopien. Mit *Abbrechen* wird der Abgleich ohne Änderung beendet und beim nächsten Mal erneut gefragt.
 

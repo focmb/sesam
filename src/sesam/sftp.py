@@ -6,6 +6,8 @@ Alle Funktionen blockieren und gehören in einen Hintergrund-Thread. Zu jeder Ve
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 import posixpath
 import stat
@@ -86,8 +88,17 @@ def _known_hosts_name(host: str, port: int) -> str:
     return host if port == 22 else f"[{host}]:{port}"
 
 
+# Rückfrage bei unbekannten Host-Schlüsseln: (Host, Schlüsseltyp, SHA256-Fingerabdruck) → vertrauen?
+# Ohne Funktion (oder bei Ablehnung) wird die Verbindung nicht aufgebaut, damit kein Passwort an einen Fremden geht.
+host_key_confirmer = None
+
+
+def _sha256_fingerprint(key) -> str:
+    return "SHA256:" + base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode("ascii").rstrip("=")
+
+
 def _make_host_key_policy(known_hosts: Path):
-    """Wie ``StrictHostKeyChecking=accept-new``: unbekannte Hosts werden gemerkt, geänderte Schlüssel abgelehnt.
+    """Unbekannte Hosts werden nach Rückfrage (``host_key_confirmer``) in known_hosts gemerkt, geänderte Schlüssel abgelehnt.
 
     Die Datei wird nur um eine Zeile ergänzt (nie neu geschrieben), damit gehashte oder kommentierte Einträge
     des Anwenders unangetastet bleiben.
@@ -96,6 +107,9 @@ def _make_host_key_policy(known_hosts: Path):
 
     class AcceptNew(paramiko.MissingHostKeyPolicy):
         def missing_host_key(self, client, hostname, key):
+            confirm = host_key_confirmer
+            if confirm is None or not confirm(hostname, key.get_name(), _sha256_fingerprint(key)):
+                raise paramiko.SSHException(f"Server '{hostname}' not found in known_hosts")
             line = f"{hostname} {key.get_name()} {key.get_base64()}\n"
             try:
                 known_hosts.parent.mkdir(parents=True, exist_ok=True)
@@ -187,7 +201,7 @@ def open_client(
         raise SftpAuthError(tr("Anmeldung abgelehnt (Passwort oder Schlüssel stimmen nicht).")) from exc
     except (paramiko.SSHException, OSError, EOFError) as exc:
         client.close()
-        if strict_host_keys and "not found in known_hosts" in str(exc):
+        if "not found in known_hosts" in str(exc):
             raise SftpUnknownHostKey(tr("Der Host {host} ist noch nicht bekannt.", host=eff.host)) from exc
         if "No authentication methods" in str(exc):  # weder Passwort noch Schlüssel vorhanden
             raise SftpAuthError(tr("Es ist kein Passwort oder Schlüssel hinterlegt.")) from exc
