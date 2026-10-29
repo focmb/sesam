@@ -75,7 +75,7 @@ def parse_status(output: str) -> list[Port]:
 
 
 def check_port_name(name: str) -> str:
-    if not _PORT_NAME.match(name or ""):
+    if not _PORT_NAME.fullmatch(name or ""):  # fullmatch: „$“ würde ein abschließendes Zeilenende durchlassen
         raise CiscoError(tr("Der Portname „{name}“ ist ungültig.", name=name))
     return name
 
@@ -83,6 +83,8 @@ def check_port_name(name: str) -> str:
 def check_description(text: str) -> str:
     """Beschreibung für ``description``: einzeilig, ohne „?“ (löst in der Geräte-Shell die Hilfe aus)."""
     text = " ".join(text.split())
+    if not text.isprintable():  # Steuerzeichen (Strg+Z, ESC …) würden von der Geräte-Shell ausgewertet
+        raise CiscoError(tr("Die Beschreibung enthält Steuerzeichen."))
     if "?" in text:
         raise CiscoError(tr("Die Beschreibung darf kein „?“ enthalten."))
     if len(text) > MAX_DESCRIPTION:

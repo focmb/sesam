@@ -635,4 +635,21 @@ EN: dict[str, str] = {
     "verbunden": "connected",
     "Verbindung zu {host} fehlgeschlagen: Das Gerät hat die Verbindung während der Anmeldung getrennt (zu viele Anmeldeversuche oder nicht unterstützte Verfahren).":
         "Connection to {host} failed: the device closed the connection during login (too many login attempts or unsupported methods).",
+    # Eingabeprüfung und Härtung
+    "Host": "Host",
+    "Ungültiger Wert für {what}: {value}": "Invalid value for {what}: {value}",
+    "Die Befehlszeile ist ungültig: {exc}": "The command line is invalid: {exc}",
+    "Die Verbindung kann nicht vorbereitet werden: {exc}": "The connection cannot be prepared: {exc}",
+    "Die Beschreibung enthält Steuerzeichen.": "The description contains control characters.",
+    "Die Ordner sind zu tief verschachtelt.": "The folders are nested too deeply.",
+    "Der Server meldet den unzulässigen Namen {name}.": "The server reports the invalid name {name}.",
+    "Unzulässiger Zielpfad: {rel}": "Invalid target path: {rel}",
+    "Ungültiger Branch-Name: {branch}": "Invalid branch name: {branch}",
+    "Ungültige Repository-Adresse.": "Invalid repository address.",
+    "Zugangsdaten werden nicht über unverschlüsseltes HTTP gesendet. Bitte eine https://-Adresse verwenden.":
+        "Credentials are not sent over unencrypted HTTP. Please use an https:// address.",
+    "Ungültige Schlüsselableitung im Repository (meta.json).": "Invalid key derivation in the repository (meta.json).",
+    "Ungültige ID im Eintrag „{name}“.": "Invalid ID in the entry \u201c{name}\u201d.",
+    "Das Repository enthält symbolische Links und wird aus Sicherheitsgründen nicht verwendet.":
+        "The repository contains symbolic links and is not used for security reasons.",
 }

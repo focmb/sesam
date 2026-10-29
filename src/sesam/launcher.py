@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -21,11 +22,14 @@ class LaunchError(Exception):
 
 
 def split_command(text: str) -> list[str]:
-    """Zerlegt eine Befehlszeile plattformgerecht in Argumente."""
-    if IS_WINDOWS:
-        parts = shlex.split(text, posix=False)
-        return [p[1:-1] if len(p) >= 2 and p[0] == p[-1] and p[0] in "\"'" else p for p in parts]
-    return shlex.split(text)
+    """Zerlegt eine Befehlszeile plattformgerecht in Argumente. Unbrauchbare Eingaben (z. B. offene Anführungszeichen) ergeben ``LaunchError``."""
+    try:
+        if IS_WINDOWS:
+            parts = shlex.split(text, posix=False)
+            return [p[1:-1] if len(p) >= 2 and p[0] == p[-1] and p[0] in "\"'" else p for p in parts]
+        return shlex.split(text)
+    except ValueError as exc:
+        raise LaunchError(tr("Die Befehlszeile ist ungültig: {exc}", exc=exc)) from exc
 
 
 def join_command(args: list[str]) -> str:
@@ -34,6 +38,24 @@ def join_command(args: list[str]) -> str:
 
 def destination(conn: Connection) -> str:
     return f"{conn.user}@{conn.host}" if conn.user else conn.host
+
+
+_UNSAFE_TARGET = re.compile(r"[\x00-\x20\x7f]")
+
+
+def _check_target_part(value: str, what: str) -> None:
+    if value.startswith("-") or _UNSAFE_TARGET.search(value):
+        raise LaunchError(tr("Ungültiger Wert für {what}: {value}", what=what, value=repr(value)))
+
+
+def check_target(conn: Connection) -> None:
+    """Host, Benutzer und Jump-Host dürfen nicht wie eine ssh-Option aussehen (``-oProxyCommand=…``) und keine Leer- oder Steuerzeichen enthalten.
+
+    Die Werte können aus einem Sync-Repository oder ``~/.ssh/config`` stammen und landen als Argument im ssh-Aufruf."""
+    _check_target_part(conn.host, tr("Host"))
+    _check_target_part(conn.user, tr("Benutzer"))
+    for part in conn.jump_host.split(","):
+        _check_target_part(part.strip(), tr("Jump-Host"))
 
 
 SUDO_MODES = {"login": "-i", "shell": "-s"}
@@ -65,6 +87,7 @@ def remote_command_line(conn: Connection, sudo_password: bool = False) -> str:
 
 
 def build_ssh_args(conn: Connection, sudo_password: bool = False) -> list[str]:
+    check_target(conn)
     args = ["ssh"]
     if conn.port and conn.port != 22:
         args += ["-p", str(conn.port)]
@@ -79,7 +102,7 @@ def build_ssh_args(conn: Connection, sudo_password: bool = False) -> list[str]:
         args += ["-o", f"SendEnv={SUDO_ENV}"]
     if remote:
         args.append("-t")
-    args.append(destination(conn))
+    args += ["--", destination(conn)]  # nach „--“ nie mehr eine Option
     if remote:
         args.append(remote)
     return args
@@ -154,6 +177,7 @@ def _wt_escape(text: str) -> str:
 
 
 def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[str] | None = None) -> list[str]:
+    check_target(conn)
     ssh_args = ssh_args if ssh_args is not None else build_ssh_args(conn)
     wt = bool(terminal.command.strip()) and is_windows_terminal(split_command(terminal.command)[0])
     if wt:  # eingesetzte Werte (z. B. Snippet-Befehle mit „;“) dürfen Windows Terminal nicht in mehrere Befehle zerlegen

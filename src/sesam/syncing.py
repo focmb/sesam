@@ -23,6 +23,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -40,6 +41,25 @@ GIT_PASSWORD_KEY = "sync:git-password"  # Schlüssel im Schlüsselbund für das 
 FORMAT = 1
 KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey), "s": ("snippets", Snippet)}
 VOLATILE = {"use_password"}  # lokal abgeleitet, nicht Teil des Vergleichs
+SAFE_ID = keystore._SAFE_ID  # IDs werden zu Dateinamen im Repository: keine Pfadtrenner, kein „..“
+_SAFE_BRANCH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}")
+_UNSAFE_URL = re.compile(r"[\x00-\x20\x7f]")
+SCRYPT_LIMITS = {"n": (2, 2**18), "r": (1, 16), "p": (1, 8)}  # Obergrenzen gegen manipulierte meta.json (Speicher und Rechenzeit)
+
+
+def check_branch(branch: str) -> str:
+    """Branch-Name, der nie wie eine git-Option aussieht."""
+    if not _SAFE_BRANCH.fullmatch(branch) or ".." in branch or branch.endswith(("/", ".lock")):
+        raise SyncError(tr("Ungültiger Branch-Name: {branch}", branch=repr(branch)))
+    return branch
+
+
+def check_url(url: str) -> str:
+    """Repository-Adresse, die nie wie eine git-Option aussieht (``--upload-pack=…``) und keine Leer- oder Steuerzeichen enthält."""
+    url = url.strip()
+    if url.startswith("-") or _UNSAFE_URL.search(url):
+        raise SyncError(tr("Ungültige Repository-Adresse."))
+    return url
 
 
 class SyncError(Exception):
@@ -86,12 +106,17 @@ def new_kdf() -> dict:
 
 
 def derive_key(passphrase: str, kdf: dict) -> bytes:
-    if kdf.get("name") != "scrypt":
+    if not isinstance(kdf, dict) or kdf.get("name") != "scrypt":
         raise SyncError(tr("Unbekanntes Schlüsselableitungsverfahren im Repository."))
-    return hashlib.scrypt(
-        passphrase.encode("utf-8"), salt=_b64d(kdf["salt"]), n=kdf["n"], r=kdf["r"], p=kdf["p"],
-        maxmem=256 * 1024 * 1024, dklen=32,
-    )
+    try:
+        params = {k: kdf[k] for k in SCRYPT_LIMITS}
+        if any(isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi for (k, v), (lo, hi) in zip(params.items(), SCRYPT_LIMITS.values())):
+            raise ValueError("Parameter außerhalb des erlaubten Bereichs")
+        return hashlib.scrypt(
+            passphrase.encode("utf-8"), salt=_b64d(kdf["salt"]), maxmem=256 * 1024 * 1024, dklen=32, **params,
+        )
+    except (KeyError, ValueError, TypeError, AttributeError) as exc:
+        raise SyncError(tr("Ungültige Schlüsselableitung im Repository (meta.json).")) from exc
 
 
 def encrypt(key: bytes, plaintext: str, aad: str) -> dict:
@@ -108,7 +133,7 @@ def decrypt(key: bytes, blob: dict, aad: str) -> str:
 
     try:
         return AESGCM(key).decrypt(_b64d(blob["nonce"]), _b64d(blob["ct"]), aad.encode("utf-8")).decode("utf-8")
-    except (InvalidTag, KeyError, ValueError) as exc:
+    except (InvalidTag, KeyError, ValueError, TypeError, AttributeError) as exc:
         raise SyncError(tr("Entschlüsselung fehlgeschlagen (falsches Sync-Passwort?).")) from exc
 
 
@@ -274,6 +299,8 @@ def load_credentials(settings: SyncSettings) -> tuple[str, str] | None:
     user = settings.username.strip()
     if not user:
         return None
+    if settings.url.strip().lower().startswith("http://"):
+        raise SyncError(tr("Zugangsdaten werden nicht über unverschlüsseltes HTTP gesendet. Bitte eine https://-Adresse verwenden."))
     password = ""
     if settings.git_password_saved:
         try:
@@ -292,6 +319,7 @@ class Git:
         env = runtime.clean_env()
         env.setdefault("GIT_TERMINAL_PROMPT", "0")
         env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+        env.setdefault("GIT_ALLOW_PROTOCOL", "https:http:ssh:git:file")  # keine Hilfsprogramm-Transporte wie „ext::“
         cred_args, cred_env = credential_config(self.credentials)
         env.update(cred_env)
         kwargs = {}
@@ -315,6 +343,9 @@ class Git:
 
 def check_remote(url: str, credentials: tuple[str, str] | None = None) -> str:
     """Prüft, ob das Repository erreichbar ist. Liefert eine kurze Beschreibung."""
+    url = check_url(url)
+    if credentials and url.lower().startswith("http://"):
+        raise SyncError(tr("Zugangsdaten werden nicht über unverschlüsseltes HTTP gesendet. Bitte eine https://-Adresse verwenden."))
     out = Git(Path.cwd(), credentials).run("ls-remote", "--heads", url, timeout=60)
     n = len(out.strip().splitlines())
     return tr("Repository erreichbar (leer).") if n == 0 else tr("Repository erreichbar ({n} Branch(es)).", n=n)
@@ -400,14 +431,16 @@ class SyncEngine:
     def fetch(self) -> RemoteState:
         if not self.s.url.strip():
             raise SyncError(tr("Keine Repository-URL eingestellt."))
-        branch = self.s.branch.strip() or "main"
+        url = check_url(self.s.url)
+        branch = check_branch(self.s.branch.strip() or "main")
         self.repo.parent.mkdir(parents=True, exist_ok=True)
         if not (self.repo / ".git").exists():
             self.repo.mkdir(parents=True, exist_ok=True)
             Git(self.repo).run("init", "-q")
-            self.git.run("remote", "add", "origin", self.s.url)
+            self.git.run("remote", "add", "origin", url)
         else:
-            self.git.run("remote", "set-url", "origin", self.s.url)
+            self.git.run("remote", "set-url", "origin", url)
+        self.git.run("config", "core.symlinks", "false")  # ein feindliches Repository darf keine Links ins Dateisystem legen
         heads = self.git.run("ls-remote", "--heads", "origin", branch, timeout=60).strip()
         exists = bool(heads)
         if exists:
@@ -418,8 +451,17 @@ class SyncEngine:
             self.git.run("symbolic-ref", "HEAD", f"refs/heads/{branch}")
             self.git.run("rm", "-rq", "--cached", ".", check=False)
         self.git.run("clean", "-fdxq")
+        self._reject_symlinks()
         self._remote = self._read_remote(exists)
         return self._remote
+
+    def _reject_symlinks(self) -> None:
+        for root, dirs, files in os.walk(self.repo):
+            if ".git" in dirs:
+                dirs.remove(".git")
+            for name in (*dirs, *files):
+                if os.path.islink(os.path.join(root, name)):
+                    raise SyncError(tr("Das Repository enthält symbolische Links und wird aus Sicherheitsgründen nicht verwendet."))
 
     def _read_remote(self, branch_exists: bool) -> RemoteState:
         meta = None
@@ -427,15 +469,17 @@ class SyncEngine:
         if meta_path.exists():
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            except ValueError as exc:
+            except (ValueError, OSError) as exc:  # ValueError: auch ungültiges UTF-8
                 raise SyncError(tr("meta.json im Repository ist beschädigt.")) from exc
+            if not isinstance(meta, dict):
+                raise SyncError(tr("meta.json im Repository ist beschädigt."))
         key, new_meta = None, False
         if self.s.passwords:
             if not self.passphrase:
                 raise SyncError(tr("Das Sync-Passwort fehlt (Seitenleiste → Synchronisation …)."))
             if meta and meta.get("kdf"):
                 key = derive_key(self.passphrase, meta["kdf"])
-                decrypt(key, meta["check"], "check")  # prüft das Sync-Passwort
+                decrypt(key, meta.get("check"), "check")  # prüft das Sync-Passwort
             else:
                 meta = {"format": FORMAT, "kdf": new_kdf()}
                 key = derive_key(self.passphrase, meta["kdf"])
@@ -446,11 +490,15 @@ class SyncEngine:
             for path in sorted((self.repo / folder).glob("*.json")) if (self.repo / folder).is_dir() else []:
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
+                    if not isinstance(data, dict):
+                        continue
                     blob = data.pop("password_enc", None)
                     item_id = data["id"]
+                    if not isinstance(item_id, str) or not SAFE_ID.fullmatch(item_id):
+                        continue  # die ID wird zum Dateinamen: nichts aus einem manipulierten Repository übernehmen
                     # auf bekannte Felder normalisieren (fehlende Felder bekommen Standardwerte)
                     data = {k: v for k, v in asdict(_cls.from_dict(data)).items() if k not in VOLATILE}
-                except (ValueError, KeyError, OSError):
+                except (ValueError, KeyError, OSError, TypeError, AttributeError, RecursionError):
                     continue  # beschädigte Datei überspringen
                 pw = decrypt(key, blob, item_id) if (key and blob) else None
                 items[(kind, item_id)] = Item(kind, item_id, data, pw, blob)
@@ -460,11 +508,13 @@ class SyncEngine:
         if gp.exists():
             try:
                 gdata = json.loads(gp.read_text(encoding="utf-8"))
-                groups = set(gdata.get("groups", []))
-                raw = gdata.get("colors")
-                if isinstance(raw, dict):
-                    colors = {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
-            except ValueError:
+                if isinstance(gdata, dict):
+                    listed = gdata.get("groups", [])
+                    groups = {g for g in listed if isinstance(g, str)} if isinstance(listed, list) else set()
+                    raw = gdata.get("colors")
+                    if isinstance(raw, dict):
+                        colors = {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
+            except (ValueError, OSError, RecursionError):
                 pass
         return RemoteState(items, groups, meta, key, branch_exists, new_meta, colors)
 
@@ -643,6 +693,8 @@ class SyncEngine:
 
         wanted: set[Path] = set()
         for k, item in result.items():
+            if not isinstance(item.id, str) or not SAFE_ID.fullmatch(item.id):
+                raise SyncError(tr("Ungültige ID im Eintrag „{name}“.", name=str(item.data.get("name", ""))))
             folder = KINDS[k[0]][0]
             path = self.repo / folder / f"{item.id}.json"
             wanted.add(path)
@@ -676,7 +728,7 @@ class SyncEngine:
     def push(self) -> bool:
         pushed = False
         if self._dirty_commit:
-            branch = self.s.branch.strip() or "main"
+            branch = check_branch(self.s.branch.strip() or "main")
             try:
                 self.git.run("push", "-q", "origin", f"HEAD:refs/heads/{branch}", timeout=180)
             except SyncError as exc:

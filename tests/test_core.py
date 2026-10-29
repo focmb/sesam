@@ -11,16 +11,16 @@ from sesam.ssh_config import parse_ssh_config
 class LauncherTests(unittest.TestCase):
     def test_ssh_args_basic(self):
         c = Connection(name="a", host="h.example", user="root", port=2222, identity_file="/k", jump_host="j@b", extra_args="-o A=B")
-        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-p", "2222", "-i", "/k", "-J", "j@b", "-o", "A=B", "root@h.example"])
+        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-p", "2222", "-i", "/k", "-J", "j@b", "-o", "A=B", "--", "root@h.example"])
 
     def test_ssh_args_remote_command(self):
         c = Connection(name="a", host="h", remote_command="tmux attach")
-        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "h", "tmux attach"])
+        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "--", "h", "tmux attach"])
 
     def test_terminal_ssh_args_expansion(self):
         t = Terminal("x", "gnome-terminal --title {title} -- {ssh_args}")
         c = Connection(name="Mein Server", host="h", user="u")
-        self.assertEqual(launcher.build_terminal_command(t, c), ["gnome-terminal", "--title", "Mein Server", "--", "ssh", "u@h"])
+        self.assertEqual(launcher.build_terminal_command(t, c), ["gnome-terminal", "--title", "Mein Server", "--", "ssh", "--", "u@h"])
 
     def test_terminal_ssh_command_string(self):
         t = Terminal("x", "cmd.exe /k {ssh_command}")
@@ -92,7 +92,7 @@ class PasswordTests(unittest.TestCase):
         from sesam.connect_cli import prepare
         c = Connection("n", "h", user="u")
         args, env = prepare(c, "geheim", "/x/askpass.sh", {})
-        self.assertEqual(args, ["ssh", "-o", "StrictHostKeyChecking=accept-new", "u@h"])
+        self.assertEqual(args, ["ssh", "-o", "StrictHostKeyChecking=accept-new", "--", "u@h"])
         self.assertEqual(env["SSHV_PASSWORD"], "geheim")
         self.assertEqual(env["SSH_ASKPASS_REQUIRE"], "force")
         self.assertEqual(env["SSH_ASKPASS"], "/x/askpass.sh")
@@ -140,7 +140,7 @@ class TemplateTests(unittest.TestCase):
     def test_ghostty_command(self):
         t = Terminal("G", "ghostty --title={title} -e {ssh_args}")
         c = Connection("Srv", "h", user="u")
-        self.assertEqual(launcher.build_terminal_command(t, c), ["ghostty", "--title=Srv", "-e", "ssh", "u@h"])
+        self.assertEqual(launcher.build_terminal_command(t, c), ["ghostty", "--title=Srv", "-e", "ssh", "--", "u@h"])
 
 
 class GroupTests(unittest.TestCase):
@@ -196,14 +196,14 @@ class GroupTests(unittest.TestCase):
 class SudoTests(unittest.TestCase):
     def test_sudo_login(self):
         c = Connection("n", "h", user="u", sudo_mode="login")
-        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "u@h", "sudo -i"])
+        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "--", "u@h", "sudo -i"])
 
     def test_sudo_shell_other_user_with_command(self):
         c = Connection("n", "h", sudo_mode="shell", sudo_user="www data", remote_command="tmux attach")
-        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "h", "sudo -u 'www data' -s tmux attach"])
+        self.assertEqual(launcher.build_ssh_args(c), ["ssh", "-t", "--", "h", "sudo -u 'www data' -s tmux attach"])
 
     def test_no_sudo_unchanged(self):
-        self.assertEqual(launcher.build_ssh_args(Connection("n", "h", user="u")), ["ssh", "u@h"])
+        self.assertEqual(launcher.build_ssh_args(Connection("n", "h", user="u")), ["ssh", "--", "u@h"])
 
     def test_wrapper_carries_sudo_override(self):
         from sesam.connect_cli import parse_overrides
@@ -287,7 +287,7 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(key, ident.id)          # Passwort liegt unter der Identitäts-ID
         self.assertEqual(eff.id, conn.id)
         self.assertEqual(conn.user, "alt")       # Original bleibt unverändert
-        self.assertEqual(launcher.build_ssh_args(eff), ["ssh", "-i", "/k/id", "deploy@h"])
+        self.assertEqual(launcher.build_ssh_args(eff), ["ssh", "-i", "/k/id", "--", "deploy@h"])
 
     def test_identity_without_password_ignores_connection_password(self):
         cfg, ident, conn = self._cfg()

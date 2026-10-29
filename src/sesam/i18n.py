@@ -66,7 +66,7 @@ def load_saved_language() -> str:
     try:
         data = json.loads(storage.config_path().read_text(encoding="utf-8"))
         setting = data.get("language") if isinstance(data, dict) else None
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         setting = None
     return set_language(setting)
 

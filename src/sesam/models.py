@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from typing import Any
 
 
@@ -9,9 +9,32 @@ def new_id() -> str:
     return uuid.uuid4().hex
 
 
+def _default_of(f):
+    if f.default is not MISSING:
+        return f.default
+    if f.default_factory is not MISSING:
+        return f.default_factory()
+    return ""  # Pflichtfelder (name, host, command) sind Texte
+
+
 def _from_dict(cls, data: dict[str, Any]):
-    names = {f.name for f in fields(cls)}
-    return cls(**{k: v for k, v in data.items() if k in names})
+    """Baut das Objekt aus einem Wörterbuch. Werte mit falschem Typ (``null``, Zahl statt Text …) fallen auf den Standard zurück,
+    damit ein beschädigter Eintrag später nicht an jeder Stelle (Sortieren, ``.strip()``) einen Absturz auslöst."""
+    if not isinstance(data, dict):
+        raise TypeError(f"Objekt erwartet, {type(data).__name__} gefunden")
+    fs = {f.name: f for f in fields(cls)}
+    values = {}
+    for k, v in data.items():
+        f = fs.get(k)
+        if f is None:
+            continue
+        kind = f.type
+        if (kind == "str" and not isinstance(v, str)) or (kind == "bool" and not isinstance(v, bool)):
+            v = _default_of(f)
+        elif kind == "int" and (isinstance(v, bool) or not isinstance(v, int)):
+            v = _default_of(f)
+        values[k] = v
+    return cls(**values)
 
 
 COLUMN_KEYS = ("target", "terminal", "tags", "os")  # ausblendbare Spalten der Hauptansicht (der Name bleibt immer sichtbar)
@@ -160,6 +183,8 @@ class Connection:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Connection":
         conn = _from_dict(cls, data)
+        if not 1 <= conn.port <= 65535:
+            conn.port = 22
         if not isinstance(conn.color, str):
             conn.color = ""
         conn.tags = _clean_tags(conn.tags)

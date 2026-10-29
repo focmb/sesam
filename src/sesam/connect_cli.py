@@ -45,11 +45,25 @@ def host_key_changed(stderr: str) -> bool:
     return HOSTKEY_CHANGED in stderr
 
 
+def _bare_host(name: str) -> str:
+    """Hostname ohne Benutzer, Klammern und Port („user@[h]:22“ → „h“)."""
+    name = name.strip().rsplit("@", 1)[-1]
+    m = re.fullmatch(r"\[(.+)\](?::\d+)?", name)
+    if m:
+        return m.group(1).lower()
+    return re.sub(r":\d+$", "", name).lower() if name.count(":") == 1 else name.lower()
+
+
 def known_hosts_name(conn: Connection, stderr: str = "") -> str:
-    """Name, unter dem der Host in known_hosts steht. Bei einem Sprunghost nennt ssh den betroffenen Host selbst."""
+    """Name, unter dem der Host in known_hosts steht. Bei einem Sprunghost nennt ssh den betroffenen Host selbst.
+
+    Ein Server kann in seinem Banner jede Meldung vortäuschen; deshalb zählt der von ssh genannte Name nur, wenn er zu
+    dieser Verbindung gehört (Ziel oder Jump-Host). Sonst würde die Rückfrage den Eintrag eines fremden Hosts entfernen."""
     m = re.search(r"Host key for (\S+) has changed", stderr)
     if m:
-        return m.group(1)
+        own = {_bare_host(conn.host), *(_bare_host(p) for p in conn.jump_host.split(",") if p.strip())}
+        if _bare_host(m.group(1)) in own and not m.group(1).startswith("-"):
+            return m.group(1)
     host = conn.host.strip()
     return host if (conn.port or 22) == 22 else f"[{host}]:{conn.port}"
 
@@ -134,7 +148,7 @@ def _fail(message: str) -> int:
     print(f"Sesam: {message}", file=sys.stderr)
     try:
         input(tr("Enter zum Schließen …"))
-    except EOFError:
+    except (EOFError, KeyboardInterrupt):
         pass
     return 1
 
@@ -172,7 +186,12 @@ def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
             return _fail(str(exc))
         if password is None:
             print(tr("Hinweis: Kein Passwort im Schlüsselbund gefunden, ssh fragt selbst."), file=sys.stderr)
-    args, env = prepare(conn, password, askpass.askpass_path() if password is not None else "")
+    try:
+        args, env = prepare(conn, password, askpass.askpass_path() if password is not None else "")
+    except launcher.LaunchError as exc:
+        return _fail(str(exc))
+    except OSError as exc:
+        return _fail(tr("Die Verbindung kann nicht vorbereitet werden: {exc}", exc=exc))
     try:
         code, err = run_ssh(args, env)
         if code == SSH_ERROR and host_key_changed(err) and forget_host_key(conn, err):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 from dataclasses import asdict
@@ -49,7 +50,7 @@ def load(path: Path | None = None) -> Config:
         raise ConfigError(path, tr("kein gültiges JSON (Zeile {lineno}, Spalte {colno}: {msg})", lineno=exc.lineno, colno=exc.colno, msg=exc.msg)) from exc
     except UnicodeDecodeError as exc:
         raise ConfigError(path, tr("keine gültige UTF-8-Datei ({reason})", reason=exc.reason)) from exc
-    except (TypeError, KeyError, ValueError, AttributeError) as exc:
+    except (TypeError, KeyError, ValueError, AttributeError, OverflowError, RecursionError) as exc:
         raise ConfigError(path, tr("unerwarteter Inhalt ({kind}: {exc})", kind=type(exc).__name__, exc=exc)) from exc
     if not cfg.terminals:
         cfg.terminals = default_terminals()
@@ -72,7 +73,7 @@ def quarantine(path: Path) -> Path:
 
 def _font_scale(value) -> int:
     """Reiner Anzeigewert: Unbrauchbares ergibt 100 %, Außergewöhnliches wird auf den erlaubten Bereich begrenzt."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         return 100
     return max(FONT_SCALE_MIN, min(FONT_SCALE_MAX, int(value)))
 
@@ -81,6 +82,13 @@ def _group_colors(value) -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
     return {k: v for k, v in value.items() if isinstance(k, str) and k and isinstance(v, str) and v}
+
+
+def _column_widths(value) -> list[int]:
+    """Reiner Anzeigezustand: nur endliche Zahlen (JSON erlaubt auch ``Infinity`` und ``NaN``)."""
+    if not isinstance(value, list):
+        return []
+    return [int(w) for w in value if isinstance(w, (int, float)) and not isinstance(w, bool) and math.isfinite(w)]
 
 
 def _hidden_columns(value) -> list[str]:
@@ -115,7 +123,7 @@ def _from_data(data: dict) -> Config:
         window_size=_window_size(data.get("window_size")),
         window_maximized=data.get("window_maximized") is True,
         hidden_columns=_hidden_columns(data.get("hidden_columns")),
-        column_widths=[int(w) for w in data.get("column_widths", []) if isinstance(w, (int, float))],
+        column_widths=_column_widths(data.get("column_widths")),
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
         snippets=[Snippet.from_dict(s) for s in data.get("snippets", []) if isinstance(s, dict)] if isinstance(data.get("snippets"), list) else [],
         ssh_keys=[SshKey.from_dict(k) for k in data.get("ssh_keys", []) if isinstance(k, dict)],

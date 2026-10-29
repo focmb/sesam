@@ -38,6 +38,28 @@ class TransferCancelled(Exception):
     pass
 
 
+MAX_DEPTH = 64  # tiefer verschachtelte Ordner gelten als Angriff bzw. Schleife
+
+
+def safe_name(name: str) -> bool:
+    """Ist das ein einzelner Datei- oder Ordnername? Ein Server darf keine Pfade („../x“, „/etc/x“, „C:\\x“) als Namen liefern."""
+    return (bool(name) and name not in (".", "..") and not any(c in name for c in "/\\\x00")
+            and not (os.name == "nt" and ":" in name))
+
+
+def _io_errors() -> tuple:
+    """Fehler, die bei einer unterbrochenen oder gestörten Verbindung auftreten (nicht nur ``OSError``)."""
+    return (OSError, EOFError, _paramiko().SSHException)
+
+
+def _inside(base: str, target: str) -> bool:
+    base, target = os.path.abspath(base), os.path.abspath(target)
+    try:
+        return os.path.commonpath([base, target]) == base
+    except ValueError:  # z. B. verschiedene Laufwerke unter Windows
+        return False
+
+
 @dataclass(frozen=True)
 class RemoteEntry:
     name: str
@@ -157,12 +179,12 @@ def open_client(
         raise SftpError(
             tr("Der Schlüssel von {host} hat sich geändert (möglicher Angriff). Prüfe die Datei known_hosts, bevor du erneut verbindest.", host=eff.host)
         ) from exc
+    except paramiko.PasswordRequiredException as exc:  # Unterklasse von AuthenticationException: muss davor stehen
+        client.close()
+        raise SftpAuthError(tr("Der Schlüssel ist durch eine Passphrase geschützt.")) from exc
     except paramiko.AuthenticationException as exc:
         client.close()
         raise SftpAuthError(tr("Anmeldung abgelehnt (Passwort oder Schlüssel stimmen nicht).")) from exc
-    except paramiko.PasswordRequiredException as exc:
-        client.close()
-        raise SftpAuthError(tr("Der Schlüssel ist durch eine Passphrase geschützt.")) from exc
     except (paramiko.SSHException, OSError, EOFError) as exc:
         client.close()
         if strict_host_keys and "not found in known_hosts" in str(exc):
@@ -237,6 +259,8 @@ class SftpSession:
                 raise SftpError(tr("Ordner kann nicht gelesen werden: {path} ({exc})", path=path, exc=exc)) from exc
             entries = []
             for a in attrs:
+                if not safe_name(a.filename):
+                    continue  # der Server liefert einen Pfad statt eines Namens: nicht anbieten
                 mode = a.st_mode or 0
                 is_link = stat.S_ISLNK(mode)
                 is_dir = stat.S_ISDIR(mode)
@@ -267,14 +291,18 @@ class SftpSession:
         with self._lock:
             try:
                 self._remove(path)
-            except OSError as exc:
+            except _io_errors() as exc:
                 raise SftpError(tr("Löschen fehlgeschlagen: {exc}", exc=exc)) from exc
 
-    def _remove(self, path: str) -> None:
+    def _remove(self, path: str, depth: int = 0) -> None:
+        if depth > MAX_DEPTH:
+            raise SftpError(tr("Die Ordner sind zu tief verschachtelt."))
         mode = self._browse.lstat(path).st_mode or 0
         if stat.S_ISDIR(mode):  # Links auf Ordner sind keine Ordner (lstat): nur der Link wird entfernt
             for a in self._browse.listdir_attr(path):
-                self._remove(posixpath.join(path, a.filename))
+                if not safe_name(a.filename):
+                    raise SftpError(tr("Der Server meldet den unzulässigen Namen {name}.", name=repr(a.filename)))
+                self._remove(posixpath.join(path, a.filename), depth + 1)
             self._browse.rmdir(path)
         else:
             self._browse.remove(path)
@@ -326,7 +354,7 @@ class SftpSession:
                     except OSError:
                         pass
                     raise
-                except OSError as exc:
+                except _io_errors() as exc:
                     raise SftpError(tr("Hochladen von {rel} fehlgeschlagen: {exc}", rel=rel, exc=exc)) from exc
                 done += size
                 if progress:
@@ -348,19 +376,24 @@ class SftpSession:
         try:
             try:
                 plan = _plan_remote(sftp, [p for p in remote_paths if posixpath.basename(p.rstrip("/")) not in (skip or set())], cancel)
-            except OSError as exc:
+            except _io_errors() as exc:
                 raise SftpError(tr("Ordner kann nicht gelesen werden: {exc}", exc=exc)) from exc
             total = sum(size for _, _, size in plan.files)
             done = 0
             for rel_dir in plan.dirs:
                 _check(cancel)
                 try:
-                    os.makedirs(os.path.join(local_dir, *rel_dir.split("/")), exist_ok=True)
+                    dir_target = os.path.join(local_dir, *rel_dir.split("/"))
+                    if not _inside(local_dir, dir_target):
+                        raise SftpError(tr("Unzulässiger Zielpfad: {rel}", rel=rel_dir))
+                    os.makedirs(dir_target, exist_ok=True)
                 except OSError as exc:
                     raise SftpError(tr("Ordner konnte nicht angelegt werden: {rel_dir} ({exc})", rel_dir=rel_dir, exc=exc)) from exc
             for remote, rel, size in plan.files:
                 _check(cancel)
                 target = os.path.join(local_dir, *rel.split("/"))
+                if not _inside(local_dir, target):  # letzte Sicherung, falls ein Name doch durchrutscht
+                    raise SftpError(tr("Unzulässiger Zielpfad: {rel}", rel=rel))
                 base = done
 
                 def cb(got, _total, base=base, name=rel):
@@ -377,7 +410,7 @@ class SftpSession:
                     except OSError:
                         pass
                     raise
-                except OSError as exc:
+                except _io_errors() as exc:
                     raise SftpError(tr("Herunterladen von {rel} fehlgeschlagen: {exc}", rel=rel, exc=exc)) from exc
                 done += size
                 if progress:
@@ -426,6 +459,8 @@ def _plan_remote(sftp, paths: list[str], cancel: threading.Event | None) -> _Pla
     for raw in paths:
         path = raw.rstrip("/") or raw
         name = posixpath.basename(path)
+        if not safe_name(name):
+            raise SftpError(tr("Der Server meldet den unzulässigen Namen {name}.", name=repr(name)))
         attr = sftp.lstat(path)
         mode = attr.st_mode or 0
         if stat.S_ISLNK(mode):
@@ -440,14 +475,18 @@ def _plan_remote(sftp, paths: list[str], cancel: threading.Event | None) -> _Pla
     return plan
 
 
-def _walk_remote(sftp, path: str, rel: str, plan: _Plan, cancel: threading.Event | None) -> None:
+def _walk_remote(sftp, path: str, rel: str, plan: _Plan, cancel: threading.Event | None, depth: int = 0) -> None:
     _check(cancel)
+    if depth > MAX_DEPTH:
+        raise SftpError(tr("Die Ordner sind zu tief verschachtelt."))
     plan.dirs.append(rel)
     for a in sorted(sftp.listdir_attr(path), key=lambda x: x.filename):
+        if not safe_name(a.filename):
+            raise SftpError(tr("Der Server meldet den unzulässigen Namen {name}.", name=repr(a.filename)))
         mode = a.st_mode or 0
         child, child_rel = posixpath.join(path, a.filename), f"{rel}/{a.filename}"
         if stat.S_ISDIR(mode):
-            _walk_remote(sftp, child, child_rel, plan, cancel)
+            _walk_remote(sftp, child, child_rel, plan, cancel, depth + 1)
         elif stat.S_ISREG(mode):
             plan.files.append((child, child_rel, a.st_size or 0))
         elif stat.S_ISLNK(mode):

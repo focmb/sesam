@@ -28,7 +28,7 @@ class HelperTests(unittest.TestCase):
 
     def test_known_hosts_name_prefers_the_host_ssh_names(self):
         msg = "Host key for bastion.example has changed and you have requested strict checking.\n"
-        self.assertEqual(connect_cli.known_hosts_name(Connection("n", "ziel"), msg), "bastion.example")
+        self.assertEqual(connect_cli.known_hosts_name(Connection("n", "ziel", jump_host="admin@bastion.example:2200"), msg), "bastion.example")
 
     def test_forget_command(self):
         self.assertEqual(connect_cli.forget_command("[h]:2222"), ["ssh-keygen", "-R", "[h]:2222"])
