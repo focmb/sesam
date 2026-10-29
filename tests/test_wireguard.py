@@ -472,7 +472,7 @@ class ElevationTests(unittest.TestCase):
     """sudo-Passwort: Einzelheiten ohne Root, sicher übergeben und bei Fehlern ohne Wiederholungen."""
 
     def setUp(self):
-        for target, value in (("sudo_available", lambda: True), ("_wg_executable", lambda: "/usr/bin/wg")):
+        for target, value in (("sudo_available", lambda: True), ("_root_wg_executable", lambda: "/usr/bin/wg")):
             patcher = mock.patch.object(wireguard, target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -544,7 +544,7 @@ class ElevationTests(unittest.TestCase):
 
     def test_missing_wg_and_odd_names_are_reported(self):
         elevation = wireguard.Elevation("pw")
-        with mock.patch.object(wireguard, "_wg_executable", lambda: None):
+        with mock.patch.object(wireguard, "_root_wg_executable", lambda: None):
             self.assertIsNone(elevation.details("wg0", NOW))
         self.assertIn("wg", elevation.error)
         self.assertIn("ungültig", (lambda e: (e.details("a b", NOW), e.error)[1])(wireguard.Elevation("pw")))
@@ -604,7 +604,7 @@ class SudoPromptTests(GuiTestCase):
             patcher = mock.patch.object(passwords, name, fake)
             patcher.start()
             self.addCleanup(patcher.stop)
-        for target, value in (("sudo_available", lambda: True), ("_wg_executable", lambda: "/usr/bin/wg")):
+        for target, value in (("sudo_available", lambda: True), ("_root_wg_executable", lambda: "/usr/bin/wg")):
             patcher = mock.patch.object(wireguard, target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -668,3 +668,26 @@ class SudoPromptTests(GuiTestCase):
                 mock.patch.object(QInputDialog, "getText", side_effect=AssertionError("keine Abfrage")):
             self.w.set_wireguard(True)
         self.assertIsNone(self.w.wg_indicator.elevation)
+
+
+class RootWgTests(unittest.TestCase):
+    """Mit dem sudo-Passwort läuft nur ein wg aus einem root-eigenen Systemverzeichnis, nie eines aus dem PATH des Benutzers."""
+
+    def test_only_root_owned_unwritable_paths_are_accepted(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            exe = os.path.join(d, "wg")
+            with open(exe, "w") as fh:
+                fh.write("#!/bin/sh\n")
+            os.chmod(exe, 0o777)  # für alle schreibbar: nie
+            self.assertIsNone(wireguard._root_wg_executable((d,)))
+            os.chmod(exe, 0o755)
+            if os.geteuid() != 0:  # dem Benutzer gehörende Datei/Verzeichnis: nie
+                self.assertIsNone(wireguard._root_wg_executable((d,)))
+        if os.path.exists("/usr/bin/wg") and wireguard._root_owned("/usr/bin/wg"):
+            self.assertEqual(wireguard._root_wg_executable(), next(p for d in wireguard._ROOT_WG_DIRS for p in [d + "/wg"] if wireguard._root_owned(p)))
+
+    def test_path_lookup_is_not_used(self):
+        with mock.patch.object(wireguard.shutil, "which", side_effect=AssertionError("PATH darf nicht befragt werden")):
+            wireguard._root_wg_executable(("/nonexistent",))

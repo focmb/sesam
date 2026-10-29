@@ -97,6 +97,32 @@ def _wg_executable() -> str | None:
     return next((p for p in _WINDOWS_WG if IS_WINDOWS and os.path.exists(p)), None)
 
 
+_ROOT_WG_DIRS = ("/usr/sbin", "/usr/bin", "/sbin", "/bin", "/usr/local/sbin", "/usr/local/bin")
+
+
+def _root_owned(path: str) -> bool:
+    """Gehört die Datei samt allen Verzeichnissen darüber root und ist für niemand sonst schreibbar?"""
+    try:
+        real = os.path.realpath(path)
+        parts = [real]
+        while os.path.dirname(parts[-1]) != parts[-1]:
+            parts.append(os.path.dirname(parts[-1]))
+        for p in parts:
+            st = os.stat(p)
+            if st.st_uid != 0 or st.st_mode & 0o022:
+                return False
+        return os.path.isfile(real) and os.access(real, os.X_OK)
+    except OSError:
+        return False
+
+
+def _root_wg_executable(dirs: tuple[str, ...] = _ROOT_WG_DIRS) -> str | None:
+    """``wg`` für den Aufruf als root: nur aus festen Systemverzeichnissen und nur, wenn kein normaler Benutzer es ändern kann.
+
+    Der Suchpfad (PATH) des Benutzers ist dafür tabu – ein ``~/bin/wg`` würde sonst mit dem sudo-Passwort als root laufen."""
+    return next((p for d in dirs for p in [os.path.join(d, "wg")] if _root_owned(p)), None)
+
+
 # --- Linux ---
 def linux_interfaces(sysfs: Path = SYSFS_NET) -> list[str] | None:
     """Namen der aktiven WireGuard-Schnittstellen; ``None``, wenn sich das System nicht lesen lässt."""
@@ -313,9 +339,9 @@ class Elevation:
             if tunnel.handshake_age is not None and tunnel.handshake_age != NEVER:
                 tunnel.handshake_age += now - cached[0]  # seit dem Lesen ist Zeit vergangen
             return tunnel
-        wg = _wg_executable()
+        wg = _root_wg_executable()
         if not wg:
-            self.error = "Programm „wg“ nicht gefunden (Paket wireguard-tools?)"
+            self.error = "Programm „wg“ nicht in einem Systemverzeichnis gefunden (Paket wireguard-tools?)"
             return None
         script = "; echo ---; ".join(f"{shlex.quote(wg)} show {name} {what}"
                                      for what in ("endpoints", "latest-handshakes", "transfer", "allowed-ips"))
