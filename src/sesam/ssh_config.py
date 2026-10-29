@@ -24,6 +24,10 @@ def parse_ssh_config(path: Path | None = None) -> list[Connection]:
             aliases = [a for a in value.split() if not any(c in a for c in "*?!")]
             current = [{"alias": alias} for alias in aliases]
             entries.extend(current)
+        elif key == "match":
+            # Match-Blöcke gelten nur unter Bedingungen (z. B. „host *.corp“, „exec …“): ihre Einstellungen dürfen nicht
+            # dem davor stehenden Host zugeschlagen werden (sonst könnte z. B. ein fremdes HostName/ProxyJump landen).
+            current = []
         else:
             for entry in current:
                 entry.setdefault(key, value)

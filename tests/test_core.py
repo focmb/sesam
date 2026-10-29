@@ -74,6 +74,15 @@ class SshConfigTests(unittest.TestCase):
             self.assertEqual(conns[0].port, 2222)
             self.assertEqual(conns[0].jump_host, "bastion")
 
+    def test_match_blocks_are_not_attributed_to_the_previous_host(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "config"
+            p.write_text("Host web\n  HostName 10.0.0.5\nMatch host web exec \"true\"\n  HostName evil.example\n  ProxyJump x\n  User root\n"
+                         "Host db\n  HostName 10.0.0.6\n")
+            conns = {c.name: c for c in parse_ssh_config(p)}
+            self.assertEqual((conns["web"].host, conns["web"].jump_host, conns["web"].user), ("10.0.0.5", "", ""))
+            self.assertEqual(conns["db"].host, "10.0.0.6")
+
 
 if __name__ == "__main__":
     unittest.main()
