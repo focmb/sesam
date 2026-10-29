@@ -442,6 +442,7 @@ class SyncEngine:
         self.git = Git(self.repo, credentials)
         self._remote: RemoteState | None = None
         self._next_state: dict | None = None
+        self._plan = None  # Ergebnis von prepare(), wartet auf commit()
         self._dirty_commit = False
 
     # ---- Zustand ----
@@ -597,8 +598,20 @@ class SyncEngine:
         remote: RemoteState | None = None,
         resolve: Callable[[list[Conflict]], dict[str, str] | None] | None = None,
     ) -> SyncReport:
-        """Führt lokal und Server zusammen. ``resolve`` bekommt die Konflikte und liefert je ``Conflict.token``
-        ``LOCAL`` oder ``REMOTE`` (fehlend = lokal) oder ``None`` zum Abbrechen."""
+        """Beide Phasen nacheinander (blockierend): ``prepare`` und ``commit``."""
+        report = self.prepare(cfg, remote, resolve)
+        self.commit()
+        return report
+
+    def prepare(
+        self,
+        cfg: Config,
+        remote: RemoteState | None = None,
+        resolve: Callable[[list[Conflict]], dict[str, str] | None] | None = None,
+    ) -> SyncReport:
+        """Phase 2a (schnell, gehört in den Thread der Konfiguration): führt lokal und Server zusammen und übernimmt das
+        Ergebnis in ``cfg`` und den Schlüsselbund – ganz oder gar nicht. ``resolve`` bekommt die Konflikte und liefert je
+        ``Conflict.token`` ``LOCAL`` oder ``REMOTE`` (fehlend = lokal) oder ``None`` zum Abbrechen."""
         remote = remote or self._remote
         if remote is None:
             raise SyncError("fetch() muss vor merge() laufen.")
@@ -656,7 +669,23 @@ class SyncEngine:
         cfg.group_colors = merged_colors
         report.local_changed = asdict(cfg) != before
 
-        self._write_repo(result, merged_groups, remote, key, merged_colors)
+        self._dirty_commit = False
+        self._plan = (result, merged_groups, remote, key, merged_colors, report)
+        self._next_state = {
+            "mode": mode,
+            "items": {f"{k[0]}:{k[1]}": item_hash(it, hkey) for k, it in result.items()},
+            "groups": sorted(merged_groups),
+            "group_colors": merged_colors,
+            "integrity": self.s.url.strip() if key is not None else self._load_state().get("integrity"),
+        }
+        return report
+
+    def commit(self) -> None:
+        """Phase 2b (langsam, darf im Hintergrund laufen): schreibt das Ergebnis aus ``prepare`` ins Repository und committet."""
+        if self._plan is None:
+            raise SyncError("prepare() muss vor commit() laufen.")
+        result, groups, remote, key, colors, report = self._plan
+        self._write_repo(result, groups, remote, key, colors)
         status = self.git.run("status", "--porcelain")
         if status.strip():
             self.git.run("add", "-A")
@@ -667,14 +696,7 @@ class SyncEngine:
             )
             report.committed = True
         self._dirty_commit = report.committed
-        self._next_state = {
-            "mode": mode,
-            "items": {f"{k[0]}:{k[1]}": item_hash(it, hkey) for k, it in result.items()},
-            "groups": sorted(merged_groups),
-            "group_colors": merged_colors,
-            "integrity": self.s.url.strip() if key is not None else self._load_state().get("integrity"),
-        }
-        return report
+        self._plan = None
 
     def _apply_local(self, cfg: Config, local: dict, result: dict, pw_on: bool, report: SyncReport) -> None:
         old = {k: o for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys), ("s", cfg.snippets))
@@ -683,6 +705,36 @@ class SyncEngine:
         new_idents: list[Identity] = []
         new_keys: list[SshKey] = []
         new_snippets: list[Snippet] = []
+        undo: list[tuple] = []        # (Speicher, ID, alter Wert): macht Schlüsselbund-Änderungen bei einem Fehler rückgängig
+        deferred: list[tuple] = []    # (bestehendes Objekt, neue Werte): erst nach allen Schlüsselbund-Schritten anwenden
+
+        def secret_set(kind: str, ident: str, value: str | None) -> None:
+            store = self._store_for(kind)
+            undo.append((store, ident, store.get(ident)))
+            if value is None:
+                store.delete(ident)
+            else:
+                store.set(ident, value)
+
+        try:
+            self._apply_secrets_and_objects(cfg, local, result, pw_on, report, old, new_conns, new_idents, new_keys, new_snippets,
+                                            deferred, secret_set)
+        except Exception as exc:  # noqa: BLE001 - egal was schiefgeht: Schlüsselbund zurücksetzen, cfg bleibt unverändert
+            for store, ident, previous in reversed(undo):
+                try:
+                    store.delete(ident) if previous is None else store.set(ident, previous)
+                except Exception:  # noqa: BLE001, S110
+                    pass
+            if isinstance(exc, (SyncError, passwords.PasswordError)):
+                raise SyncError(str(exc)) from exc
+            raise
+        for existing, obj in deferred:
+            for f in fields(obj):  # in place, damit offene Dialoge gültige Objekte behalten
+                setattr(existing, f.name, getattr(obj, f.name))
+        self._finish_apply(cfg, new_conns, new_idents, new_keys, new_snippets)
+
+    def _apply_secrets_and_objects(self, cfg, local, result, pw_on, report, old, new_conns, new_idents, new_keys, new_snippets,
+                                   deferred, secret_set) -> None:
         moved_old = {(k[0], it.renamed_from) for k, it in local.items() if it.renamed_from}
         for k, item in result.items():
             _folder, cls = KINDS[k[0]]
@@ -691,22 +743,13 @@ class SyncEngine:
             moved_from = local[k].renamed_from if k in local else None
             moved_obj = old.get((k[0], moved_from)) if moved_from else None
             if moved_obj is not None and moved_obj.use_password:  # Passwort wandert zur neuen ID; unter der alten wird es unten gelöscht
-                try:
-                    secret = self._store_for(k[0]).get(moved_from)
-                    if secret is not None:
-                        self._store_for(k[0]).set(item.id, secret)
-                except passwords.PasswordError as exc:
-                    raise SyncError(str(exc)) from exc
+                secret = self._store_for(k[0]).get(moved_from)
+                if secret is not None:
+                    secret_set(k[0], item.id, secret)
             if pw_on:
                 local_pw = local[k].pw if k in local else None
                 if item.pw != local_pw or (k in local and local[k].pw_missing and item.pw is not None):
-                    try:
-                        if item.pw is None:
-                            self._store_for(k[0]).delete(item.id)
-                        else:
-                            self._store_for(k[0]).set(item.id, item.pw)
-                    except passwords.PasswordError as exc:
-                        raise SyncError(str(exc)) from exc
+                    secret_set(k[0], item.id, item.pw)
                 obj.use_password = item.pw is not None
             else:
                 source = existing or moved_obj
@@ -719,8 +762,7 @@ class SyncEngine:
             else:
                 if item_from_obj(k[0], existing, None).data != item.data or (pw_on and local[k].pw != item.pw):
                     report.updated += 1
-                for f in fields(obj):  # in place, damit offene Dialoge gültige Objekte behalten
-                    setattr(existing, f.name, getattr(obj, f.name))
+                deferred.append((existing, obj))
                 obj = existing
             {"c": new_conns, "i": new_idents, "k": new_keys, "s": new_snippets}[k[0]].append(obj)
         for k, o in old.items():
@@ -728,10 +770,9 @@ class SyncEngine:
                 if k not in moved_old:
                     report.removed += 1
                 if o.use_password and (pw_on or k in moved_old):
-                    try:
-                        self._store_for(k[0]).delete(o.id)
-                    except passwords.PasswordError as exc:
-                        raise SyncError(str(exc)) from exc
+                    secret_set(k[0], o.id, None)
+
+    def _finish_apply(self, cfg: Config, new_conns, new_idents, new_keys, new_snippets) -> None:
         ident_ids = {i.id for i in new_idents}
         key_ids = {k.id for k in new_keys}
         for c in new_conns:

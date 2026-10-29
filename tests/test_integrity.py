@@ -216,3 +216,55 @@ class IntegrityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AtomicApplyTests(unittest.TestCase):
+    """Schlägt ein Schlüsselbund-Schritt fehl, bleiben Konfiguration und Schlüsselbund unverändert."""
+
+    def test_failure_rolls_back_keyring_and_leaves_config_untouched(self):
+        from dataclasses import replace
+        from sesam.passwords import PasswordError
+
+        class Store:
+            def __init__(self):
+                self.d, self.sets = {}, 0
+
+            def get(self, k):
+                return self.d.get(k)
+
+            def set(self, k, v):
+                self.sets += 1
+                if self.sets == 2:
+                    raise PasswordError("Schlüsselbund gesperrt")
+                self.d[k] = v
+
+            def delete(self, k):
+                self.d.pop(k, None)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store()
+            eng = SyncEngine(SyncSettings(url=URL, passwords=True), Path(tmp), "geheim123", store, device="A")
+            cfg = Config(connections=[Connection("a", "a.example", use_password=True), Connection("b", "b.example", use_password=True)])
+            for c in cfg.connections:
+                store.d[c.id] = "alt-" + c.name
+            key = b"k" * 32
+            local = eng._local_items(cfg, key)
+            result = {k: replace(it, pw="neu-" + it.data["name"], data={**it.data, "host": "geaendert"}) for k, it in local.items()}
+            store.sets = 0
+            with self.assertRaises(SyncError):
+                eng._apply_local(cfg, local, result, True, syncing.SyncReport())
+            self.assertEqual([c.host for c in cfg.connections], ["a.example", "b.example"])
+            self.assertEqual(sorted(store.d.values()), ["alt-a", "alt-b"])
+
+    def test_prepare_applies_locally_and_commit_writes_the_repository(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            eng = SyncEngine(SyncSettings(url=URL, passwords=False), Path(tmp) / "A", None, _Store(), device="A")
+            eng.repo.mkdir(parents=True)
+            eng.git.run("init", "-q")
+            cfg = Config(connections=[Connection("web", "web.example")])
+            report = eng.prepare(cfg, eng._read_remote(False))
+            self.assertFalse(report.committed)
+            self.assertFalse(any((eng.repo / "connections").glob("*.json")) if (eng.repo / "connections").exists() else False)
+            eng.commit()
+            self.assertTrue(report.committed)
+            self.assertEqual(len(list((eng.repo / "connections").glob("*.json"))), 1)

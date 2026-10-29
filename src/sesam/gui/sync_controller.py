@@ -27,7 +27,7 @@ class _Job(QThread):
 
 
 class SyncController(QObject):
-    """Steuert den Abgleich: Holen und Hochladen im Hintergrund, Zusammenführen im GUI-Thread (keine Wettlaufsituation mit Eingaben)."""
+    """Steuert den Abgleich: Holen, Committen und Hochladen im Hintergrund, Zusammenführen und Übernehmen im GUI-Thread (keine Wettlaufsituation mit Eingaben)."""
 
     status = Signal(str, bool)  # Text, ist Fehler
     cfg_changed = Signal()  # der Abgleich hat die Konfiguration verändert
@@ -120,7 +120,7 @@ class SyncController(QObject):
             return
         self._applying = True
         try:
-            report = self._engine.merge(self.cfg, remote, self._resolve if self.resolver else None)
+            report = self._engine.prepare(self.cfg, remote, self._resolve if self.resolver else None)
         except Exception as err:  # noqa: BLE001
             self._finish(None, err)
             return
@@ -128,7 +128,13 @@ class SyncController(QObject):
             self._applying = False
         if report.local_changed:
             self.cfg_changed.emit()
-        self._run_job(self._engine.push, lambda pushed, err: self._after_push(report, pushed, err))
+        engine = self._engine
+
+        def commit_and_push():  # Repository schreiben, committen (git) und hochladen: langsam, daher im Hintergrund
+            engine.commit()
+            return engine.push()
+
+        self._run_job(commit_and_push, lambda pushed, err: self._after_push(report, pushed, err))
 
     def _resolve(self, conflicts: list[Conflict]):
         open_ = [c for c in conflicts if c.token not in self._decisions]
