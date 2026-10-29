@@ -671,6 +671,7 @@ class SudoPromptTests(GuiTestCase):
         self.assertIsNone(self.w.wg_indicator.elevation)
 
 
+@unittest.skipIf(__import__("sys").platform.startswith("win"), "Linux-Funktion (root-Besitz, sudo)")
 class RootWgTests(unittest.TestCase):
     """Mit dem sudo-Passwort läuft nur ein wg aus einem root-eigenen Systemverzeichnis, nie eines aus dem PATH des Benutzers."""
 
