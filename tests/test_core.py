@@ -92,7 +92,7 @@ class PasswordTests(unittest.TestCase):
         from sesam.connect_cli import prepare
         c = Connection("n", "h", user="u")
         args, env = prepare(c, "geheim", "/x/askpass.sh", {})
-        self.assertEqual(args, ["ssh", "-o", "StrictHostKeyChecking=accept-new", "--", "u@h"])
+        self.assertEqual(args, ["ssh", "--", "u@h"])
         self.assertEqual(env["SSHV_PASSWORD"], "geheim")
         self.assertEqual(env["SSH_ASKPASS_REQUIRE"], "force")
         self.assertEqual(env["SSH_ASKPASS"], "/x/askpass.sh")
@@ -328,6 +328,7 @@ class IdentityTests(unittest.TestCase):
         with mock.patch.object(connect_cli.storage, "load", return_value=cfg), \
              mock.patch.object(connect_cli.passwords, "get_password", side_effect=lambda k: asked.append(k) or "geheim"), \
              mock.patch.object(connect_cli.askpass, "askpass_path", return_value="/a"), \
+             mock.patch.object(connect_cli, "ensure_known_hosts", return_value=True), \
              mock.patch.object(connect_cli, "run_ssh", return_value=(0, "")) as ex:
             connect_cli.run(conn.id)
         self.assertEqual(asked, [ident.id])

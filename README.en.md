@@ -251,7 +251,7 @@ A password can be stored per connection. It is saved in the operating system’s
 When connecting, the terminal starts `ssh` through a small wrapper that supplies the password via `SSH_ASKPASS`
 (OpenSSH ≥ 8.4). Notes:
 - Password prompts are answered automatically, other prompts (passphrase, 2FA code) are not.
-- Unknown hosts are added to `known_hosts` automatically (`StrictHostKeyChecking=accept-new`); changed keys are still rejected. Automatic password entry only answers prompts of the target host, not those of a jump host. If you set the option yourself under “Additional options”, yours takes precedence.
+- With a stored password, Sesam asks in the terminal for unknown hosts (target and jump hosts), shows the fingerprint and adds them to `known_hosts` only after “y” (needs `ssh-keygen` and `ssh-keyscan`); changed keys are still rejected. Automatic password entry only answers prompts of the target host, not those of a jump host. If you set the option yourself under “Additional options”, yours takes precedence.
 
 ## Connection errors and changed host keys
 

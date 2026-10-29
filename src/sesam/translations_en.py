@@ -662,4 +662,10 @@ EN: dict[str, str] = {
     "Unbekannter Host-Schlüssel": "Unknown host key",
     "Schlüsseltyp: {type}\nFingerabdruck: {fp}\n\nNur fortfahren, wenn der Fingerabdruck stimmt. Das Passwort wird sonst an einen Fremden gesendet.": "Key type: {type}\nFingerprint: {fp}\n\nOnly continue if the fingerprint is correct. Otherwise the password is sent to a stranger.",
     "Vertrauen und verbinden": "Trust and connect",
+    "Der Schlüssel von {host} konnte nicht abgerufen werden.": "The key of {host} could not be retrieved.",
+    "Der Host {host} ist noch nicht bekannt. Fingerabdrücke:": "The host {host} is not known yet. Fingerprints:",
+    "Nur fortfahren, wenn ein Fingerabdruck stimmt – sonst geht das Passwort an einen Fremden.": "Only continue if a fingerprint is correct – otherwise the password goes to a stranger.",
+    "Host vertrauen und in known_hosts eintragen? [j/N]": "Trust host and add it to known_hosts? [y/N]",
+    "known_hosts kann nicht geschrieben werden: {exc}": "known_hosts cannot be written: {exc}",
+    "Verbindung abgebrochen: Der Host-Schlüssel wurde nicht bestätigt.": "Connection cancelled: the host key was not confirmed.",
 }

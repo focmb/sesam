@@ -249,7 +249,7 @@ Pro Verbindung kann ein Passwort hinterlegt werden. Es wird im Schlüsselbund de
 Beim Verbinden startet das Terminal `ssh` über einen kleinen Wrapper, der das Passwort per `SSH_ASKPASS` übergibt
 (OpenSSH ≥ 8.4). Hinweise:
 - Auf Passwortabfragen wird automatisch geantwortet, auf andere Abfragen (Passphrase, 2FA-Code) nicht.
-- Unbekannte Hosts werden automatisch in `known_hosts` aufgenommen (`StrictHostKeyChecking=accept-new`), geänderte Schlüssel werden weiterhin abgelehnt. Die automatische Passwort-Eingabe antwortet nur auf Abfragen des Zielhosts, nicht auf die eines Jump-Hosts. Setzt du die Option selbst unter „Zusätzliche Optionen“, hat sie Vorrang.
+- Bei gespeichertem Passwort fragt Sesam bei unbekannten Hosts (Ziel und Jump-Hosts) im Terminal mit Fingerabdruck nach und trägt sie erst nach „j“ in `known_hosts` ein (nötig `ssh-keygen` und `ssh-keyscan`); geänderte Schlüssel werden weiterhin abgelehnt. Die automatische Passwort-Eingabe antwortet nur auf Abfragen des Zielhosts, nicht auf die eines Jump-Hosts. Setzt du die Option selbst unter „Zusätzliche Optionen“, hat sie Vorrang.
 
 ## Verbindungsfehler und geänderte Host-Schlüssel
 

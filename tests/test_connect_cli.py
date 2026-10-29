@@ -1,8 +1,10 @@
 """Wrapper im Terminal: Verbindungsfehler bleiben sichtbar, geänderter Host-Schlüssel wird nach Rückfrage entfernt."""
 import io
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr
+from pathlib import Path
 from unittest import mock
 
 from sesam import connect_cli, launcher
@@ -160,3 +162,62 @@ class LaunchViaWrapperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EnsureKnownHostsTests(unittest.TestCase):
+    def setUp(self):
+        from sesam import connect_cli
+        self.cli = connect_cli
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.kh = Path(tmp.name) / ".ssh" / "known_hosts"
+        p = mock.patch.object(connect_cli, "known_hosts_file", return_value=self.kh)
+        p.start()
+        self.addCleanup(p.stop)
+        p = mock.patch.object(connect_cli.shutil, "which", return_value="/usr/bin/x")
+        p.start()
+        self.addCleanup(p.stop)
+
+    def fake_run(self, known=()):
+        calls = []
+
+        def run(cmd, **kw):
+            calls.append(cmd)
+            r = mock.Mock(returncode=0, stdout="", stderr="")
+            if cmd[1] == "-F":
+                r.returncode, r.stdout = (0, "found") if cmd[2] in known else (1, "")
+            elif cmd[0] == "ssh-keyscan":
+                r.stdout = f"# c\n{cmd[-1]} ssh-ed25519 AAAAkey\n"
+            else:
+                r.stdout = "256 SHA256:abc host (ED25519)\n"
+            return r
+        return run, calls
+
+    def test_known_host_needs_no_question(self):
+        run, calls = self.fake_run(known={"h"})
+        with mock.patch.object(self.cli.subprocess, "run", run), mock.patch.object(self.cli, "_ask") as ask:
+            self.assertTrue(self.cli.ensure_known_hosts(Connection("n", "h")))
+        ask.assert_not_called()
+        self.assertFalse(self.kh.exists())
+
+    def test_unknown_host_is_written_only_after_confirmation(self):
+        run, _ = self.fake_run()
+        with mock.patch.object(self.cli.subprocess, "run", run), mock.patch.object(self.cli, "_ask", return_value=False):
+            self.assertFalse(self.cli.ensure_known_hosts(Connection("n", "h")))
+        self.assertFalse(self.kh.exists())
+        with mock.patch.object(self.cli.subprocess, "run", run), mock.patch.object(self.cli, "_ask", return_value=True):
+            self.assertTrue(self.cli.ensure_known_hosts(Connection("n", "h")))
+        self.assertEqual(self.kh.read_text(encoding="utf-8"), "h ssh-ed25519 AAAAkey\n")
+
+    def test_jump_hosts_and_ports_are_checked_too(self):
+        run, calls = self.fake_run()
+        conn = Connection("n", "target", port=2222, jump_host="admin@bastion:2200")
+        with mock.patch.object(self.cli.subprocess, "run", run), mock.patch.object(self.cli, "_ask", return_value=True):
+            self.assertTrue(self.cli.ensure_known_hosts(conn))
+        self.assertEqual([c[2] for c in calls if c[1] == "-F"], ["[target]:2222", "[bastion]:2200"])
+
+    def test_unreachable_host_aborts(self):
+        def run(cmd, **kw):
+            return mock.Mock(returncode=1 if cmd[1] == "-F" else 0, stdout="", stderr="")
+        with mock.patch.object(self.cli.subprocess, "run", run):
+            self.assertFalse(self.cli.ensure_known_hosts(Connection("n", "h")))

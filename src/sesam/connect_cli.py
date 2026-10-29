@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 from dataclasses import replace
+from pathlib import Path
 
 from . import askpass, launcher, passwords, runtime, storage
 from .askpass import ENV_VAR
@@ -29,10 +30,8 @@ def prepare(conn: Connection, password: str | None, askpass_script: str, base_en
         env["SSH_ASKPASS"] = askpass_script
         env["SSH_ASKPASS_REQUIRE"] = "force"
         env.setdefault("DISPLAY", "sesam")
-        # Askpass kann keine Host-Key-Rückfrage beantworten: unbekannte Hosts automatisch merken,
-        # geänderte Schlüssel werden weiterhin abgelehnt.
-        if "stricthostkeychecking" not in conn.extra_args.lower():
-            args[1:1] = ["-o", "StrictHostKeyChecking=accept-new"]
+        # Askpass kann keine Host-Key-Rückfrage beantworten. Unbekannte Hosts bestätigt run() vorher mit Fingerabdruck
+        # (ensure_known_hosts); danach prüft ssh ganz normal, geänderte Schlüssel werden abgelehnt.
     return args, env
 
 
@@ -71,6 +70,75 @@ def known_hosts_name(conn: Connection, stderr: str = "") -> str:
 
 def forget_command(name: str) -> list[str]:
     return ["ssh-keygen", "-R", name]
+
+
+def _split_target(part: str, default_port: int = 22) -> tuple[str, int]:
+    """„user@host:2200“ / „user@[::1]:2200“ → („host“, 2200)."""
+    part = part.strip().rsplit("@", 1)[-1]
+    m = re.fullmatch(r"\[(.+)\](?::(\d+))?", part)
+    if m:
+        return m.group(1), int(m.group(2) or default_port)
+    if part.count(":") == 1:
+        host, _, port = part.partition(":")
+        if port.isdigit():
+            return host, int(port)
+    return part, default_port
+
+
+def host_key_targets(conn: Connection) -> list[tuple[str, int]]:
+    """Alle Hosts, deren Schlüssel ssh prüft: Ziel und Jump-Hosts."""
+    out = [(conn.host.strip(), conn.port or 22)]
+    out += [_split_target(p) for p in conn.jump_host.split(",") if p.strip()]
+    return out
+
+
+def _kh_name(host: str, port: int) -> str:
+    return host if port == 22 else f"[{host}]:{port}"
+
+
+def _is_known(name: str) -> bool:
+    r = subprocess.run(["ssh-keygen", "-F", name], stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
+def known_hosts_file() -> Path:
+    return Path.home() / ".ssh" / "known_hosts"
+
+
+def ensure_known_hosts(conn: Connection) -> bool:
+    """Unbekannte Hosts (Ziel und Jump-Hosts) erst nach Bestätigung des Fingerabdrucks in known_hosts eintragen.
+
+    Nötig, weil bei der automatischen Passworteingabe niemand ssh' Host-Key-Frage beantworten kann – und ein stilles
+    „accept-new“ das Passwort beim ersten Kontakt an einen Man-in-the-Middle geben würde. False = Verbindung abbrechen."""
+    if not (shutil.which("ssh-keygen") and shutil.which("ssh-keyscan")):
+        return True  # ohne die Hilfsprogramme entscheidet ssh selbst (und scheitert bei unbekannten Hosts)
+    for host, port in host_key_targets(conn):
+        name = _kh_name(host, port)
+        if not host or _is_known(name):
+            continue
+        scan = subprocess.run(["ssh-keyscan", "-T", "10", "-p", str(port), "--", host], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True)
+        lines = [ln for ln in scan.stdout.splitlines() if ln.strip() and not ln.startswith("#")]
+        if not lines:
+            print(tr("Der Schlüssel von {host} konnte nicht abgerufen werden.", host=name), file=sys.stderr)
+            return False
+        shown = subprocess.run(["ssh-keygen", "-lf", "-"], input="\n".join(lines) + "\n", capture_output=True, text=True).stdout
+        print(file=sys.stderr)
+        print(tr("Der Host {host} ist noch nicht bekannt. Fingerabdrücke:", host=name), file=sys.stderr)
+        print(shown.rstrip(), file=sys.stderr)
+        print(tr("Nur fortfahren, wenn ein Fingerabdruck stimmt – sonst geht das Passwort an einen Fremden."), file=sys.stderr)
+        if not _ask(tr("Host vertrauen und in known_hosts eintragen? [j/N]")):
+            return False
+        path = known_hosts_file()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            needs_nl = path.exists() and path.stat().st_size > 0 and not path.read_bytes().endswith(b"\n")
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(("\n" if needs_nl else "") + "\n".join(lines) + "\n")
+        except OSError as exc:
+            print(tr("known_hosts kann nicht geschrieben werden: {exc}", exc=exc), file=sys.stderr)
+            return False
+    return True
 
 
 def run_ssh(args: list[str], env: dict[str, str]) -> tuple[int, str]:
@@ -193,6 +261,8 @@ def run(conn_id: str, overrides: dict[str, str] | None = None) -> int:
         return _fail(str(exc))
     except OSError as exc:
         return _fail(tr("Die Verbindung kann nicht vorbereitet werden: {exc}", exc=exc))
+    if password is not None and "stricthostkeychecking" not in conn.extra_args.lower() and not ensure_known_hosts(conn):
+        return _fail(tr("Verbindung abgebrochen: Der Host-Schlüssel wurde nicht bestätigt."))
     try:
         code, err = run_ssh(args, env)
         if code == SSH_ERROR and host_key_changed(err) and forget_host_key(conn, err):
