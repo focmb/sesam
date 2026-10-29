@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, QSize, Qt, Signal
+
+from . import safe
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
@@ -189,7 +191,7 @@ class FilePanel(QWidget):
     def __init__(self, side: str, title: str, accept_urls: bool, sep: str, can_delete: bool, transfer_text: str):
         super().__init__()
         self.side, self.sep, self._can_delete, self._transfer_text = side, sep, can_delete, transfer_text
-        self.title = QLabel(title)
+        self.title = safe.plain(QLabel(title))
         self.title.setStyleSheet("font-weight: 600;")
         self.up_button = QToolButton()
         self.up_button.setToolTip(tr("Eine Ebene höher"))
@@ -286,7 +288,7 @@ class TransferRow(QWidget):
     def __init__(self, text: str, job: Job):
         super().__init__()
         self.job = job
-        self.label = QLabel(text)
+        self.label = safe.plain(QLabel(text))
         self.bar = QProgressBar()
         self.bar.setRange(0, 1000)
         self.bar.setTextVisible(True)
@@ -316,7 +318,7 @@ class TransferRow(QWidget):
         if state == "ok":
             self.bar.setValue(1000)
         self.bar.setFormat(message)
-        self.bar.setToolTip(message)
+        self.bar.setToolTip(safe.tip(message))
 
 
 class SftpWindow(QMainWindow):

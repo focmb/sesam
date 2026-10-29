@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from .. import passwords, syncing
 from ..models import Config
 from ..i18n import tr
+from . import safe
 
 HELP = (
     "Verbindungen, Gruppen und Identitäten werden in einem Git-Repository abgeglichen (eine Datei pro Eintrag). "
@@ -50,7 +51,7 @@ class SyncDialog(QDialog):
         self.phrase2 = QLineEdit()
         self.phrase2.setEchoMode(QLineEdit.EchoMode.Password)
         self.phrase2.setPlaceholderText(tr("zur Kontrolle wiederholen"))
-        self.status = QLabel(tr("Letzter Abgleich: {last_sync}", last_sync=s.last_sync) if s.last_sync else tr("Noch nicht abgeglichen."))
+        self.status = safe.plain(QLabel(tr("Letzter Abgleich: {last_sync}", last_sync=s.last_sync) if s.last_sync else tr("Noch nicht abgeglichen.")))
         test = QPushButton(tr("Verbindung testen"))
         test.clicked.connect(self._test)
         self.test_result = QLabel()

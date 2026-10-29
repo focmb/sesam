@@ -50,11 +50,12 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
 
     from . import migration, storage
-    from .gui import style, theme
+    from .gui import safe, style, theme
     from .gui.main_window import MainWindow
 
     migration.run(log=lambda m: print(m, file=sys.stderr))
     app = QApplication(sys.argv)
+    safe.install_plain_message_boxes()  # Meldungen mit fremdem Text nie als HTML anzeigen
     app.setApplicationName("Sesam")
     app.setApplicationDisplayName("Sesam")
     app.setDesktopFileName("sesam")  # ordnet das Fenster dem Starter sesam.desktop zu (Dash, Taskleiste)

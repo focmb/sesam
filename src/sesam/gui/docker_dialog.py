@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html
+
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout
 
 from ..i18n import tr
@@ -29,7 +31,7 @@ class DockerConnectDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 18, 20, 18)
         layout.setSpacing(12)
-        layout.addWidget(QLabel(tr("Container <b>{container}</b>", container=container)))
+        layout.addWidget(QLabel(tr("Container <b>{container}</b>", container=html.escape(container))))
         layout.addLayout(form)
         layout.addWidget(buttons)
 

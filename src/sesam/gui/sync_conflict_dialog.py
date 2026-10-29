@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..i18n import tr
+from . import safe
 from ..syncing import LOCAL, REMOTE, Conflict
 
 MAX_VALUE = 60
@@ -55,7 +56,7 @@ class SyncConflictDialog(QDialog):
             fl = QVBoxLayout(frame)
             title = QLabel(f"<b>{_escape(c.name)}</b> · {kind_label(c.kind)}")
             fl.addWidget(title)
-            diff = QLabel(describe(c))
+            diff = safe.plain(QLabel(describe(c)))
             diff.setWordWrap(True)
             fl.addWidget(diff)
             local = QRadioButton(tr("Lokale Version behalten (wird auf den Server hochgeladen)"))

@@ -17,7 +17,7 @@ from .. import __version__
 from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
-from . import style, theme
+from . import safe, style, theme
 from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
@@ -173,7 +173,7 @@ class MainWindow(QMainWindow):
         self.sync.status.connect(self._sync_status)
         self.sync.cfg_changed.connect(self._sync_changed_config)
         self.sync.finished.connect(self._sync_finished)
-        self.sync_label = QLabel("")
+        self.sync_label = safe.plain(QLabel(""))
         self.statusBar().addPermanentWidget(self.sync_label)
         self.wg_indicator = WireGuardIndicator(self)  # ganz rechts: Zustand des WireGuard-Tunnels
         self.statusBar().addPermanentWidget(self.wg_indicator)
@@ -574,7 +574,7 @@ class MainWindow(QMainWindow):
             item.setForeground(3, muted)
             item.setForeground(4, muted)
             if conn.notes:
-                item.setToolTip(0, conn.notes)
+                item.setToolTip(0, safe.tip(conn.notes))
             (nodes.get(conn.group) or self.tree.invisibleRootItem()).addChild(item)
             if _has_children(conn):
                 self._fill_containers(item, conn)
@@ -821,7 +821,7 @@ class MainWindow(QMainWindow):
         font.setItalic(True)
         item.setFont(0, font)
         if tooltip:
-            item.setToolTip(0, tooltip)
+            item.setToolTip(0, safe.tip(tooltip))
         return item
 
     def _fill_containers(self, host_item: QTreeWidgetItem, conn: Connection):
@@ -854,7 +854,7 @@ class MainWindow(QMainWindow):
                 child.setForeground(1, muted)
                 if not port.up:
                     child.setForeground(0, muted)
-                child.setToolTip(0, "\n".join(filter(None, [port.name, port.description, port.status, port.type])))
+                child.setToolTip(0, safe.tip("\n".join(filter(None, [port.name, port.description, port.status, port.type]))))
                 child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 host_item.addChild(child)
         elif guests:
@@ -867,7 +867,7 @@ class MainWindow(QMainWindow):
                 child.setForeground(1, muted)
                 if not guest.running:
                     child.setForeground(0, muted)
-                child.setToolTip(0, "\n".join(filter(None, [guest.title, f"{kind} · {status}", guest.node])))
+                child.setToolTip(0, safe.tip("\n".join(filter(None, [guest.title, f"{kind} · {status}", guest.node]))))
                 child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                 host_item.addChild(child)
         else:
@@ -878,7 +878,7 @@ class MainWindow(QMainWindow):
                 child.setForeground(1, muted)
                 if not box.running:
                     child.setForeground(0, muted)
-                child.setToolTip(0, "\n".join(filter(None, [box.name, box.image, box.status, box.ports])))
+                child.setToolTip(0, safe.tip("\n".join(filter(None, [box.name, box.image, box.status, box.ports]))))
                 child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)  # nicht verschiebbar
                 host_item.addChild(child)
 
@@ -1527,7 +1527,7 @@ class MainWindow(QMainWindow):
     # --- Synchronisation ---
     def _sync_status(self, text: str, error: bool):
         self.sync_label.setText(("⚠ " if error else "⟳ " if text.endswith("…") else "✓ ") + text)
-        self.sync_label.setToolTip(text)
+        self.sync_label.setToolTip(safe.tip(text))
 
     def _sync_changed_config(self):
         try:
@@ -1670,7 +1670,7 @@ class MainWindow(QMainWindow):
         for cat in ["", *snippets.categories(self.cfg)]:
             for sn in snippets.in_category(self.cfg, cat):
                 action = holder(cat).addAction(sn.name)
-                action.setToolTip(sn.command)
+                action.setToolTip(safe.tip(sn.command))
                 action.triggered.connect(lambda _=False, s=sn, c=list(conns): self.run_snippet(s, c))
         if not self.cfg.snippets:
             sub.setToolTip(tr("Noch keine Snippets angelegt"))
