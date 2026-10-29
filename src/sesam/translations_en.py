@@ -652,4 +652,10 @@ EN: dict[str, str] = {
     "Ungültige ID im Eintrag „{name}“.": "Invalid ID in the entry \u201c{name}\u201d.",
     "Das Repository enthält symbolische Links und wird aus Sicherheitsgründen nicht verwendet.":
         "The repository contains symbolic links and is not used for security reasons.",
+    # Integritätsschutz
+    "Im Repository fehlt der Integritätsschutz, den dieses Gerät schon kennt (meta.json verändert?). Der Abgleich wird aus Sicherheitsgründen nicht fortgesetzt.":
+        "The repository is missing the integrity protection this device already knows (meta.json changed?). The sync is not continued for security reasons.",
+    "meta.json im Repository wurde verändert (Integritätsprüfung fehlgeschlagen).": "meta.json in the repository was changed (integrity check failed).",
+    "{n} Eintrag/Einträge im Repository abgelehnt (nicht mit dem Sync-Passwort signiert): ":
+        "{n} entry/entries in the repository rejected (not signed with the sync password): ",
 }

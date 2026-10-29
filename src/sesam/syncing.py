@@ -137,6 +137,30 @@ def decrypt(key: bytes, blob: dict, aad: str) -> str:
         raise SyncError(tr("Entschlüsselung fehlgeschlagen (falsches Sync-Passwort?).")) from exc
 
 
+# ---------------------------------------------------------------- Integrität
+#
+# Das Passwort-Blob eines Eintrags ist per AES-GCM geschützt, alle übrigen Felder (Host, extra_args, Remote-Befehl …) liegen im
+# Klartext im Repository. Ohne weiteren Schutz könnte jeder mit Schreibzugriff auf das Repository dort einen ProxyCommand eintragen
+# oder den Host umbiegen. Deshalb trägt jeder Eintrag eine Signatur (HMAC-SHA256 mit einem aus dem Sync-Passwort abgeleiteten
+# Schlüssel) über den gesamten Inhalt samt Art und ID. meta.json enthält eine signierte Markierung; ein Gerät, das einmal ein
+# geschütztes Repository gesehen hat, nimmt danach keine unsignierten Einträge mehr an (kein Zurückstufen).
+# Nicht abgedeckt: Löschen von Einträgen und das Zurückspielen einer älteren, ebenfalls gültig signierten Fassung.
+
+def _mac_key(key: bytes) -> bytes:
+    return hmac.new(key, b"sesam-entry-mac-v1", hashlib.sha256).digest()
+
+
+def entry_mac(key: bytes, kind: str, content: dict) -> str:
+    """Signatur über den kompletten Dateiinhalt eines Eintrags (ohne das Feld ``mac`` selbst)."""
+    canonical = json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hmac.new(_mac_key(key), f"entry\0{kind}\0".encode() + canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def integrity_tag(key: bytes) -> str:
+    """Signierte Markierung in meta.json: Das Repository schützt seine Einträge."""
+    return hmac.new(_mac_key(key), b"integrity-v1", hashlib.sha256).hexdigest()
+
+
 # ---------------------------------------------------------------- Einträge und Zusammenführung
 
 @dataclass
@@ -148,6 +172,7 @@ class Item:
     blob: dict | None = field(default=None, compare=False)  # vorhandener verschlüsselter Block im Repository
     pw_missing: bool = field(default=False, compare=False)  # lokal als gespeichert markiert, aber nicht im Schlüsselbund
     renamed_from: str | None = field(default=None, compare=False)  # lokale ID, die auf die ID des gleichen Servereintrags umgestellt wurde
+    mac: str | None = field(default=None, compare=False)  # Signatur des Eintrags im Repository (siehe entry_mac)
 
     @property
     def key(self) -> tuple[str, str]:
@@ -360,8 +385,9 @@ class RemoteState:
     meta: dict | None
     key: bytes | None
     branch_exists: bool
-    new_meta: bool = False
+    new_meta: bool = False  # meta.json muss (neu) geschrieben werden
     group_colors: dict = field(default_factory=dict)
+    rejected: dict = field(default_factory=dict)  # Schlüssel -> Name der Einträge ohne gültige Signatur (nicht übernommen)
 
 
 @dataclass
@@ -372,6 +398,7 @@ class SyncReport:
     merged: int = 0  # doppelte Einträge (gleiche Verbindung mit verschiedenen IDs), die zusammengeführt wurden
     conflicts: list[str] = field(default_factory=list)
     kept_remote: list[str] = field(default_factory=list)  # Konflikte, bei denen die Server-Version gewählt wurde
+    rejected: list[str] = field(default_factory=list)  # Einträge im Repository ohne gültige Signatur (abgelehnt, lokale Fassung bleibt)
     local_changed: bool = False
     committed: bool = False
     pushed: bool = False
@@ -384,6 +411,9 @@ class SyncReport:
             parts.append(tr("{n} doppelte(r) Eintrag/Einträge zusammengeführt", n=self.merged))
         if self.pushed:
             parts.append(tr("Änderungen hochgeladen"))
+        if self.rejected:
+            parts.append(tr("{n} Eintrag/Einträge im Repository abgelehnt (nicht mit dem Sync-Passwort signiert): ", n=len(self.rejected))
+                         + ", ".join(self.rejected))
         if self.conflicts:
             parts.append(tr("{n} Konflikt(e): ", n=len(self.conflicts)) + ", ".join(self.conflicts))
         return "; ".join(parts) or tr("Alles aktuell")
@@ -420,6 +450,10 @@ class SyncEngine:
             return json.loads(self.state_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return {}
+
+    def _integrity_expected(self) -> bool:
+        """Hat dieses Gerät dieses Repository schon einmal mit Signaturen gesehen? Dann sind unsignierte Einträge nie mehr gültig."""
+        return self._load_state().get("integrity") == self.s.url.strip()
 
     def _save_state(self, state: dict) -> None:
         self.work.mkdir(parents=True, exist_ok=True)
@@ -474,34 +508,54 @@ class SyncEngine:
             if not isinstance(meta, dict):
                 raise SyncError(tr("meta.json im Repository ist beschädigt."))
         key, new_meta = None, False
+        enforce = self._integrity_expected()
         if self.s.passwords:
             if not self.passphrase:
                 raise SyncError(tr("Das Sync-Passwort fehlt (Seitenleiste → Synchronisation …)."))
             if meta and meta.get("kdf"):
                 key = derive_key(self.passphrase, meta["kdf"])
                 decrypt(key, meta.get("check"), "check")  # prüft das Sync-Passwort
+                marker = meta.get("integrity")
+                tag = marker.get("tag") if isinstance(marker, dict) else None
+                if tag is None:
+                    if enforce:
+                        raise SyncError(tr("Im Repository fehlt der Integritätsschutz, den dieses Gerät schon kennt (meta.json verändert?). Der Abgleich wird aus Sicherheitsgründen nicht fortgesetzt."))
+                    meta["integrity"] = {"v": 1, "tag": integrity_tag(key)}  # älteres Repository: beim ersten Abgleich nachrüsten
+                    new_meta = True
+                elif isinstance(tag, str) and hmac.compare_digest(tag, integrity_tag(key)):
+                    enforce = True
+                else:
+                    raise SyncError(tr("meta.json im Repository wurde verändert (Integritätsprüfung fehlgeschlagen)."))
             else:
                 meta = {"format": FORMAT, "kdf": new_kdf()}
                 key = derive_key(self.passphrase, meta["kdf"])
                 meta["check"] = encrypt(key, "ssh-verwaltung", "check")  # Prüftext, bewusst unverändert (Kompatibilität)
+                meta["integrity"] = {"v": 1, "tag": integrity_tag(key)}
                 new_meta = True
         items: dict = {}
+        rejected: dict = {}
         for kind, (folder, _cls) in KINDS.items():
             for path in sorted((self.repo / folder).glob("*.json")) if (self.repo / folder).is_dir() else []:
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
                     if not isinstance(data, dict):
                         continue
-                    blob = data.pop("password_enc", None)
+                    mac = data.pop("mac", None)
                     item_id = data["id"]
                     if not isinstance(item_id, str) or not SAFE_ID.fullmatch(item_id):
                         continue  # die ID wird zum Dateinamen: nichts aus einem manipulierten Repository übernehmen
+                    if key is not None:
+                        valid = isinstance(mac, str) and hmac.compare_digest(mac, entry_mac(key, kind, data))
+                        if not valid and (enforce or mac is not None):  # unsigniert ist nur in einem noch ungeschützten Repository erlaubt
+                            rejected[(kind, item_id)] = str(data.get("name") or item_id)
+                            continue
+                    blob = data.pop("password_enc", None)
                     # auf bekannte Felder normalisieren (fehlende Felder bekommen Standardwerte)
                     data = {k: v for k, v in asdict(_cls.from_dict(data)).items() if k not in VOLATILE}
                 except (ValueError, KeyError, OSError, TypeError, AttributeError, RecursionError):
                     continue  # beschädigte Datei überspringen
                 pw = decrypt(key, blob, item_id) if (key and blob) else None
-                items[(kind, item_id)] = Item(kind, item_id, data, pw, blob)
+                items[(kind, item_id)] = Item(kind, item_id, data, pw, blob, mac=mac if isinstance(mac, str) else None)
         groups: set = set()
         colors: dict = {}
         gp = self.repo / "groups.json"
@@ -516,7 +570,7 @@ class SyncEngine:
                         colors = {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
             except (ValueError, OSError, RecursionError):
                 pass
-        return RemoteState(items, groups, meta, key, branch_exists, new_meta, colors)
+        return RemoteState(items, groups, meta, key, branch_exists, new_meta, colors, rejected)
 
     # ---- Phase 2: zusammenführen (verändert cfg, Schlüsselbund und Arbeitsverzeichnis) ----
     def _store_for(self, kind: str) -> PasswordStore:
@@ -561,13 +615,22 @@ class SyncEngine:
 
         before = copy.deepcopy(asdict(cfg))
         local = self._local_items(cfg, key)
-        local = adopt_remote_ids(local, match_duplicates(base_key, local, remote.items))
+        ritems = remote.items
+        if remote.rejected:
+            # Ein Eintrag ohne gültige Signatur zählt nicht als Änderung und nicht als Löschung am Server: Die lokale Fassung bleibt und
+            # überschreibt die Datei beim Hochladen (mit gültiger Signatur). Gibt es lokal keine, verschwindet die Datei aus dem Repository.
+            ritems = dict(remote.items)
+            for rk in remote.rejected:
+                if rk in local:
+                    ritems[rk] = replace(local[rk], blob=None, renamed_from=None, pw_missing=False, mac=None)
+        local = adopt_remote_ids(local, match_duplicates(base_key, local, ritems))
         for k, it in local.items():
             # Passwort fehlt lokal im Schlüsselbund: nicht als „gelöscht“ auf den Server übertragen, sondern wiederherstellen
-            if it.pw_missing and k in remote.items and remote.items[k].pw is not None:
-                it.pw = remote.items[k].pw
-        result, raw_conflicts = merge_items(base_key, local, remote.items, lambda it: item_hash(it, hkey))
+            if it.pw_missing and k in ritems and ritems[k].pw is not None:
+                it.pw = ritems[k].pw
+        result, raw_conflicts = merge_items(base_key, local, ritems, lambda it: item_hash(it, hkey))
         report = SyncReport()
+        report.rejected = sorted(remote.rejected.values(), key=str.lower)
         conflicts = [
             Conflict(k, loc, rem, f"{k[0]}:{k[1]}:{item_hash(loc, hkey)}:{item_hash(rem, hkey)}")
             for k, loc, rem in raw_conflicts
@@ -609,6 +672,7 @@ class SyncEngine:
             "items": {f"{k[0]}:{k[1]}": item_hash(it, hkey) for k, it in result.items()},
             "groups": sorted(merged_groups),
             "group_colors": merged_colors,
+            "integrity": self.s.url.strip() if key is not None else self._load_state().get("integrity"),
         }
         return report
 
@@ -710,6 +774,12 @@ class SyncEngine:
                 blob = old.blob if old else None  # ohne Passwort-Sync vorhandene Blöcke erhalten
             if blob:
                 content["password_enc"] = blob
+            if key is not None:
+                content["mac"] = entry_mac(key, k[0], content)
+            else:  # ohne Sync-Passwort lässt sich nichts signieren: eine unveränderte Signatur bleibt erhalten
+                old = remote.items.get(k)
+                if old and old.mac and old.data == item.data and old.blob == blob:
+                    content["mac"] = old.mac
             write(path, dump(content))
         for folder, _ in KINDS.values():
             d = self.repo / folder

@@ -239,9 +239,12 @@ class EngineTests(unittest.TestCase):
         got.host = "geaendert"
         B.run(cfgB)
         self.assertIn("password_enc", self.remote_text()[f"connections/{c.id}.json"])  # Block bleibt erhalten
-        A.run(cfgA)
-        self.assertEqual(cfgA.connections[0].host, "geaendert")
+        report = A.run(cfgA)
+        # Ohne Sync-Passwort kann B nicht signieren: A lehnt die Änderung ab und behält seine Version.
+        self.assertEqual(report.rejected, ["x"])
+        self.assertEqual(cfgA.connections[0].host, "x.example")
         self.assertEqual(sA.get(c.id), "p")
+        self.assertIn("password_enc", self.remote_text()[f"connections/{c.id}.json"])
 
     def test_failed_push_does_not_lose_new_items(self):
         cfgA, A, sA = self.device("A")
