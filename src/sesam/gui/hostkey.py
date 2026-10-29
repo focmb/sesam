@@ -19,6 +19,12 @@ class HostKeyAsker(QObject):
         self._request.connect(self._ask)
 
     def confirm(self, host: str, key_type: str, fingerprint: str) -> bool:
+        try:
+            return self._confirm(host, key_type, fingerprint)
+        except RuntimeError:  # Fenster samt Rückfrage-Objekt ist schon zerstört: im Zweifel nicht vertrauen
+            return False
+
+    def _confirm(self, host: str, key_type: str, fingerprint: str) -> bool:
         job = {"host": host, "type": key_type, "fp": fingerprint, "event": threading.Event(), "answer": False}
         if QThread.currentThread() is QApplication.instance().thread():
             self._ask(job)

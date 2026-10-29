@@ -604,7 +604,8 @@ class SudoPromptTests(GuiTestCase):
             patcher = mock.patch.object(passwords, name, fake)
             patcher.start()
             self.addCleanup(patcher.stop)
-        for target, value in (("sudo_available", lambda: True), ("_root_wg_executable", lambda: "/usr/bin/wg")):
+        for target, value in (("sudo_available", lambda: True), ("_wg_executable", lambda: "/usr/bin/wg"),
+                              ("_root_wg_executable", lambda: "/usr/bin/wg")):
             patcher = mock.patch.object(wireguard, target, value)
             patcher.start()
             self.addCleanup(patcher.stop)

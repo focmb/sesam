@@ -52,6 +52,14 @@ class GuiTestCase(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+        from sesam import sftp
+        from sesam.gui import hostkey
+
+        patcher = mock.patch.object(hostkey.HostKeyAsker, "confirm", lambda self, *a: True)  # Testserver gilt als vertrauenswürdig
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(setattr, sftp, "host_key_confirmer", sftp.host_key_confirmer)  # das Hauptfenster setzt sie; danach zurück
+
         def boom(*_a, **_k):  # ein unerwartetes modales Fenster würde den Test endlos blockieren
             raise AssertionError("Unerwartetes modales Fenster im Test (würde hängen)")
 

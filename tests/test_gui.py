@@ -403,17 +403,17 @@ class GuiTests(unittest.TestCase):
             dlg._accept()                                 # Sync-Passwort fehlt
             dlg.phrase.setText("kurz")
             dlg._accept()                                 # zu kurz
-            dlg.phrase.setText("langgenug1")
-            dlg.phrase2.setText("anders123")
+            dlg.phrase.setText("langgenug12345")
+            dlg.phrase2.setText("anders123456")
             dlg._accept()                                 # Wiederholung weicht ab
         self.assertEqual(warn.call_count, 4)
         self.assertFalse(cfg.sync.enabled)
-        dlg.phrase2.setText("langgenug1")
+        dlg.phrase2.setText("langgenug12345")
         dlg._accept()
         self.assertTrue(cfg.sync.enabled and cfg.sync.passphrase_saved)
         self.assertEqual(cfg.sync.url, "git@host:r.git")
         from sesam import syncing
-        self.assertEqual(self.store[syncing.PASSPHRASE_KEY], "langgenug1")
+        self.assertEqual(self.store[syncing.PASSPHRASE_KEY], "langgenug12345")
         # Ohne Passwort-Sync braucht es kein Sync-Passwort
         cfg2 = type(cfg)()
         d2 = SyncDialog(cfg2)
