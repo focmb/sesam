@@ -219,6 +219,7 @@ class Connection:
     color: str = ""  # Schlüssel aus sesam.colors.PALETTE, leer = keine Farbe
     tags: list[str] = field(default_factory=list)
     forwards: list[Forward] = field(default_factory=list)  # gespeicherte Port-Weiterleitungen (Tunnel)
+    favorite: bool = False  # Favorit: steht zusätzlich oben im Baum und im Schnellstarter (wird synchronisiert)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Connection":
@@ -273,6 +274,7 @@ class Config:
     hidden_columns: list[str] = field(default_factory=lambda: list(DEFAULT_HIDDEN_COLUMNS))  # ausgeblendete Spalten (nur lokal, wird nicht synchronisiert)
     window_size: list[int] = field(default_factory=list)  # [Breite, Höhe] des Hauptfensters beim Beenden (nur lokal)
     window_maximized: bool = False  # Hauptfenster war beim Beenden maximiert (nur lokal)
+    recent: dict[str, float] = field(default_factory=dict)  # Verbindungs-ID → Zeitpunkt der letzten Nutzung (Unix-Zeit; nur lokal, wird nicht synchronisiert)
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     group_colors: dict[str, str] = field(default_factory=dict)  # Gruppenpfad -> Farbschlüssel (sesam.colors)
     collapsed_groups: list[str] = field(default_factory=list)  # zugeklappte Gruppen der Hauptansicht (nur lokal, wird nicht synchronisiert)

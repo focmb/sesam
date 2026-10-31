@@ -274,6 +274,7 @@ _ICONS = {
     "arrow_up": '<path d="M12 19V6M6 11.5l6-6 6 6"/>',
     "home": '<path d="M4 11l8-6.5 8 6.5M6.5 9.5V19h11V9.5"/>',
     "transfer": '<path d="M8 20V6M4.500 9.500L8 6l3.500 3.500"/><path d="M16 4v14M12.500 14.500L16 18l3.500-3.500"/>',
+    "star": '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 17l-5.2 2.7 1-5.9-4.3-4.1 5.9-.8z"/>',
     "search": '<circle cx="11" cy="11" r="6.500"/><path d="M16 16l4 4"/>',
     "shield_ok": '<path d="M12 3l7.5 3v6c0 4.5-3.3 8.1-7.5 9.8C7.8 20.1 4.5 16.5 4.5 12V6z"/><path d="M8.5 12.2l2.5 2.5 4.6-5"/>',
     "shield_warn": '<path d="M12 3l7.5 3v6c0 4.5-3.3 8.1-7.5 9.8C7.8 20.1 4.5 16.5 4.5 12V6z"/><path d="M12 8.5v4M12 15.7h.01"/>',
@@ -282,18 +283,18 @@ _ICONS = {
 }
 
 
-def icon(name: str, color: str, disabled_color: str | None = None, size: int = 18) -> QIcon:
-    """Zeichnet ein Linien-Icon in der gewünschten Farbe (scharf auch auf HiDPI-Bildschirmen)."""
+def icon(name: str, color: str, disabled_color: str | None = None, size: int = 18, fill: str = "none") -> QIcon:
+    """Zeichnet ein Linien-Icon in der gewünschten Farbe (scharf auch auf HiDPI-Bildschirmen); ``fill``: Füllfarbe (z. B. für den Stern)."""
     result = QIcon()
     for mode, col in ((QIcon.Mode.Normal, color), (QIcon.Mode.Disabled, disabled_color or color)):
-        result.addPixmap(_pixmap(name, col, size), mode)
+        result.addPixmap(_pixmap(name, col, size, fill), mode)
     return result
 
 
-def _pixmap(name: str, color: str, size: int) -> QPixmap:
+def _pixmap(name: str, color: str, size: int, fill: str = "none") -> QPixmap:
     svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%s" '
-        'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">%s</svg>' % (color, _ICONS[name])
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%s" stroke="%s" '
+        'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">%s</svg>' % (fill, color, _ICONS[name])
     )
     ratio = 2.0  # genug für HiDPI; Qt skaliert bei Bedarf herunter
     pix = QPixmap(int(size * ratio), int(size * ratio))

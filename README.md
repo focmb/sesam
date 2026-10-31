@@ -22,6 +22,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - [Darstellung](#darstellung)
 - [Im Anwendungsmenü / Dash installieren (Linux)](#im-anwendungsmenü--dash-installieren-linux)
 - [Gruppen](#gruppen)
+- [Favoriten und Schnellstarter](#favoriten-und-schnellstarter)
 - [Farben und Tags](#farben-und-tags)
 - [Terminals konfigurieren](#terminals-konfigurieren)
 - [Identitäten](#identitäten)
@@ -46,6 +47,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 ## Funktionen
 
 - **Verbindungsverwaltung:** SSH-Verbindungen in verschachtelten Gruppen mit Drag & Drop, Farben, Tags, Suche und Mehrfachauswahl; Import aus `~/.ssh/config`.
+- **Favoriten und Schnellstarter:** Häufige Verbindungen als Favoriten oben im Baum (werden mit synchronisiert); Strg+K öffnet eine unscharfe Suche über alle Verbindungen mit den zuletzt verwendeten.
 - **Eigenes Terminal:** Jede Verbindung öffnet sich im Terminal deiner Wahl (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, eigene Programme) über frei konfigurierbare Befehlsvorlagen, auch pro Verbindung verschieden.
 - **Zugangsdaten:** Passwörter im Schlüsselbund des Betriebssystems, nicht in der Konfigurationsdatei. Identitäten bündeln Benutzer, Schlüssel und Passwort für viele Verbindungen.
 - **SSH-Schlüssel in der App:** Ed25519/RSA erzeugen oder importieren, Fingerabdruck ansehen, per Klick auf Server installieren (wie `ssh-copy-id`) und Verbindungen zuweisen.
@@ -180,6 +182,13 @@ Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z.
 - **Spalten:** Ein Rechtsklick auf die Spaltenköpfe blendet *Ziel*, *Terminal*, *Tags* und *Betriebssystem* ein oder aus (der Name bleibt immer sichtbar). Die Auswahl bleibt lokal gespeichert. *Betriebssystem* ist zunächst ausgeblendet.
 - **Betriebssystem des Hosts:** Beim ersten Verbinden fragt Sesam im Hintergrund über eine zweite SSH-Verbindung das Betriebssystem ab (`/etc/os-release`, macOS, `uname`, Windows `ver`, bei Cisco-Switches `show version | include ^Cisco IOS`) und speichert es bei der Verbindung, sodass es bei jedem Start in der Spalte steht. Ist die letzte Abfrage älter als 7 Tage, erneuert Sesam den Wert beim nächsten Verbinden (schlägt das fehl, bleibt der alte stehen). Unbekannte Host-Schlüssel übernimmt diese Abfrage nie selbst: Sie wartet, bis du im Terminal bestätigt hast. Verbindungen mit Jump-Host werden nicht abgefragt. Im Kontextmenü der Verbindung ermittelt *Betriebssystem ermitteln* den Wert erneut, auch mit Passwortabfrage.
 - Auf- und Zugeklapptes merkt sich Sesam: Beim nächsten Start sind genau die Gruppen zu, die beim Beenden zu waren. Dieser Zustand (wie die Spaltenbreiten und die Fenstergröße, auch maximiert) bleibt lokal und wird nicht per Git synchronisiert.
+
+## Favoriten und Schnellstarter
+
+- **Favoriten:** *Favorit* (Strg+B, Seitenleiste oder Kontextmenü) markiert Verbindungen. Sie stehen zusätzlich in einem Abschnitt *Favoriten* oben im Baum (ein-/ausklappbar) und tragen in ihrer Gruppe ein ★. Das Merkmal gehört zur Verbindung und wird deshalb **per Git mit synchronisiert**. Duplikate sind keine Favoriten.
+- **Schnellstarter (Strg+K):** Ein Suchfenster über alle Verbindungen. Die Suche ist unscharf (`wbpd` findet `web-prod`), mehrere Wörter müssen alle passen, durchsucht werden Name, Host, Benutzer, Gruppe und Tags. Ohne Suchbegriff erscheinen *Favoriten*, *Zuletzt verwendet* (die jüngsten acht, mit „vor 5 Min.“ usw.) und *Alle Verbindungen*.
+  - ↵ verbindet, Strg+↵ öffnet die Dateien (SFTP), Strg+B schaltet den Favoriten um, Esc schließt.
+  - **Zuletzt verwendet** gibt es nur hier, nicht im Baum. Die Zeiten bleiben lokal (nicht synchronisiert) und zählen beim Verbinden, bei SFTP, Docker/Proxmox/Cisco und beim Starten eines Tunnels.
 
 ## Farben und Tags
 

@@ -22,6 +22,7 @@ Connections open in a **freely configurable terminal**.
 - [Appearance](#appearance)
 - [Installing in the application menu / dash (Linux)](#installing-in-the-application-menu--dash-linux)
 - [Groups](#groups)
+- [Favorites and quick launcher](#favorites-and-quick-launcher)
 - [Colors and tags](#colors-and-tags)
 - [Configuring terminals](#configuring-terminals)
 - [Identities](#identities)
@@ -46,6 +47,7 @@ Connections open in a **freely configurable terminal**.
 ## Features
 
 - **Connection management:** SSH connections in nested groups with drag & drop, colors, tags, search and multi-select; import from `~/.ssh/config`.
+- **Favorites and quick launcher:** Frequent connections as favorites at the top of the tree (synced too); Ctrl+K opens a fuzzy search over all connections with the recently used ones.
 - **Your own terminal:** Every connection opens in the terminal of your choice (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, custom programs) through freely configurable command templates, also different per connection.
 - **Credentials:** Passwords live in the operating system’s keychain, not in the configuration file. Identities bundle user, key and password for many connections.
 - **SSH keys in the app:** Generate or import Ed25519/RSA keys, view fingerprints, install them on servers with one click (like `ssh-copy-id`) and assign them to connections.
@@ -182,6 +184,13 @@ Connections can be organized in nested groups (path with “/”, e.g. `Customer
 - **Columns:** Right-click the column headers to show or hide *Target*, *Terminal*, *Tags* and *Operating system* (the name is always visible). The choice is stored locally. *Operating system* is hidden at first.
 - **Operating system of the host:** On the first connect Sesam queries the operating system in the background over a second SSH connection (`/etc/os-release`, macOS, `uname`, Windows `ver`, `show version | include ^Cisco IOS` on Cisco switches) and stores it with the connection, so it is in the column at every start. If the last query is older than 7 days, Sesam refreshes the value on the next connect (if that fails, the old value stays). This query never accepts an unknown host key by itself: it waits until you have confirmed it in the terminal. Connections with a jump host are not queried. *Detect operating system* in the connection's context menu determines the value again, including a password prompt.
 - Sesam remembers what is expanded and collapsed: at the next start exactly the groups that were collapsed when you quit are collapsed. This state (like the column widths and the window size, also maximized) stays local and is not synchronized via Git.
+
+## Favorites and quick launcher
+
+- **Favorites:** *Favorite* (Ctrl+B, sidebar or context menu) marks connections. They also appear in a *Favorites* section at the top of the tree (collapsible) and carry a ★ in their group. The flag belongs to the connection, so it is **synced via Git**. Duplicates are not favorites.
+- **Quick launcher (Ctrl+K):** A search window over all connections. The search is fuzzy (`wbpd` finds `web-prod`), several words must all match, and name, host, user, group and tags are searched. Without a query it shows *Favorites*, *Recently used* (the latest eight, with “5 min ago” etc.) and *All connections*.
+  - ↵ connects, Ctrl+↵ opens the files (SFTP), Ctrl+B toggles the favorite, Esc closes.
+  - **Recently used** exists only here, not in the tree. The times stay local (not synced) and count on connect, SFTP, Docker/Proxmox/Cisco and when starting a tunnel.
 
 ## Colors and tags
 

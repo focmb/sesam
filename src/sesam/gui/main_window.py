@@ -28,6 +28,7 @@ from .hostkey import HostKeyAsker
 from .identities_dialog import IdentitiesDialog
 from .keys_dialog import KeysDialog
 from .settings_dialog import SettingsDialog
+from .quick_dialog import QuickLauncher
 from .snippets_dialog import SnippetsDialog
 from .jobs import Job
 from .sftp_window import SftpWindow
@@ -41,6 +42,8 @@ from .wireguard_indicator import WireGuardIndicator
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
 GROUP_ROLE = ID_ROLE + 1  # Gruppenpfad
 CONTAINER_ROLE = ID_ROLE + 2  # „<ID der Host-Verbindung>\x1f<Containername bzw. Proxmox-VMID>“
+FAV_ROLE = ID_ROLE + 3  # „head“ beim Favoriten-Kopf, „entry“ bei einer Verbindung in diesem Abschnitt (Verweis, nicht die Verbindung selbst)
+GOLD = "#e8a317"  # Stern der Favoriten
 
 
 def _has_children(conn: Connection) -> bool:
@@ -75,8 +78,10 @@ class ConnectionTree(QTreeWidget):
         # Qt soll nichts selbst verschieben; wir ändern die Daten und bauen den Baum neu auf.
         event.setDropAction(Qt.DropAction.IgnoreAction)
         event.accept()
-        if source is None:
+        if source is None or source.data(0, FAV_ROLE) == "head":
             return
+        if target is not None and target.data(0, FAV_ROLE) is not None:
+            return  # der Favoriten-Abschnitt ist keine Gruppe: nichts dorthin verschieben
         if target is None:
             target_group = ""
         elif target.data(0, GROUP_ROLE) is not None:
@@ -104,6 +109,7 @@ class MainWindow(QMainWindow):
         self._hostkey_asker = HostKeyAsker(self)
         sftp.host_key_confirmer = self._hostkey_asker.confirm  # unbekannte Host-Schlüssel nur nach Bestätigung merken
         self._sftp_windows: list[SftpWindow] = []  # offene Dateibrowser (SFTP)
+        self._fav_collapsed = False  # Favoriten-Abschnitt zugeklappt (nur zur Laufzeit)
         self.tunnels = tunnels.Manager()  # laufende Port-Weiterleitungen (SSH-Tunnel)
         self._tunnel_up: set[tuple[str, str]] = set()  # Tunnel, deren „aktiv“ schon gemeldet wurde
         self._tunnel_sig: tuple = ()
@@ -214,9 +220,11 @@ class MainWindow(QMainWindow):
             return a
 
         self.a_connect = act(tr("Verbinden"), self.connect_selected, "Return")
+        self.a_quick = act(tr("Schnellstarter"), self.open_quick, "Ctrl+K")
         self.a_files = act(tr("Dateien (SFTP)"), self.open_files, "F4")
         self.a_new = act(tr("Neue Verbindung"), self.new_connection, "Ctrl+N")
         self.a_new_group = act(tr("Neue Gruppe …"), self.new_group, "Ctrl+Shift+N")
+        self.a_fav = act(tr("Favorit"), self.toggle_favorite_selected, "Ctrl+B")
         self.a_edit = act(tr("Bearbeiten"), self.edit_selected, "F2")
         self.a_dup = act(tr("Duplizieren"), self.duplicate_selected, "Ctrl+D")
         self.a_del = act(tr("Löschen"), self.delete_selected, "Del")
@@ -249,7 +257,7 @@ class MainWindow(QMainWindow):
     THEME_ICONS = {"light": "sun", "dark": "moon", "system": "monitor"}
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
-        ("a_connect", "a_files", "a_new", "a_new_group", "a_edit", "a_dup", "a_del"),
+        ("a_connect", "a_quick", "a_files", "a_new", "a_new_group", "a_fav", "a_edit", "a_dup", "a_del"),
         ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_snippets", "a_terms"),
     )
 
@@ -347,7 +355,7 @@ class MainWindow(QMainWindow):
 
     # --- Icons ---
     ACTION_ICONS = (
-        ("a_connect", "connect"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
+        ("a_connect", "connect"), ("a_quick", "search"), ("a_fav", "star"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
         ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_snippets", "snippet"), ("a_terms", "sliders"),
     )
 
@@ -531,6 +539,9 @@ class MainWindow(QMainWindow):
     def _expansion_changed(self, item: QTreeWidgetItem, collapsed: bool):
         if self._rebuilding:
             return
+        if item.data(0, FAV_ROLE) == "head":
+            self._fav_collapsed = collapsed
+            return
         cid = item.data(0, ID_ROLE)
         if cid:
             (self._docker_expanded.discard if collapsed else self._docker_expanded.add)(cid)
@@ -569,6 +580,20 @@ class MainWindow(QMainWindow):
         self._rebuilding += 1  # Auf-/Zuklappen während des Aufbaus ist keine Benutzeraktion
         self.tree.clear()
         nodes: dict[str, QTreeWidgetItem] = {}
+        favorites = [conn for conn in matches if conn.favorite]
+        if favorites:  # fester Abschnitt ganz oben; die Verbindungen stehen zusätzlich in ihrer Gruppe
+            head = QTreeWidgetItem([tr("Favoriten"), tr("{count} Verbindung(en)", count=len(favorites))])
+            head.setData(0, FAV_ROLE, "head")
+            head.setIcon(0, style.icon("star", GOLD, fill=GOLD))
+            font = head.font(0)
+            font.setBold(True)
+            head.setFont(0, font)
+            head.setForeground(1, muted)
+            self.tree.invisibleRootItem().addChild(head)
+            for conn in favorites:
+                entry = self._connection_item(conn, c, muted, favorite_entry=True)
+                head.addChild(entry)
+            head.setExpanded(not self._fav_collapsed)
         for path in group_paths:  # sortiert: Eltern stehen vor Kindern
             item = QTreeWidgetItem([grp.name_of(path)])
             item.setData(0, GROUP_ROLE, path)
@@ -580,14 +605,7 @@ class MainWindow(QMainWindow):
             (parent or self.tree.invisibleRootItem()).addChild(item)
             nodes[path] = item
         for conn in matches:
-            item = QTreeWidgetItem([self._display_name(conn), self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags), conn.os_info])
-            item.setData(0, ID_ROLE, conn.id)
-            item.setIcon(0, tinted("server", conn.color, c["muted"]))
-            item.setForeground(2, muted)
-            item.setForeground(3, muted)
-            item.setForeground(4, muted)
-            if conn.notes:
-                item.setToolTip(0, safe.tip(conn.notes))
+            item = self._connection_item(conn, c, muted)
             (nodes.get(conn.group) or self.tree.invisibleRootItem()).addChild(item)
             if _has_children(conn):
                 self._fill_containers(item, conn)
@@ -600,6 +618,19 @@ class MainWindow(QMainWindow):
         self._rebuilding -= 1
         for cid in self._docker_expanded:  # z. B. nach dem Bearbeiten des Hosts: neu laden, sobald der Baum steht
             QTimer.singleShot(0, lambda cid=cid: self._load_if_needed(cid, retry_errors=False))
+
+    def _connection_item(self, conn: Connection, c: dict[str, str], muted, favorite_entry: bool = False) -> QTreeWidgetItem:
+        """Zeile einer Verbindung. ``favorite_entry``: Verweis im Favoriten-Abschnitt (ohne Stern, ohne Docker-/Proxmox-Unterelemente)."""
+        item = QTreeWidgetItem([self._display_name(conn, favorite_entry), self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags), conn.os_info])
+        item.setData(0, ID_ROLE, conn.id)
+        if favorite_entry:
+            item.setData(0, FAV_ROLE, "entry")
+        item.setIcon(0, style.icon("server", colors.hex_of(conn.color) or c["muted"]))
+        for column in (2, 3, 4):
+            item.setForeground(column, muted)
+        if conn.notes:
+            item.setToolTip(0, safe.tip(conn.notes))
+        return item
 
     def _selected(self) -> Connection | None:
         item = self.tree.currentItem()
@@ -699,6 +730,8 @@ class MainWindow(QMainWindow):
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
             menu.addAction(self.a_files)
+            menu.addAction(tr("Aus Favoriten entfernen") if conn.favorite else tr("Zu Favoriten hinzufügen")).triggered.connect(
+                lambda: self.toggle_favorite([conn]))
             self._forwards_menu(menu, conn)
             menu.addAction(tr("Betriebssystem ermitteln")).triggered.connect(self.detect_os_selected)
             self._snippet_menu(menu, [conn])
@@ -735,6 +768,9 @@ class MainWindow(QMainWindow):
         self._snippet_menu(menu, conns)
         shared = conns[0].color if len({c.color for c in conns}) == 1 else ""
         self._color_menu(menu, shared, lambda key: self.set_connections_color(conns, key))
+        all_fav = all(c.favorite for c in conns)
+        menu.addAction(tr("Aus Favoriten entfernen") if all_fav else tr("Zu Favoriten hinzufügen")).triggered.connect(
+            lambda: self.toggle_favorite(conns))
         menu.addSeparator()
         menu.addAction(tr("{n} Verbindungen löschen", n=len(conns))).triggered.connect(lambda: self.delete_connections(conns))
         self._popup(menu, pos)
@@ -779,13 +815,20 @@ class MainWindow(QMainWindow):
             self.connect_selected()
 
     # --- Docker-Container ---
-    def _find_item(self, conn_id: str) -> QTreeWidgetItem | None:
+    def _find_items(self, conn_id: str) -> list[QTreeWidgetItem]:
+        """Alle Zeilen der Verbindung: die in ihrer Gruppe und, bei Favoriten, der Verweis im Favoriten-Abschnitt."""
+        found = []
         it = QTreeWidgetItemIterator(self.tree)
         while it.value():
             if it.value().data(0, ID_ROLE) == conn_id:
-                return it.value()
+                found.append(it.value())
             it += 1
-        return None
+        return found
+
+    def _find_item(self, conn_id: str) -> QTreeWidgetItem | None:
+        """Die Zeile der Verbindung in ihrer Gruppe (der Verweis bei den Favoriten zählt nur, wenn es keine andere gibt)."""
+        items = self._find_items(conn_id)
+        return next((i for i in items if i.data(0, FAV_ROLE) != "entry"), items[0] if items else None)
 
     def _selected_container(self) -> tuple[Connection, str] | None:
         item = self.tree.currentItem()
@@ -903,7 +946,7 @@ class MainWindow(QMainWindow):
         if item.data(0, CONTAINER_ROLE):
             return ("container", item.data(0, CONTAINER_ROLE))
         if item.data(0, ID_ROLE):
-            return ("conn", item.data(0, ID_ROLE))
+            return ("conn", item.data(0, ID_ROLE), item.data(0, FAV_ROLE) == "entry")
         if item.data(0, GROUP_ROLE) is not None:
             return ("group", item.data(0, GROUP_ROLE))
         return None
@@ -912,12 +955,20 @@ class MainWindow(QMainWindow):
         if key is None:
             return False
         role = {"container": CONTAINER_ROLE, "conn": ID_ROLE, "group": GROUP_ROLE}[key[0]]
+        in_favorites = len(key) > 2 and key[2]
+        fallback = None
         it = QTreeWidgetItemIterator(self.tree)
         while it.value():
-            if it.value().data(0, role) == key[1]:
-                self.tree.setCurrentItem(it.value())
-                return True
+            item = it.value()
+            if item.data(0, role) == key[1]:
+                if role != ID_ROLE or (item.data(0, FAV_ROLE) == "entry") == in_favorites:
+                    self.tree.setCurrentItem(item)
+                    return True
+                fallback = fallback or item  # die Zeile in der anderen Rolle (z. B. nach dem Entfernen aus den Favoriten)
             it += 1
+        if fallback is not None:
+            self.tree.setCurrentItem(fallback)
+            return True
         return False
 
     def _refill(self, conn_id: str):
@@ -1012,6 +1063,7 @@ class MainWindow(QMainWindow):
         if conn.cisco:  # Ports haben keine eigene Verbindung: Doppelklick öffnet das Gerät
             try:
                 launcher.launch(self.cfg, conn, terminal)
+                self._touch(conn)
             except launcher.LaunchError as exc:
                 QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
             return
@@ -1032,6 +1084,7 @@ class MainWindow(QMainWindow):
         try:
             titled, command = docker.container_target(conn, name, shell, user)
             launcher.launch(self.cfg, titled, terminal, remote_command=command)
+            self._touch(conn)
         except (docker.DockerError, launcher.LaunchError) as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
 
@@ -1084,6 +1137,7 @@ class MainWindow(QMainWindow):
             if guest.is_container:
                 titled, command = proxmox.guest_target(conn, guest, proxmox.shell_command(guest))
                 launcher.launch(self.cfg, titled, terminal, remote_command=command)
+                self._touch(conn)
                 return
         except (proxmox.ProxmoxError, launcher.LaunchError) as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
@@ -1114,6 +1168,7 @@ class MainWindow(QMainWindow):
                 raise exc
             titled, command = proxmox.guest_target(conn, guest, proxmox.vm_command(address, conn.proxmox_vm_user))
             launcher.launch(self.cfg, titled, terminal, remote_command=command)
+            self._touch(conn)
         except (proxmox.ProxmoxError, sftp.SftpError, launcher.LaunchError) as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
 
@@ -1221,18 +1276,66 @@ class MainWindow(QMainWindow):
     def open_files(self):
         """Öffnet den Dateibrowser (SFTP) für die gewählte Verbindung."""
         conn = self._selected()
-        if not conn:
-            return
+        if conn:
+            self._open_files(conn)
+
+    def _open_files(self, conn: Connection):
         window = SftpWindow(self.cfg, conn)
         self._sftp_windows.append(window)
         window.closed.connect(lambda w: self._sftp_windows.remove(w) if w in self._sftp_windows else None)
         window.show()
+        self._touch(conn)
+
+    # --- Favoriten, zuletzt verwendet, Schnellstarter ---
+    def _touch(self, conn: Connection) -> None:
+        """Merkt sich den Zeitpunkt der Nutzung (nur lokal, für den Schnellstarter)."""
+        self.cfg.recent[conn.id] = time.time()
+        if len(self.cfg.recent) > storage.RECENT_MAX:
+            keep = sorted(self.cfg.recent.items(), key=lambda kv: kv[1], reverse=True)[:storage.RECENT_MAX]
+            self.cfg.recent = dict(keep)
+        self._save_no_sync()
+
+    def toggle_favorite(self, conns: list[Connection]) -> None:
+        """Alle als Favorit markieren; sind schon alle Favoriten, die Markierung wieder entfernen."""
+        if not conns:
+            return
+        mark = not all(c.favorite for c in conns)
+        for c in conns:
+            c.favorite = mark
+        key, bar = self._current_key(), self.tree.verticalScrollBar()
+        scroll = bar.value()
+        self._save()  # Favoriten werden mit synchronisiert
+        self.refresh()
+        self._restore_key(key)
+        bar.setValue(scroll)
+
+    def toggle_favorite_selected(self) -> None:
+        self.toggle_favorite(self._selected_connections())
+
+    def open_quick(self) -> None:
+        """Schnellstarter (Strg+K): Verbindung suchen und öffnen."""
+        def toggle(conn_id: str):
+            conn = self.cfg.connection_by_id(conn_id)
+            if conn is not None:
+                self.toggle_favorite([conn])
+
+        dlg = QuickLauncher(self.cfg, toggle, self)
+        if not dlg.exec():
+            return
+        conn = self.cfg.connection_by_id(dlg.conn_id)
+        if conn is None:
+            return
+        if dlg.action == "files":
+            self._open_files(conn)
+        else:
+            self._open_connection(conn)
 
     # --- Port-Weiterleitungen (SSH-Tunnel) ---
-    def _display_name(self, conn: Connection) -> str:
-        """Name im Baum; läuft ein Tunnel der Verbindung, steht dahinter ⇄ und die Anzahl."""
+    def _display_name(self, conn: Connection, favorite_entry: bool = False) -> str:
+        """Name im Baum; Favoriten tragen dahinter ★ (nicht im Favoriten-Abschnitt selbst), laufende Tunnel ⇄ und die Anzahl."""
+        text = conn.name + ("  ★" if conn.favorite and not favorite_entry else "")
         n = len(self.tunnels.active(conn.id))
-        return f"{conn.name}  ⇄ {n}" if n else conn.name
+        return f"{text}  ⇄ {n}" if n else text
 
     def _forwards_menu(self, menu: QMenu, conn: Connection) -> None:
         if not conn.forwards:
@@ -1292,6 +1395,7 @@ class MainWindow(QMainWindow):
         except (launcher.LaunchError, passwords.PasswordError) as exc:
             QMessageBox.critical(self, tr("Tunnel konnte nicht gestartet werden"), str(exc))
             return False
+        self._touch(conn)
         self.toasts.notify(tr("Tunnel wird gestartet: {label}", label=tunnels.label(forward)), 4000)
         self._poll_tunnels()
         return True
@@ -1315,9 +1419,10 @@ class MainWindow(QMainWindow):
             changed = {k[0] for k in self._tunnel_sig} | {k[0] for k in sig}
             self._tunnel_sig = sig
             for cid in changed:
-                conn, item = self.cfg.connection_by_id(cid), self._find_item(cid)
-                if conn is not None and item is not None:
-                    item.setText(0, self._display_name(conn))
+                conn = self.cfg.connection_by_id(cid)
+                for item in self._find_items(cid):
+                    if conn is not None:
+                        item.setText(0, self._display_name(conn, item.data(0, FAV_ROLE) == "entry"))
 
     def connect_selected(self, terminal: Terminal | None = None, sudo: bool = False):
         conn = self._selected()
@@ -1325,6 +1430,9 @@ class MainWindow(QMainWindow):
             if self._selected_container():
                 self.connect_container(terminal)
             return
+        self._open_connection(conn, terminal, sudo)
+
+    def _open_connection(self, conn: Connection, terminal: Terminal | None = None, sudo: bool = False):
         if sudo:  # einmalig, wird nicht gespeichert
             conn = replace(conn, sudo_mode=conn.sudo_mode or "login")
         try:
@@ -1332,6 +1440,7 @@ class MainWindow(QMainWindow):
         except launcher.LaunchError as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
             return
+        self._touch(conn)
         self._detect_os(conn)  # beim ersten Verbinden das Betriebssystem merken
 
     # --- Betriebssystem des Hosts ---
@@ -1444,6 +1553,7 @@ class MainWindow(QMainWindow):
             return
         clone = copy.deepcopy(conn)
         clone.id = new_id()
+        clone.favorite = False  # die Kopie ist kein Favorit
         for f in clone.forwards:
             f.id = new_id()  # die Kopie hat eigene Tunnel
         clone.name = tr("{name} (Kopie)", name=conn.name)
@@ -1474,22 +1584,19 @@ class MainWindow(QMainWindow):
 
     def _select_connection(self, conn_id: str, add: bool = False) -> bool:
         """Wählt die Verbindung im Baum aus (klappt übergeordnete Gruppen auf). Liefert False, wenn sie nicht sichtbar ist."""
-        it = QTreeWidgetItemIterator(self.tree)
-        while it.value():
-            item = it.value()
-            if item.data(0, ID_ROLE) == conn_id:
-                parent = item.parent()
-                while parent is not None:
-                    parent.setExpanded(True)
-                    parent = parent.parent()
-                if add:
-                    item.setSelected(True)
-                else:
-                    self.tree.setCurrentItem(item)
-                    self.tree.scrollToItem(item)
-                return True
-            it += 1
-        return False
+        item = self._find_item(conn_id)
+        if item is None:
+            return False
+        parent = item.parent()
+        while parent is not None:
+            parent.setExpanded(True)
+            parent = parent.parent()
+        if add:
+            item.setSelected(True)
+        else:
+            self.tree.setCurrentItem(item)
+            self.tree.scrollToItem(item)
+        return True
 
     def delete_selected(self):
         group = self._selected_group()

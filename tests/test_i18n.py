@@ -97,21 +97,21 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(bad, [])
 
     def test_no_unused_entries(self):
-        from sesam.gui import sync_dialog, terminals_dialog, snippets_dialog, main_window
+        from sesam.gui import sync_dialog, terminals_dialog, snippets_dialog, main_window, quick_dialog
         from sesam import colors
 
         used = set(_literal_keys())
         used |= {sync_dialog.HELP, terminals_dialog.HELP, *snippets_dialog.AFTER_LABELS.values(), *main_window.MainWindow.THEME_TIPS.values(),
-                 *(name for name, _ in colors.PALETTE.values()), "Eingabeaufforderung (cmd)"}
+                 *(name for name, _ in colors.PALETTE.values()), "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values()}
         self.assertEqual([k for k in EN if k not in used], [])
 
     def test_texts_assembled_from_constants_are_translated(self):
         from sesam import colors
-        from sesam.gui import main_window, snippets_dialog, sync_dialog, terminals_dialog
+        from sesam.gui import main_window, quick_dialog, snippets_dialog, sync_dialog, terminals_dialog
 
         constants = [sync_dialog.HELP, terminals_dialog.HELP, *snippets_dialog.AFTER_LABELS.values(),
                      *main_window.MainWindow.THEME_TIPS.values(), *(name for name, _ in colors.PALETTE.values()),
-                     "Eingabeaufforderung (cmd)"]
+                     "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values()]
         self.assertEqual([c for c in constants if c not in EN], [])
 
     def test_english_has_no_german_leftovers(self):

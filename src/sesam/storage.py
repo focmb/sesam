@@ -98,6 +98,18 @@ def _hidden_columns(value) -> list[str]:
     return [k for k in COLUMN_KEYS if k in value]
 
 
+RECENT_MAX = 100
+
+
+def _recent(value) -> dict[str, float]:
+    """Reiner Anzeigezustand: nur ID → endliche Zeit; die jüngsten ``RECENT_MAX`` bleiben."""
+    if not isinstance(value, dict):
+        return {}
+    items = [(k, float(v)) for k, v in value.items()
+             if isinstance(k, str) and k and isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0]
+    return dict(sorted(items, key=lambda kv: kv[1], reverse=True)[:RECENT_MAX])
+
+
 def _window_size(value) -> list[int]:
     """[Breite, Höhe] oder leer; ein beschädigter Wert darf den Start nie verhindern."""
     if (isinstance(value, list) and len(value) == 2 and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
@@ -123,6 +135,7 @@ def _from_data(data: dict) -> Config:
         toasts=data.get("toasts") is True,
         window_size=_window_size(data.get("window_size")),
         window_maximized=data.get("window_maximized") is True,
+        recent=_recent(data.get("recent")),
         hidden_columns=_hidden_columns(data.get("hidden_columns")),
         column_widths=_column_widths(data.get("column_widths")),
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
