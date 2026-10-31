@@ -120,6 +120,7 @@ def _from_data(data: dict) -> Config:
         language=_normalize_language(data.get("language")),
         font_scale=_font_scale(data.get("font_scale")),
         wireguard=data.get("wireguard") is True,
+        toasts=data.get("toasts") is True,
         window_size=_window_size(data.get("window_size")),
         window_maximized=data.get("window_maximized") is True,
         hidden_columns=_hidden_columns(data.get("hidden_columns")),

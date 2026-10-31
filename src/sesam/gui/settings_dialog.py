@@ -8,10 +8,10 @@ from . import theme
 
 
 class SettingsDialog(QDialog):
-    """Allgemeine Einstellungen: Schriftgröße und WireGuard-Anzeige (wirken sofort), Sprache (wirkt nach einem Neustart)."""
+    """Allgemeine Einstellungen: Schriftgröße, WireGuard-Anzeige und Meldungen als Einblendung (wirken sofort), Sprache (wirkt nach einem Neustart)."""
 
     def __init__(self, font_scale: int, language: str, set_font_scale, set_language, parent=None, *,
-                 wireguard: bool = False, set_wireguard=None):
+                 wireguard: bool = False, set_wireguard=None, toasts: bool = False, set_toasts=None):
         super().__init__(parent)
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(420)
@@ -54,11 +54,20 @@ class SettingsDialog(QDialog):
         else:
             self.wireguard_box.setEnabled(False)
 
+        self.toasts_box = QCheckBox(tr("Meldungen als Einblendung anzeigen"))
+        self.toasts_box.setToolTip(tr("Zeigt Meldungen (z. B. Synchronisation, Dateiübertragung, Fehler) als kleine Einblendung unten rechts statt in der Statuszeile. Version und WireGuard-Anzeige bleiben in der Statuszeile."))
+        self.toasts_box.setChecked(bool(toasts))
+        if set_toasts is not None:
+            self.toasts_box.toggled.connect(lambda checked: set_toasts(checked))
+        else:
+            self.toasts_box.setEnabled(False)
+
         form = QFormLayout()
         form.setVerticalSpacing(10)
         form.addRow(tr("Schriftgröße"), size_row)
         form.addRow(tr("Sprache"), self.language_box)
         form.addRow(tr("WireGuard"), self.wireguard_box)
+        form.addRow(tr("Meldungen"), self.toasts_box)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close = buttons.button(QDialogButtonBox.StandardButton.Close)

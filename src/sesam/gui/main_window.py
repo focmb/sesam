@@ -35,6 +35,7 @@ from .sync_conflict_dialog import SyncConflictDialog
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
 from .terminals_dialog import TerminalsDialog
+from .toast import ToastHost
 from .wireguard_indicator import WireGuardIndicator
 
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
@@ -173,8 +174,10 @@ class MainWindow(QMainWindow):
         self.sync.status.connect(self._sync_status)
         self.sync.cfg_changed.connect(self._sync_changed_config)
         self.sync.finished.connect(self._sync_finished)
+        self.toasts = ToastHost(self, lambda: self.cfg.toasts)  # Meldungen: Einblendung oder Statuszeile (Einstellung)
         self.sync_label = safe.plain(QLabel(""))
         self.statusBar().addPermanentWidget(self.sync_label)
+        self.sync_label.setVisible(not self.cfg.toasts)
         self.wg_indicator = WireGuardIndicator(self)  # ganz rechts: Zustand des WireGuard-Tunnels
         self.statusBar().addPermanentWidget(self.wg_indicator)
         self.version_label = QLabel(tr("Version {__version__}", __version__=__version__))  # ganz links in der Statuszeile
@@ -1288,9 +1291,9 @@ class MainWindow(QMainWindow):
                 return
         self._os_tried.add(cid)
         if force:
-            self.statusBar().showMessage(
+            self.toasts.notify(
                 tr("Betriebssystem von {name} nicht ermittelt: {reason}", name=conn.name,
-                   reason=str(exc) if exc is not None else tr("keine verwertbare Antwort")), 10000)
+                   reason=str(exc) if exc is not None else tr("keine verwertbare Antwort")), 10000, error=True)
 
     def detect_os_selected(self):
         """Kontextmenü: Betriebssystem der gewählten Verbindung (erneut) ermitteln."""
@@ -1528,6 +1531,8 @@ class MainWindow(QMainWindow):
     def _sync_status(self, text: str, error: bool):
         self.sync_label.setText(("⚠ " if error else "⟳ " if text.endswith("…") else "✓ ") + text)
         self.sync_label.setToolTip(safe.tip(text))
+        if self.cfg.toasts:  # die Einblendung ersetzt das Etikett in der Statuszeile
+            self.toasts.notify(text, error=error)
 
     def _sync_changed_config(self):
         try:
@@ -1583,7 +1588,7 @@ class MainWindow(QMainWindow):
             tr("sudo-Passwort für Endpunkt und Handshake (optional).\nOhne Passwort zeigt Sesam die einfache Anzeige."),
             QLineEdit.EchoMode.Password)
         if not ok or not password:
-            self.statusBar().showMessage(tr("WireGuard: einfache Anzeige (kein sudo-Passwort)"), 6000)
+            self.toasts.notify(tr("WireGuard: einfache Anzeige (kein sudo-Passwort)"), 6000)
             return None
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
@@ -1591,7 +1596,7 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
         if not valid:
-            self.statusBar().showMessage(tr("WireGuard: sudo-Passwort nicht akzeptiert, einfache Anzeige"), 8000)
+            self.toasts.notify(tr("WireGuard: sudo-Passwort nicht akzeptiert, einfache Anzeige"), 8000, error=True)
             return None
         try:
             passwords.set_password(wireguard.SUDO_KEY, password)
@@ -1618,9 +1623,17 @@ class MainWindow(QMainWindow):
         self._save_no_sync()
         self.wg_indicator.set_enabled(enabled)
 
+    def set_toasts(self, enabled: bool):
+        """Meldungen als Einblendung (an) oder in der Statuszeile (aus); wirkt sofort, nur lokal gespeichert."""
+        self.cfg.toasts = bool(enabled)
+        self.toasts.clear()
+        self.sync_label.setVisible(not self.cfg.toasts)
+        self._save_no_sync()
+
     def edit_settings(self):
         dlg = SettingsDialog(self.cfg.font_scale, self.cfg.language, self.set_font_scale, self.set_language, self,
-                             wireguard=self.cfg.wireguard, set_wireguard=self.set_wireguard)
+                             wireguard=self.cfg.wireguard, set_wireguard=self.set_wireguard,
+                             toasts=self.cfg.toasts, set_toasts=self.set_toasts)
         dlg.exec()
 
     def set_theme(self, mode: str):

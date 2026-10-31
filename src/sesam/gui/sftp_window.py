@@ -20,6 +20,7 @@ from .. import sftp
 from ..models import Config, Connection
 from . import style, theme
 from .jobs import Job
+from .toast import ToastHost
 from .. import i18n
 from ..i18n import tr
 
@@ -378,6 +379,7 @@ class SftpWindow(QMainWindow):
         lay.addWidget(self.transfer_scroll)
         self.setCentralWidget(central)
         self.statusBar().setSizeGripEnabled(False)
+        self.toasts = ToastHost(self, lambda: self.cfg.toasts)  # Einblendung oder Statuszeile (Einstellung)
 
         self.local.navigate.connect(self.local_go)
         self.local.go_home.connect(lambda: self.local_go(str(Path.home())))
@@ -419,7 +421,7 @@ class SftpWindow(QMainWindow):
     def _show_error(self, exc):
         if self._closing:
             return
-        self.statusBar().showMessage(str(exc) or exc.__class__.__name__, 10000)
+        self.toasts.notify(str(exc) or exc.__class__.__name__, 10000, error=True)
         QMessageBox.warning(self, tr("Dateien"), str(exc) or exc.__class__.__name__)
 
     def _refresh_icons(self):
@@ -433,7 +435,7 @@ class SftpWindow(QMainWindow):
 
     # --- Verbindung ---
     def _connect(self, password: str | None = None):
-        self.statusBar().showMessage(tr("Verbinde …"))
+        self.toasts.notify(tr("Verbinde …"))
         self._start(
             lambda job: sftp.SftpSession.connect(self.cfg, self.conn, password=password),
             self._connected,
@@ -456,7 +458,7 @@ class SftpWindow(QMainWindow):
             if password:
                 self._connect(password)
                 return
-        self.statusBar().showMessage(tr("Nicht verbunden"))
+        self.toasts.notify(tr("Nicht verbunden"))
         QMessageBox.critical(self, tr("Verbindung fehlgeschlagen"), str(exc) or exc.__class__.__name__)
         self.close()
 
@@ -467,7 +469,7 @@ class SftpWindow(QMainWindow):
         self.session = session
         self.remote.setEnabled(True)
         self._update_buttons()
-        self.statusBar().showMessage(tr("Verbunden mit {label}", label=session.label), 5000)
+        self.toasts.notify(tr("Verbunden mit {label}", label=session.label), 5000)
         self.remote_go(".")
 
     # --- Ordner anzeigen ---
@@ -484,7 +486,7 @@ class SftpWindow(QMainWindow):
                         continue
                     entries.append({"name": e.name, "is_dir": is_dir, "size": st.st_size, "mtime": st.st_mtime, "is_link": e.is_symlink()})
         except OSError as exc:
-            self.statusBar().showMessage(tr("Ordner kann nicht gelesen werden: {exc}", exc=exc), 8000)
+            self.toasts.notify(tr("Ordner kann nicht gelesen werden: {exc}", exc=exc), 8000, error=True)
             self.local.path.setText(self.local.list.directory)
             return
         self.local.show_entries(os.path.abspath(path), entries)
@@ -506,7 +508,7 @@ class SftpWindow(QMainWindow):
 
         def failed(exc):
             self.remote.path.setText(self.remote.list.directory)
-            self.statusBar().showMessage(str(exc), 8000)
+            self.toasts.notify(str(exc), 8000, error=True)
 
         self._start(work, done, failed)
 
@@ -655,7 +657,7 @@ class SftpWindow(QMainWindow):
             if choice == "skip":
                 skip = set(conflicts)
                 if len(skip) == len({base(p) for p in paths}):
-                    self.statusBar().showMessage(tr("Alles übersprungen"), 5000)
+                    self.toasts.notify(tr("Alles übersprungen"), 5000)
                     return
         session = self.session
 

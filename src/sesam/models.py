@@ -227,6 +227,7 @@ class Config:
     language: str = "system"  # Oberflächensprache: "system", "de" oder "en" (nur lokal, wird nicht synchronisiert)
     font_scale: int = 100  # Schriftgröße der Oberfläche in Prozent (nur lokal, wird nicht synchronisiert)
     wireguard: bool = False  # WireGuard-Anzeige in der Statuszeile; aus = gar nicht abfragen und nicht anzeigen (nur lokal, wird nicht synchronisiert)
+    toasts: bool = False  # Meldungen als Einblendung statt in der Statuszeile (nur lokal, wird nicht synchronisiert)
     column_widths: list[int] = field(default_factory=list)  # Spaltenbreiten der Hauptansicht
     hidden_columns: list[str] = field(default_factory=lambda: list(DEFAULT_HIDDEN_COLUMNS))  # ausgeblendete Spalten (nur lokal, wird nicht synchronisiert)
     window_size: list[int] = field(default_factory=list)  # [Breite, Höhe] des Hauptfensters beim Beenden (nur lokal)

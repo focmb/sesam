@@ -279,6 +279,10 @@ EN: dict[str, str] = {
     "Zeigt unten rechts, ob dieser Rechner mit einem WireGuard-Tunnel verbunden ist.":
         "Shows at the bottom right whether this computer is connected to a WireGuard tunnel.",
     "WireGuard": "WireGuard",
+    "Meldungen": "Notifications",
+    "Meldungen als Einblendung anzeigen": "Show notifications as pop-ups",
+    "Zeigt Meldungen (z. B. Synchronisation, Dateiübertragung, Fehler) als kleine Einblendung unten rechts statt in der Statuszeile. Version und WireGuard-Anzeige bleiben in der Statuszeile.":
+        "Shows notifications (e.g. sync, file transfers, errors) as a small pop-up at the bottom right instead of in the status bar. The version and the WireGuard indicator stay in the status bar.",
     "Dateien (SFTP)": "Files (SFTP)",
     "Neue Gruppe …": "New group …",
     "Bearbeiten": "Edit",
