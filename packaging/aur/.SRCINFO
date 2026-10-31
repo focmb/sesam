@@ -1,6 +1,6 @@
 pkgbase = sesam
 	pkgdesc = SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen
-	pkgver = 2.0.0
+	pkgver = 2.1.0
 	pkgrel = 1
 	url = https://github.com/focmb/sesam
 	arch = any
@@ -19,7 +19,7 @@ pkgbase = sesam
 	optdepends = wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige
 	optdepends = gnome-keyring: Passwörter im Schlüsselbund speichern
 	optdepends = kwallet: Passwörter im Schlüsselbund speichern
-	source = sesam-2.0.0.tar.gz::https://github.com/focmb/sesam/archive/v2.0.0.tar.gz
-	sha256sums = d57b29cfc5448afefc847e81e5de6e677dbe3d150c564d2e10dc9f1a48b7d54b
+	source = sesam-2.1.0.tar.gz::https://github.com/focmb/sesam/archive/v2.1.0.tar.gz
+	sha256sums = bf96787a7611f2734d59897e6fb970181cc18c6b7757b1f338e89facdad50b03
 
 pkgname = sesam
