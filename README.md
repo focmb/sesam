@@ -1,6 +1,7 @@
 
 [![Build](https://github.com/focmb/sesam/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/focmb/sesam/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/focmb/sesam)](https://github.com/focmb/sesam/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/focmb/sesam/total)](https://github.com/focmb/sesam/releases)
 [![License: MIT](https://img.shields.io/github/license/focmb/sesam)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey)
