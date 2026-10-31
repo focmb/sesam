@@ -31,6 +31,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - [Verbindungsfehler und geänderte Host-Schlüssel](#verbindungsfehler-und-geänderte-host-schlüssel)
 - [Snippets](#snippets)
 - [Dateien übertragen (SFTP)](#dateien-übertragen-sftp)
+- [Port-Weiterleitungen (Tunnel)](#port-weiterleitungen-tunnel)
 - [Docker-Container](#docker-container)
 - [Proxmox](#proxmox)
 - [Cisco-Geräte](#cisco-geräte)
@@ -51,6 +52,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - **sudo:** Nach dem Login direkt zu root oder einem anderen Benutzer wechseln, auf Wunsch mit dem gespeicherten Passwort und ohne erneute Eingabe.
 - **Snippets:** Gespeicherte Befehle (mit Kategorien) auf einem oder mehreren Hosts gleichzeitig ausführen, optional mit sudo, danach Shell offen lassen, auf eine Taste warten oder das Terminal schließen.
 - **Dateien übertragen (SFTP):** Zweigeteilter Dateibrowser mit Drag & Drop, Fortschritt im Hintergrund, Umbenennen, Löschen und Ordner anlegen, ohne `sftp` oder `scp` auf dem Rechner.
+- **Port-Weiterleitungen (Tunnel):** Lokale (`-L`), Remote- (`-R`) und dynamische SOCKS-Weiterleitungen (`-D`) je Verbindung speichern und per Klick starten und beenden; laufende Tunnel zeigt der Baum an.
 - **Docker:** Container eines Hosts im Verbindungsbaum anzeigen, starten, stoppen, neu starten, löschen und per Doppelklick eine Shell im Container öffnen.
 - **Proxmox:** VMs und LXC-Container im Baum, Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
 - **Cisco-Switches:** Ports im Baum mit Zustand, VLAN und Geschwindigkeit; ein- und ausschalten, Beschreibung ändern, Konfiguration speichern.
@@ -281,6 +283,28 @@ Jede Verbindung startet im Terminal über einen kleinen Wrapper (auch ohne gespe
 - **Grenzen:** Verbindungen mit **Jump-Host** werden noch nicht unterstützt, „Zusätzliche Optionen“ und *Mit sudo* gelten nicht für die Dateiübertragung (es wird mit dem Benutzer der Verbindung gearbeitet, nicht als root).
   Verknüpfungen auf Ordner werden beim Herunterladen nicht verfolgt (Schutz vor Schleifen), Verknüpfungen auf Dateien als Datei übertragen.
 - Die Übertragung nutzt die Python-Bibliothek *paramiko*, braucht also kein `sftp`/`scp` auf dem Rechner.
+
+## Port-Weiterleitungen (Tunnel)
+
+Mit einer Port-Weiterleitung erreichst du Dienste, die nur auf dem Server oder in dessen Netz laufen, über die SSH-Verbindung. Gespeichert werden sie
+je Verbindung (*Bearbeiten*, Reiter **Weiterleitungen**), gestartet und beendet im Kontextmenü der Verbindung unter **Weiterleitungen**
+(ein Haken zeigt, dass der Tunnel läuft; *Alle starten* und *Alle beenden* gibt es auch).
+
+- **Lokal (`-L`):** Ein Port auf diesem Rechner führt über den Server zu einem Ziel, das der Server erreicht. Beispiel: lokaler Port `5432` →
+  Ziel `localhost:5432` öffnet eine Datenbank, die nur auf dem Server lauscht; lokaler Port `8443` → Ziel `192.168.3.20:443` öffnet die Weboberfläche
+  eines Geräts im Netz hinter dem Server (im Browser `https://localhost:8443`).
+- **Remote (`-R`):** Ein Port auf dem Server führt zu einem Ziel auf diesem Rechner, z. B. um einen lokalen Entwicklungsserver auf dem Server erreichbar zu machen.
+- **Dynamisch (`-D`):** Ein SOCKS-Proxy auf diesem Rechner. Programme, die ihn nutzen, erreichen alles, was der Server erreicht.
+- **Lauschadresse:** Leer bedeutet nur dieser Rechner (`127.0.0.1`, bei Remote auf dem Server `localhost`). Eine offene Adresse wie `0.0.0.0` macht den
+  Tunnel für alle Rechner im Netz erreichbar, und zwar ohne Anmeldung; Sesam fragt deshalb beim Speichern nach.
+- **Anzeige:** Läuft ein Tunnel, steht hinter dem Namen der Verbindung ⇄ mit der Anzahl. Sesam meldet, wenn ein Tunnel aktiv ist oder von selbst
+  endet (Port belegt, Anmeldung abgelehnt, Verbindung verloren), mit der Fehlermeldung von `ssh`.
+- **Zugang:** Benutzer, Schlüssel, Identität, Jump-Host und „Zusätzliche Optionen“ der Verbindung gelten auch für den Tunnel; ein gespeichertes Passwort wird wie beim
+  Terminal übergeben. Ein Tunnel hat kein Terminal und kann nichts nachfragen: Ohne gespeichertes Passwort funktioniert er nur mit einem Schlüssel
+  ohne Passphrase (bzw. einem geladenen `ssh-agent`). Remote-Befehl und sudo der Verbindung werden ignoriert.
+- **Unbekannte Hosts:** Steht der Host noch nicht in `known_hosts`, zeigt Sesam vor dem Start die Fingerabdrücke und fragt, ob ihm vertraut werden soll.
+- **Ende:** Jede Weiterleitung läuft als eigener `ssh -N`-Prozess; beim Beenden von Sesam (oder einem Löschen bzw. Ändern der Weiterleitung) werden die Tunnel beendet.
+- **Synchronisation:** Die Weiterleitungen gehören zur Verbindung und werden mit synchronisiert (und signiert); gestartet wird nie automatisch.
 
 ## Docker-Container
 

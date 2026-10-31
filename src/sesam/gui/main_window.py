@@ -18,7 +18,7 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme
-from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, wireguard
+from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -104,6 +104,12 @@ class MainWindow(QMainWindow):
         self._hostkey_asker = HostKeyAsker(self)
         sftp.host_key_confirmer = self._hostkey_asker.confirm  # unbekannte Host-Schlüssel nur nach Bestätigung merken
         self._sftp_windows: list[SftpWindow] = []  # offene Dateibrowser (SFTP)
+        self.tunnels = tunnels.Manager()  # laufende Port-Weiterleitungen (SSH-Tunnel)
+        self._tunnel_up: set[tuple[str, str]] = set()  # Tunnel, deren „aktiv“ schon gemeldet wurde
+        self._tunnel_sig: tuple = ()
+        self._tunnel_timer = QTimer(self)
+        self._tunnel_timer.setInterval(1000)
+        self._tunnel_timer.timeout.connect(self._poll_tunnels)
         # Docker-Container je Host (nur zur Laufzeit): ID → Liste, Fehlertext oder None (= wird geladen)
         self._containers: dict[str, list[docker.Container] | str | None] = {}
         self._docker_gen: dict[str, int] = {}  # Zähler, damit veraltete Antworten verworfen werden
@@ -186,6 +192,7 @@ class MainWindow(QMainWindow):
         self.version_label.setContentsMargins(12, 0, 0, 0)  # bündig mit der Verbindungsliste
         self.statusBar().addWidget(self.version_label)
         self.statusBar().setSizeGripEnabled(False)
+        self._tunnel_timer.start()
 
         self._build_actions()
         self.refresh()
@@ -508,6 +515,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.wg_indicator.stop()
+        self._tunnel_timer.stop()
+        self.tunnels.stop_all()  # Tunnel gehören zu dieser Sitzung und enden mit ihr
         self._flush_window_size()
         for window in list(self._sftp_windows):
             window.close()
@@ -537,6 +546,7 @@ class MainWindow(QMainWindow):
         self._collapse_timer.start()
 
     def refresh(self, *_):
+        self.tunnels.forget_missing(self.cfg)  # gelöschte oder geänderte Weiterleitungen laufen nicht weiter
         needle = self.search.text().strip().lower()
         matches = [
             c
@@ -570,7 +580,7 @@ class MainWindow(QMainWindow):
             (parent or self.tree.invisibleRootItem()).addChild(item)
             nodes[path] = item
         for conn in matches:
-            item = QTreeWidgetItem([conn.name, self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags), conn.os_info])
+            item = QTreeWidgetItem([self._display_name(conn), self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags), conn.os_info])
             item.setData(0, ID_ROLE, conn.id)
             item.setIcon(0, tinted("server", conn.color, c["muted"]))
             item.setForeground(2, muted)
@@ -689,6 +699,7 @@ class MainWindow(QMainWindow):
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
             menu.addAction(self.a_files)
+            self._forwards_menu(menu, conn)
             menu.addAction(tr("Betriebssystem ermitteln")).triggered.connect(self.detect_os_selected)
             self._snippet_menu(menu, [conn])
             self._color_menu(menu, conn.color, lambda key: self.set_connection_color(conn, key))
@@ -1217,6 +1228,97 @@ class MainWindow(QMainWindow):
         window.closed.connect(lambda w: self._sftp_windows.remove(w) if w in self._sftp_windows else None)
         window.show()
 
+    # --- Port-Weiterleitungen (SSH-Tunnel) ---
+    def _display_name(self, conn: Connection) -> str:
+        """Name im Baum; läuft ein Tunnel der Verbindung, steht dahinter ⇄ und die Anzahl."""
+        n = len(self.tunnels.active(conn.id))
+        return f"{conn.name}  ⇄ {n}" if n else conn.name
+
+    def _forwards_menu(self, menu: QMenu, conn: Connection) -> None:
+        if not conn.forwards:
+            return
+        sub = _submenu(menu, tr("Weiterleitungen"))
+        for f in conn.forwards:
+            on = self.tunnels.state(conn.id, f.id) in (tunnels.STARTING, tunnels.RUNNING)
+            a = sub.addAction(tunnels.label(f))
+            a.setCheckable(True)
+            a.setChecked(on)
+            a.triggered.connect(lambda _=False, c=conn, fw=f: self.toggle_tunnel(c, fw))
+        sub.addSeparator()
+        sub.addAction(tr("Alle starten")).triggered.connect(lambda: [self.start_tunnel(conn, f) for f in conn.forwards])
+        stop_all = sub.addAction(tr("Alle beenden"))
+        stop_all.setEnabled(bool(self.tunnels.active(conn.id)))
+        stop_all.triggered.connect(lambda: self.stop_tunnels(conn))
+
+    def toggle_tunnel(self, conn: Connection, forward) -> None:
+        if self.tunnels.state(conn.id, forward.id) in (tunnels.STARTING, tunnels.RUNNING):
+            self.tunnels.stop(conn.id, forward.id)
+            self._poll_tunnels()
+        else:
+            self.start_tunnel(conn, forward)
+
+    def stop_tunnels(self, conn: Connection) -> None:
+        self.tunnels.stop_connection(conn.id)
+        self._poll_tunnels()
+
+    def start_tunnel(self, conn: Connection, forward) -> bool:
+        """Startet die Weiterleitung. Unbekannte Host-Schlüssel werden vorher bestätigt (ein Tunnel hat kein Terminal für die Rückfrage)."""
+        if self.tunnels.state(conn.id, forward.id) in (tunnels.STARTING, tunnels.RUNNING):
+            return True
+        try:
+            eff, secret_id = launcher.resolve(self.cfg, conn)
+            launcher.check_key(self.cfg, eff)
+            password = passwords.get_password(secret_id) if eff.use_password else None
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                pending = tunnels.pending_host_keys(eff)
+            finally:
+                QApplication.restoreOverrideCursor()
+            for key in pending:
+                box = QMessageBox(self)
+                box.setIcon(QMessageBox.Icon.Question)
+                box.setWindowTitle(tr("Unbekannter Host-Schlüssel"))
+                box.setTextFormat(Qt.TextFormat.PlainText)
+                box.setText(tr("Der Host {host} ist noch nicht bekannt.", host=key.name))
+                box.setInformativeText(tr("Fingerabdrücke:\n{fp}\n\nNur fortfahren, wenn ein Fingerabdruck stimmt.", fp=key.shown))
+                yes = box.addButton(tr("Vertrauen und verbinden"), QMessageBox.ButtonRole.AcceptRole)
+                box.addButton(QMessageBox.StandardButton.Cancel)
+                box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+                box.exec()
+                if box.clickedButton() is not yes:
+                    return False
+                tunnels.trust(key)
+            self.tunnels.start(eff, forward, password)
+        except (launcher.LaunchError, passwords.PasswordError) as exc:
+            QMessageBox.critical(self, tr("Tunnel konnte nicht gestartet werden"), str(exc))
+            return False
+        self.toasts.notify(tr("Tunnel wird gestartet: {label}", label=tunnels.label(forward)), 4000)
+        self._poll_tunnels()
+        return True
+
+    def _poll_tunnels(self) -> None:
+        """Meldet beendete und aktive Tunnel und aktualisiert die Anzeige im Baum (läuft jede Sekunde)."""
+        for t in self.tunnels.newly_failed():
+            conn = self.cfg.connection_by_id(t.conn_id)
+            text = tr("Tunnel „{name}“ wurde beendet: {error}", name=tunnels.label(t.forward), error=t.error)
+            if conn is not None and not conn.use_password and conn.identity_id == "" and "denied" in t.error.lower():
+                text += " " + tr("Ohne gespeichertes Passwort funktionieren Tunnel nur mit Schlüsseln ohne Passphrase.")
+            self.toasts.notify(text, error=True)
+        active = {t.key: t for t in self.tunnels.active()}
+        for key, t in active.items():
+            if t.state == tunnels.RUNNING and key not in self._tunnel_up:
+                self._tunnel_up.add(key)
+                self.toasts.notify(tr("Tunnel aktiv: {label}", label=tunnels.label(t.forward)), 4000)
+        self._tunnel_up &= set(active)
+        sig = tuple(sorted((k[0], k[1], t.state) for k, t in active.items()))
+        if sig != self._tunnel_sig:
+            changed = {k[0] for k in self._tunnel_sig} | {k[0] for k in sig}
+            self._tunnel_sig = sig
+            for cid in changed:
+                conn, item = self.cfg.connection_by_id(cid), self._find_item(cid)
+                if conn is not None and item is not None:
+                    item.setText(0, self._display_name(conn))
+
     def connect_selected(self, terminal: Terminal | None = None, sudo: bool = False):
         conn = self._selected()
         if not conn:
@@ -1342,6 +1444,8 @@ class MainWindow(QMainWindow):
             return
         clone = copy.deepcopy(conn)
         clone.id = new_id()
+        for f in clone.forwards:
+            f.id = new_id()  # die Kopie hat eigene Tunnel
         clone.name = tr("{name} (Kopie)", name=conn.name)
         if conn.use_password:
             try:

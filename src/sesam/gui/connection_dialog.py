@@ -11,6 +11,7 @@ from .. import colors
 from .. import groups as grp
 from .. import tags as tag_util
 from ..models import Config, Connection
+from .forwards_dialog import ForwardsPage
 from .identities_dialog import IdentityEditDialog, save_identity
 from .keys_dialog import fill_key_combo
 from ..i18n import tr
@@ -237,6 +238,8 @@ class ConnectionDialog(QDialog):
         self.tabs.addTab(make_page(access), tr("Zugang"))
         self.tabs.addTab(make_page(advanced), tr("Erweitert"))
         self.tabs.addTab(make_page(tree), tr("Baum-Erweiterungen"))
+        self.forwards_page = ForwardsPage(self.conn.forwards)
+        self.tabs.addTab(self.forwards_page, tr("Weiterleitungen"))
 
         self._identity_changed()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -321,6 +324,7 @@ class ConnectionDialog(QDialog):
         c.tags = tag_util.parse(self.tags.text())
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()
+        c.forwards = list(self.forwards_page.forwards)
         if self.password.text():
             self.password_change = self.password.text()
         elif self.clear_password.isChecked():

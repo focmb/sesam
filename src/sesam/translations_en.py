@@ -672,4 +672,51 @@ EN: dict[str, str] = {
     "Host vertrauen und in known_hosts eintragen? [j/N]": "Trust host and add it to known_hosts? [y/N]",
     "known_hosts kann nicht geschrieben werden: {exc}": "known_hosts cannot be written: {exc}",
     "Verbindung abgebrochen: Der Host-Schlüssel wurde nicht bestätigt.": "Connection cancelled: the host key was not confirmed.",
+    # Port-Weiterleitungen (Tunnel)
+    "Weiterleitungen": "Port forwarding",
+    "Weiterleitung bearbeiten": "Edit forwarding",
+    "Neue Weiterleitung": "New forwarding",
+    "Lokal (-L): entfernten Dienst auf diesem Rechner erreichen": "Local (-L): reach a remote service on this computer",
+    "Remote (-R): diesen Rechner auf dem Server freigeben": "Remote (-R): expose this computer on the server",
+    "Dynamisch (-D): SOCKS-Proxy über den Server": "Dynamic (-D): SOCKS proxy through the server",
+    "z. B. Datenbank": "e.g. database",
+    "leer = nur dieser Rechner (127.0.0.1)": "empty = this computer only (127.0.0.1)",
+    "Adresse, an der der Tunnel lauscht. Leer oder 127.0.0.1: nur dieser Rechner. 0.0.0.0 oder * macht den Tunnel für alle Rechner im Netz erreichbar.":
+        "Address the tunnel listens on. Empty or 127.0.0.1: this computer only. 0.0.0.0 or * makes the tunnel reachable for every computer on the network.",
+    "Host, wie ihn der Server sieht, z. B. localhost": "Host as seen by the server, e.g. localhost",
+    "Zielport": "Destination port",
+    "Art": "Type",
+    "Lauschadresse": "Listen address",
+    "Hinzufügen …": "Add …",
+    "Entfernen": "Remove",
+    "Gespeicherte Tunnel werden im Kontextmenü der Verbindung unter „Weiterleitungen“ gestartet und beendet.":
+        "Saved tunnels are started and stopped in the connection's context menu under “Port forwarding”.",
+    "Port auf dem Server": "Port on the server",
+    "Lokaler Port": "Local port",
+    "Tunnel im Netz erreichbar": "Tunnel reachable on the network",
+    "Die Adresse {host} macht den Tunnel für andere Rechner im Netz erreichbar – ohne Anmeldung. Trotzdem verwenden?":
+        "The address {host} makes the tunnel reachable for other computers on the network – without any login. Use it anyway?",
+    "Verbindungen an den lokalen Port werden über den Server an das Ziel weitergeleitet, z. B. localhost:5432 für eine Datenbank, die nur auf dem Server erreichbar ist.":
+        "Connections to the local port are forwarded through the server to the destination, e.g. localhost:5432 for a database that is only reachable from the server.",
+    "Verbindungen an den Port auf dem Server landen beim Ziel auf diesem Rechner, z. B. localhost:3000 für einen lokalen Entwicklungsserver.":
+        "Connections to the port on the server end up at the destination on this computer, e.g. localhost:3000 for a local development server.",
+    "Programme, die diesen SOCKS-Proxy nutzen, erreichen alles, was der Server erreicht.":
+        "Programs that use this SOCKS proxy can reach everything the server can reach.",
+    "Eingabe ungültig": "Invalid input",
+    "Alle starten": "Start all",
+    "Alle beenden": "Stop all",
+    "Tunnel wird gestartet: {label}": "Starting tunnel: {label}",
+    "Tunnel aktiv: {label}": "Tunnel active: {label}",
+    "Tunnel „{name}“ wurde beendet: {error}": "Tunnel “{name}” ended: {error}",
+    "Tunnel konnte nicht gestartet werden": "Tunnel could not be started",
+    "Tunnel konnte nicht gestartet werden: {exc}": "Tunnel could not be started: {exc}",
+    "Ohne gespeichertes Passwort funktionieren Tunnel nur mit Schlüsseln ohne Passphrase.":
+        "Without a saved password, tunnels only work with keys that have no passphrase.",
+    "Fingerabdrücke:\n{fp}\n\nNur fortfahren, wenn ein Fingerabdruck stimmt.":
+        "Fingerprints:\n{fp}\n\nOnly continue if a fingerprint is correct.",
+    "ssh wurde beendet (Exit-Code {code}).": "ssh exited (exit code {code}).",
+    "SOCKS-Proxy {listen}": "SOCKS proxy {listen}",
+    "Server {listen} → {dest}": "Server {listen} → {dest}",
+    "Unbekannte Art der Weiterleitung: {value}": "Unknown forwarding type: {value}",
+    "Adresse": "Address",
 }

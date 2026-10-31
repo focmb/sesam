@@ -149,6 +149,45 @@ class Snippet:
         return s
 
 
+FORWARD_KINDS = ("local", "remote", "dynamic")  # ssh -L / -R / -D
+
+
+@dataclass
+class Forward:
+    """Eine Port-Weiterleitung (SSH-Tunnel) einer Verbindung.
+
+    ``local`` (-L): ``listen_port`` auf diesem Rechner führt zu ``dest_host:dest_port`` (vom Server aus gesehen).
+    ``remote`` (-R): ``listen_port`` auf dem Server führt zu ``dest_host:dest_port`` (von diesem Rechner aus gesehen).
+    ``dynamic`` (-D): ``listen_port`` auf diesem Rechner ist ein SOCKS-Proxy; ein Ziel gibt es nicht.
+    ``listen_host`` leer = nur Loopback (127.0.0.1 bzw. auf dem Server localhost).
+    """
+
+    kind: str = "local"
+    listen_port: int = 0
+    id: str = field(default_factory=new_id)
+    name: str = ""
+    listen_host: str = ""
+    dest_host: str = "localhost"
+    dest_port: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Forward":
+        f = _from_dict(cls, data)
+        if f.kind not in FORWARD_KINDS:
+            f.kind = "local"
+        for name in ("listen_port", "dest_port"):
+            if not 0 <= getattr(f, name) <= 65535:
+                setattr(f, name, 0)
+        return f
+
+
+def _clean_forwards(value) -> list[Forward]:
+    """Beschädigte Werte (kein Listentyp, Nicht-Objekte) ergeben eine saubere Liste statt eines Absturzes."""
+    if not isinstance(value, list):
+        return []
+    return [f if isinstance(f, Forward) else Forward.from_dict(f) for f in value if isinstance(f, (dict, Forward))]
+
+
 @dataclass
 class Connection:
     name: str
@@ -179,6 +218,7 @@ class Connection:
     os_checked: float = 0.0  # Zeitpunkt der letzten erfolgreichen Abfrage (Unix-Zeit); danach alle 7 Tage beim Verbinden erneuert
     color: str = ""  # Schlüssel aus sesam.colors.PALETTE, leer = keine Farbe
     tags: list[str] = field(default_factory=list)
+    forwards: list[Forward] = field(default_factory=list)  # gespeicherte Port-Weiterleitungen (Tunnel)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Connection":
@@ -188,6 +228,7 @@ class Connection:
         if not isinstance(conn.color, str):
             conn.color = ""
         conn.tags = _clean_tags(conn.tags)
+        conn.forwards = _clean_forwards(conn.forwards)
         if not isinstance(conn.os_info, str):
             conn.os_info = ""
         if isinstance(conn.os_checked, bool) or not isinstance(conn.os_checked, (int, float)):
