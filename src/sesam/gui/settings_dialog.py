@@ -8,10 +8,11 @@ from . import theme
 
 
 class SettingsDialog(QDialog):
-    """Allgemeine Einstellungen: Schriftgröße, WireGuard-Anzeige und Meldungen als Einblendung (wirken sofort), Sprache (wirkt nach einem Neustart)."""
+    """Allgemeine Einstellungen: Schriftgröße, WireGuard-Anzeige, Meldungen als Einblendung und Favoriten (wirken sofort), Sprache (wirkt nach einem Neustart)."""
 
     def __init__(self, font_scale: int, language: str, set_font_scale, set_language, parent=None, *,
-                 wireguard: bool = False, set_wireguard=None, toasts: bool = False, set_toasts=None):
+                 wireguard: bool = False, set_wireguard=None, toasts: bool = False, set_toasts=None,
+                 favorites: bool = True, set_favorites=None):
         super().__init__(parent)
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(420)
@@ -62,12 +63,21 @@ class SettingsDialog(QDialog):
         else:
             self.toasts_box.setEnabled(False)
 
+        self.favorites_box = QCheckBox(tr("Favoriten anzeigen"))
+        self.favorites_box.setToolTip(tr("Zeigt den Abschnitt „Favoriten“ und den Stern im Baum. Ausgeschaltet bleiben die Markierungen erhalten und erscheinen wieder, sobald die Favoriten eingeschaltet werden."))
+        self.favorites_box.setChecked(bool(favorites))
+        if set_favorites is not None:
+            self.favorites_box.toggled.connect(lambda checked: set_favorites(checked))
+        else:
+            self.favorites_box.setEnabled(False)
+
         form = QFormLayout()
         form.setVerticalSpacing(10)
         form.addRow(tr("Schriftgröße"), size_row)
         form.addRow(tr("Sprache"), self.language_box)
         form.addRow(tr("WireGuard"), self.wireguard_box)
         form.addRow(tr("Meldungen"), self.toasts_box)
+        form.addRow(tr("Favoriten"), self.favorites_box)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close = buttons.button(QDialogButtonBox.StandardButton.Close)

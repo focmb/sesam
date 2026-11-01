@@ -722,6 +722,9 @@ EN: dict[str, str] = {
     "Schnellstarter": "Quick launcher",
     "Favorit": "Favorite",
     "Favoriten": "Favorites",
+    "Favoriten anzeigen": "Show favorites",
+    "Zeigt den Abschnitt „Favoriten“ und den Stern im Baum. Ausgeschaltet bleiben die Markierungen erhalten und erscheinen wieder, sobald die Favoriten eingeschaltet werden.":
+        "Shows the “Favorites” section and the star in the tree. When switched off, the marks are kept and reappear as soon as favorites are switched on again.",
     "Zu Favoriten hinzufügen": "Add to favorites",
     "Aus Favoriten entfernen": "Remove from favorites",
     "Verbindung suchen (Name, Host, Benutzer, Gruppe, Tag) …": "Search connections (name, host, user, group, tag) …",

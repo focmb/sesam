@@ -188,7 +188,7 @@ Connections can be organized in nested groups (path with “/”, e.g. `Customer
 
 ## Favorites and quick launcher
 
-- **Favorites:** *Favorite* (Ctrl+B, sidebar or context menu) marks connections. They also appear in a *Favorites* section at the top of the tree (collapsible) and carry a ★ in their group. The flag belongs to the connection, so it is **synced via Git**. Duplicates are not favorites.
+- **Favorites:** *Favorite* (Ctrl+B, sidebar or context menu) marks connections. They also appear in a *Favorites* section at the top of the tree (collapsible) and carry a ★ in their group. The flag belongs to the connection, so it is **synced via Git**. Duplicates are not favorites. Under **Settings › Show favorites** favorites can be switched off: the section, the ★ and the favorites entries in the menus then disappear from the main window, while the marks are kept. The setting applies to this computer only.
 - **Quick launcher (Ctrl+K):** A search window over all connections. The search is fuzzy (`wbpd` finds `web-prod`), several words must all match, and name, host, user, group and tags are searched. Without a query it shows *Favorites*, *Recently used* (the latest eight, with “5 min ago” etc.) and *All connections*.
   - ↵ connects, Ctrl+↵ opens the files (SFTP), Ctrl+B toggles the favorite, Esc closes.
   - **Recently used** exists only here, not in the tree. The times stay local (not synced) and count on connect, SFTP, Docker/Proxmox/Cisco and when starting a tunnel.

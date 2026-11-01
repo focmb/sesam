@@ -186,7 +186,7 @@ Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z.
 
 ## Favoriten und Schnellstarter
 
-- **Favoriten:** *Favorit* (Strg+B, Seitenleiste oder Kontextmenü) markiert Verbindungen. Sie stehen zusätzlich in einem Abschnitt *Favoriten* oben im Baum (ein-/ausklappbar) und tragen in ihrer Gruppe ein ★. Das Merkmal gehört zur Verbindung und wird deshalb **per Git mit synchronisiert**. Duplikate sind keine Favoriten.
+- **Favoriten:** *Favorit* (Strg+B, Seitenleiste oder Kontextmenü) markiert Verbindungen. Sie stehen zusätzlich in einem Abschnitt *Favoriten* oben im Baum (ein-/ausklappbar) und tragen in ihrer Gruppe ein ★. Das Merkmal gehört zur Verbindung und wird deshalb **per Git mit synchronisiert**. Duplikate sind keine Favoriten. Unter **Einstellungen › Favoriten anzeigen** lassen sich die Favoriten abschalten: Abschnitt, ★ und die Favoriten-Einträge in den Menüs verschwinden dann im Hauptfenster, die Markierungen bleiben erhalten. Die Einstellung gilt nur für diesen Rechner.
 - **Schnellstarter (Strg+K):** Ein Suchfenster über alle Verbindungen. Die Suche ist unscharf (`wbpd` findet `web-prod`), mehrere Wörter müssen alle passen, durchsucht werden Name, Host, Benutzer, Gruppe und Tags. Ohne Suchbegriff erscheinen *Favoriten*, *Zuletzt verwendet* (die jüngsten acht, mit „vor 5 Min.“ usw.) und *Alle Verbindungen*.
   - ↵ verbindet, Strg+↵ öffnet die Dateien (SFTP), Strg+B schaltet den Favoriten um, Esc schließt.
   - **Zuletzt verwendet** gibt es nur hier, nicht im Baum. Die Zeiten bleiben lokal (nicht synchronisiert) und zählen beim Verbinden, bei SFTP, Docker/Proxmox/Cisco und beim Starten eines Tunnels.

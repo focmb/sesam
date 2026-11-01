@@ -133,6 +133,7 @@ def _from_data(data: dict) -> Config:
         font_scale=_font_scale(data.get("font_scale")),
         wireguard=data.get("wireguard") is True,
         toasts=data.get("toasts") is True,
+        favorites=data.get("favorites") is not False,  # ohne gültigen Wert (auch alte Konfiguration): an
         window_size=_window_size(data.get("window_size")),
         window_maximized=data.get("window_maximized") is True,
         recent=_recent(data.get("recent")),

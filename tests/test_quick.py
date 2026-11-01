@@ -147,6 +147,45 @@ class QuickGuiTests(GuiTestCase):
         self.assertFalse(storage.load(self.path).connections[0].favorite)
         self.assertFalse(any(it.data(0, FAV_ROLE) == "head" for it in self._entries(w)))
 
+    def test_favorites_setting_hides_section_and_star_but_keeps_marks(self):
+        from sesam.gui.main_window import FAV_ROLE
+
+        w = self._open()
+        conn = w.cfg.connections[0]
+        w.toggle_favorite([conn])
+        self.assertTrue(w.cfg.favorites)  # Standard: an
+        self.assertTrue(w.a_fav.isEnabled())
+        w.set_favorites(False)
+        self.assertFalse(storage.load(self.path).favorites)  # wird gespeichert
+        self.assertFalse(any(it.data(0, FAV_ROLE) for it in self._entries(w)))  # kein Abschnitt, keine Verweise
+        self.assertNotIn("★", " ".join(it.text(0) for it in self._entries(w)))
+        self.assertFalse(w.a_fav.isEnabled())
+        self.assertTrue(storage.load(self.path).connections[0].favorite)  # Markierung bleibt erhalten
+        w.set_favorites(True)
+        roles = [it.data(0, FAV_ROLE) for it in self._entries(w)]
+        self.assertEqual(roles.count("head"), 1)
+        self.assertTrue(w.a_fav.isEnabled())
+
+    def test_favorites_setting_defaults_to_on_and_survives_bad_values(self):
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        data.pop("favorites", None)  # alte Konfiguration
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIs(storage.load(self.path).favorites, True)
+        for raw, expected in ((False, False), (True, True), ("nein", True), (0, True), (None, True)):
+            data["favorites"] = raw
+            self.path.write_text(json.dumps(data), encoding="utf-8")
+            self.assertIs(storage.load(self.path).favorites, expected, raw)
+
+    def test_settings_dialog_has_favorites_checkbox(self):
+        from sesam.gui.settings_dialog import SettingsDialog
+
+        seen = []
+        dlg = SettingsDialog(100, "de", lambda *_: None, lambda *_: None, favorites=True, set_favorites=seen.append)
+        self.addCleanup(dlg.close)
+        self.assertTrue(dlg.favorites_box.isChecked())
+        dlg.favorites_box.setChecked(False)
+        self.assertEqual(seen, [False])
+
     def test_touch_records_recent_locally(self):
         w = self._open()
         conn = w.cfg.connections[1]

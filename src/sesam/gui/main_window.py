@@ -225,6 +225,7 @@ class MainWindow(QMainWindow):
         self.a_new = act(tr("Neue Verbindung"), self.new_connection, "Ctrl+N")
         self.a_new_group = act(tr("Neue Gruppe …"), self.new_group, "Ctrl+Shift+N")
         self.a_fav = act(tr("Favorit"), self.toggle_favorite_selected, "Ctrl+B")
+        self.a_fav.setEnabled(self.cfg.favorites)  # in den Einstellungen abschaltbar
         self.a_edit = act(tr("Bearbeiten"), self.edit_selected, "F2")
         self.a_dup = act(tr("Duplizieren"), self.duplicate_selected, "Ctrl+D")
         self.a_del = act(tr("Löschen"), self.delete_selected, "Del")
@@ -580,7 +581,7 @@ class MainWindow(QMainWindow):
         self._rebuilding += 1  # Auf-/Zuklappen während des Aufbaus ist keine Benutzeraktion
         self.tree.clear()
         nodes: dict[str, QTreeWidgetItem] = {}
-        favorites = [conn for conn in matches if conn.favorite]
+        favorites = [conn for conn in matches if conn.favorite] if self.cfg.favorites else []
         if favorites:  # fester Abschnitt ganz oben; die Verbindungen stehen zusätzlich in ihrer Gruppe
             head = QTreeWidgetItem([tr("Favoriten"), tr("{count} Verbindung(en)", count=len(favorites))])
             head.setData(0, FAV_ROLE, "head")
@@ -730,8 +731,9 @@ class MainWindow(QMainWindow):
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
             menu.addAction(self.a_files)
-            menu.addAction(tr("Aus Favoriten entfernen") if conn.favorite else tr("Zu Favoriten hinzufügen")).triggered.connect(
-                lambda: self.toggle_favorite([conn]))
+            if self.cfg.favorites:
+                menu.addAction(tr("Aus Favoriten entfernen") if conn.favorite else tr("Zu Favoriten hinzufügen")).triggered.connect(
+                    lambda: self.toggle_favorite([conn]))
             self._forwards_menu(menu, conn)
             menu.addAction(tr("Betriebssystem ermitteln")).triggered.connect(self.detect_os_selected)
             self._snippet_menu(menu, [conn])
@@ -768,9 +770,10 @@ class MainWindow(QMainWindow):
         self._snippet_menu(menu, conns)
         shared = conns[0].color if len({c.color for c in conns}) == 1 else ""
         self._color_menu(menu, shared, lambda key: self.set_connections_color(conns, key))
-        all_fav = all(c.favorite for c in conns)
-        menu.addAction(tr("Aus Favoriten entfernen") if all_fav else tr("Zu Favoriten hinzufügen")).triggered.connect(
-            lambda: self.toggle_favorite(conns))
+        if self.cfg.favorites:
+            all_fav = all(c.favorite for c in conns)
+            menu.addAction(tr("Aus Favoriten entfernen") if all_fav else tr("Zu Favoriten hinzufügen")).triggered.connect(
+                lambda: self.toggle_favorite(conns))
         menu.addSeparator()
         menu.addAction(tr("{n} Verbindungen löschen", n=len(conns))).triggered.connect(lambda: self.delete_connections(conns))
         self._popup(menu, pos)
@@ -1312,6 +1315,17 @@ class MainWindow(QMainWindow):
     def toggle_favorite_selected(self) -> None:
         self.toggle_favorite(self._selected_connections())
 
+    def set_favorites(self, enabled: bool) -> None:
+        """Favoriten in der Hauptansicht ein- oder ausblenden (wirkt sofort, nur lokal gespeichert; die Markierungen bleiben)."""
+        self.cfg.favorites = bool(enabled)
+        self.a_fav.setEnabled(self.cfg.favorites)
+        key, bar = self._current_key(), self.tree.verticalScrollBar()
+        scroll = bar.value()
+        self._save_no_sync()
+        self.refresh()
+        self._restore_key(key)
+        bar.setValue(scroll)
+
     def open_quick(self) -> None:
         """Schnellstarter (Strg+K): Verbindung suchen und öffnen."""
         def toggle(conn_id: str):
@@ -1333,7 +1347,7 @@ class MainWindow(QMainWindow):
     # --- Port-Weiterleitungen (SSH-Tunnel) ---
     def _display_name(self, conn: Connection, favorite_entry: bool = False) -> str:
         """Name im Baum; Favoriten tragen dahinter ★ (nicht im Favoriten-Abschnitt selbst), laufende Tunnel ⇄ und die Anzahl."""
-        text = conn.name + ("  ★" if conn.favorite and not favorite_entry else "")
+        text = conn.name + ("  ★" if conn.favorite and self.cfg.favorites and not favorite_entry else "")
         n = len(self.tunnels.active(conn.id))
         return f"{text}  ⇄ {n}" if n else text
 
@@ -1844,7 +1858,8 @@ class MainWindow(QMainWindow):
     def edit_settings(self):
         dlg = SettingsDialog(self.cfg.font_scale, self.cfg.language, self.set_font_scale, self.set_language, self,
                              wireguard=self.cfg.wireguard, set_wireguard=self.set_wireguard,
-                             toasts=self.cfg.toasts, set_toasts=self.set_toasts)
+                             toasts=self.cfg.toasts, set_toasts=self.set_toasts,
+                             favorites=self.cfg.favorites, set_favorites=self.set_favorites)
         dlg.exec()
 
     def set_theme(self, mode: str):
