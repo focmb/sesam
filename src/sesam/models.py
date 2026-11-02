@@ -79,25 +79,34 @@ class Terminal:
 
 @dataclass
 class Viewer:
-    """Ein VNC-Viewer, definiert über eine Befehlsvorlage.
+    """Ein Viewer für den Fernzugriff (VNC oder RDP), definiert über eine Befehlsvorlage.
 
     Platzhalter in ``command``:
-      {host} {port} {display} {url} {title}   Ziel (bei VNC über SSH: lokaler Tunnelendpunkt 127.0.0.1)
+      {host} {port} {display} {url} {title}   Ziel (beim SSH-Tunnel: lokaler Tunnelendpunkt 127.0.0.1)
+      {user} {domain}  nur RDP; fehlt der Wert, entfällt das Argument
       {profile}        Remmina-Profildatei (wird von Sesam erzeugt, samt gespeichertem Passwort)
-      {password_file}  Passwortdatei im Format von ``vncpasswd`` (z. B. für TigerVNC ``-passwd``); ohne gespeichertes Passwort entfällt das Argument
+      {password_file}  VNC: Passwortdatei im Format von ``vncpasswd`` (z. B. für TigerVNC ``-passwd``); ohne gespeichertes Passwort entfällt das Argument
+      {rdp_file}       RDP: .rdp-Datei (z. B. für mstsc)
+      ``/from-stdin``  RDP (xfreerdp): das Passwort wird über die Standardeingabe übergeben
     """
 
     name: str
     command: str
     id: str = field(default_factory=new_id)
     platform: str = "all"  # "all", "linux", "windows"
+    protocol: str = "vnc"  # "vnc" oder "rdp"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Viewer":
-        return _from_dict(cls, data)
+        viewer = _from_dict(cls, data)
+        if viewer.protocol not in ("vnc", "rdp"):
+            viewer.protocol = "vnc"
+        return viewer
 
 
-VNC_MODES = ("", "tunnel", "direct")  # aus, über SSH-Tunnel, direkt (Gerät spricht nur VNC)
+REMOTE_PROTOCOLS = ("", "vnc", "rdp")  # aus, VNC, RDP
+REMOTE_MODES = ("tunnel", "direct")  # über SSH-Tunnel, direkt (Gerät spricht nur VNC/RDP)
+REMOTE_DEFAULT_PORTS = {"vnc": 5900, "rdp": 3389}
 
 
 @dataclass
@@ -242,15 +251,28 @@ class Connection:
     color: str = ""  # Schlüssel aus sesam.colors.PALETTE, leer = keine Farbe
     tags: list[str] = field(default_factory=list)
     forwards: list[Forward] = field(default_factory=list)  # gespeicherte Port-Weiterleitungen (Tunnel)
-    vnc: str = ""  # "" = kein VNC, "tunnel" = VNC über einen SSH-Tunnel, "direct" = direkt zum Host (Gerät ohne SSH)
-    vnc_port: int = 5900
-    vnc_host: str = ""  # Ziel vom Server aus gesehen (nur bei "tunnel"), leer = localhost
-    vnc_viewer_id: str = ""  # leer = Standard-Viewer
-    vnc_use_password: bool = False  # VNC-Passwort liegt im Schlüsselbund (wird nicht synchronisiert)
+    remote: str = ""  # Fernzugriff: "" = aus, "vnc" oder "rdp"
+    remote_mode: str = "tunnel"  # "tunnel" = über einen SSH-Tunnel, "direct" = direkt zum Host (Gerät ohne SSH)
+    remote_port: int = 0  # 0 = Standard des Protokolls (VNC 5900, RDP 3389)
+    remote_host: str = ""  # Ziel vom Server aus gesehen (nur bei "tunnel"), leer = localhost
+    remote_viewer_id: str = ""  # leer = Standard-Viewer des Protokolls
+    remote_use_password: bool = False  # Passwort liegt im Schlüsselbund (wird nicht synchronisiert)
+    remote_user: str = ""  # nur RDP
+    remote_domain: str = ""  # nur RDP
+    remote_args: str = ""  # nur RDP: zusätzliche Argumente für den Viewer
     favorite: bool = False  # Favorit: steht zusätzlich oben im Baum und im Schnellstarter (wird synchronisiert)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Connection":
+        if isinstance(data, dict) and "remote" not in data and "vnc" in data:  # Version 3.0: nur VNC, Modus im Feld „vnc“
+            data = dict(data)
+            old = data.pop("vnc")
+            if old in ("tunnel", "direct"):
+                data.update(remote="vnc", remote_mode=old)
+            for new, legacy in (("remote_port", "vnc_port"), ("remote_host", "vnc_host"), ("remote_viewer_id", "vnc_viewer_id"),
+                                ("remote_use_password", "vnc_use_password")):
+                if legacy in data:
+                    data[new] = data[legacy]
         conn = _from_dict(cls, data)
         if not 1 <= conn.port <= 65535:
             conn.port = 22
@@ -258,10 +280,12 @@ class Connection:
             conn.color = ""
         conn.tags = _clean_tags(conn.tags)
         conn.forwards = _clean_forwards(conn.forwards)
-        if conn.vnc not in VNC_MODES:
-            conn.vnc = ""
-        if not 1 <= conn.vnc_port <= 65535:
-            conn.vnc_port = 5900
+        if conn.remote not in REMOTE_PROTOCOLS:
+            conn.remote = ""
+        if conn.remote_mode not in REMOTE_MODES:
+            conn.remote_mode = "tunnel"
+        if not 0 <= conn.remote_port <= 65535:
+            conn.remote_port = 0
         if not isinstance(conn.os_info, str):
             conn.os_info = ""
         if isinstance(conn.os_checked, bool) or not isinstance(conn.os_checked, (int, float)):
@@ -296,8 +320,9 @@ class Config:
     ssh_keys: list[SshKey] = field(default_factory=list)
     snippets: list[Snippet] = field(default_factory=list)
     default_terminal_id: str = ""
-    viewers: list[Viewer] = field(default_factory=list)  # VNC-Viewer (nur lokal, wird nicht synchronisiert)
-    default_viewer_id: str = ""
+    viewers: list[Viewer] = field(default_factory=list)  # Viewer für VNC und RDP (nur lokal, wird nicht synchronisiert)
+    default_viewer_id: str = ""  # Standard-Viewer für VNC
+    default_rdp_viewer_id: str = ""  # Standard-Viewer für RDP
     sync: SyncSettings = field(default_factory=SyncSettings)
     theme: str = "system"  # "system", "light" oder "dark"
     language: str = "system"  # Oberflächensprache: "system", "de" oder "en" (nur lokal, wird nicht synchronisiert)
@@ -320,6 +345,9 @@ class Config:
 
     def viewer_by_id(self, viewer_id: str) -> Viewer | None:
         return next((v for v in self.viewers if v.id == viewer_id), None)
+
+    def default_viewer_for(self, protocol: str) -> str:
+        return self.default_rdp_viewer_id if protocol == "rdp" else self.default_viewer_id
 
     def snippet_by_id(self, snippet_id: str) -> Snippet | None:
         return next((s for s in self.snippets if s.id == snippet_id), None)

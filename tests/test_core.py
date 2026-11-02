@@ -51,9 +51,9 @@ class StorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "sub" / "config.json"
             t = Terminal("T", "xterm -e {ssh_args}")
-            v = Viewer("V", "viewer {host}::{port}")
-            cfg = Config(terminals=[t], connections=[Connection("n", "h", group="g", vnc="direct")], default_terminal_id=t.id,
-                         viewers=[v], default_viewer_id=v.id)
+            v, r = Viewer("V", "viewer {host}::{port}"), Viewer("R", "rdp {host}", protocol="rdp")
+            cfg = Config(terminals=[t], connections=[Connection("n", "h", group="g", remote="vnc", remote_mode="direct")], default_terminal_id=t.id,
+                         viewers=[v, r], default_viewer_id=v.id, default_rdp_viewer_id=r.id)
             storage.save(cfg, p)
             loaded = storage.load(p)
             self.assertEqual(loaded, cfg)

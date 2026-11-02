@@ -18,8 +18,10 @@ HELP = (
     "<code>{host}</code> <code>{port}</code> <code>{display}</code> <code>{url}</code> <code>{title}</code> – Ziel der VNC-Verbindung "
     "(bei VNC über SSH der lokale Tunnelendpunkt)<br>"
     "<code>{profile}</code> – Remmina-Profildatei, wird von Sesam erzeugt (samt gespeichertem Passwort)<br>"
-    "<code>{password_file}</code> – Passwortdatei im Format von <code>vncpasswd</code> (z. B. für <code>-passwd</code>); "
-    "ohne gespeichertes Passwort entfällt das Argument"
+    "<code>{password_file}</code> – VNC: Passwortdatei im Format von <code>vncpasswd</code> (z. B. für <code>-passwd</code>); "
+    "ohne gespeichertes Passwort entfällt das Argument<br>"
+    "<code>{user}</code> <code>{domain}</code> <code>{rdp_file}</code> – RDP: Benutzer, Domäne (fehlen sie, entfällt das Argument) "
+    "und .rdp-Datei (z. B. für <code>mstsc</code>); <code>/from-stdin</code> übergibt das Passwort an <code>xfreerdp</code> über die Standardeingabe"
 )
 
 PLATFORMS = [("Alle", "all"), ("Linux", "linux"), ("Windows", "windows")]
@@ -30,20 +32,22 @@ class ViewersDialog(QDialog):
 
     def __init__(self, cfg: Config, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("VNC-Viewer konfigurieren"))
+        self.setWindowTitle(tr("Viewer konfigurieren"))
         self.resize(720, 440)
         self.viewers: list[Viewer] = copy.deepcopy(cfg.viewers)
-        self.default_id = cfg.default_viewer_id
+        self.default_ids = {"vnc": cfg.default_viewer_id, "rdp": cfg.default_rdp_viewer_id}
+        self.protocol = "vnc"
         self._current: Viewer | None = None
+        self.protocol_box = QComboBox()
+        self.protocol_box.addItem("VNC", "vnc")
+        self.protocol_box.addItem("RDP", "rdp")
+        self.protocol_box.currentIndexChanged.connect(self._protocol_changed)
 
         self.list = QListWidget()
         self.list.currentRowChanged.connect(self._select)
         add = QPushButton(tr("Neu ▾"))
         add_menu = QMenu(add)
-        add_menu.addAction(tr("Eigener Viewer (leer)")).triggered.connect(lambda: self._add())
-        add_menu.addSeparator()
-        for tpl in template_viewers():
-            add_menu.addAction(tr("Vorlage: {name}", name=tpl.name)).triggered.connect(lambda _=False, t=tpl: self._add(t))
+        add_menu.aboutToShow.connect(lambda: self._fill_add_menu(add_menu))
         add.setMenu(add_menu)
         remove = QPushButton(tr("Löschen"))
         remove.clicked.connect(self._remove)
@@ -53,6 +57,7 @@ class ViewersDialog(QDialog):
         for b in (add, remove):
             left_buttons.addWidget(b)
         left = QVBoxLayout()
+        left.addWidget(self.protocol_box)
         left.addWidget(self.list)
         left.addLayout(left_buttons)
         left.addWidget(make_default)
@@ -96,26 +101,44 @@ class ViewersDialog(QDialog):
         layout.addWidget(buttons)
 
         self._reload_list()
-        if self.viewers:
+        if self._shown():
             self.list.setCurrentRow(0)
         else:
             self._select(-1)
 
+    def _shown(self) -> list[Viewer]:
+        """Die Viewer des gewählten Protokolls (die Liste zeigt nur diese)."""
+        return [v for v in self.viewers if v.protocol == self.protocol]
+
+    def _protocol_changed(self, *_):
+        self.protocol = self.protocol_box.currentData()
+        self._reload_list(keep_row=0)
+        self._select(self.list.currentRow())
+
+    def _fill_add_menu(self, menu: QMenu):
+        menu.clear()
+        menu.addAction(tr("Eigener Viewer (leer)")).triggered.connect(lambda: self._add())
+        menu.addSeparator()
+        for tpl in template_viewers(self.protocol):
+            menu.addAction(tr("Vorlage: {name}", name=tpl.name)).triggered.connect(lambda _=False, t=tpl: self._add(t))
+
     def _label(self, v: Viewer) -> str:
-        return tr("{name} (Standard)", name=v.name) if v.id == self.default_id else v.name
+        return tr("{name} (Standard)", name=v.name) if v.id == self.default_ids.get(v.protocol) else v.name
 
     def _reload_list(self, keep_row: int | None = None):
         row = self.list.currentRow() if keep_row is None else keep_row
+        shown = self._shown()
         self.list.blockSignals(True)
         self.list.clear()
-        for v in self.viewers:
+        for v in shown:
             self.list.addItem(QListWidgetItem(self._label(v)))
         self.list.blockSignals(False)
-        if 0 <= row < len(self.viewers):
+        if 0 <= row < len(shown):
             self.list.setCurrentRow(row)
 
     def _select(self, row: int):
-        self._current = self.viewers[row] if 0 <= row < len(self.viewers) else None
+        shown = self._shown()
+        self._current = shown[row] if 0 <= row < len(shown) else None
         widgets = (self.name, self.command, self.platform)
         for w in widgets:
             w.setEnabled(self._current is not None)
@@ -150,29 +173,35 @@ class ViewersDialog(QDialog):
         self._store()
 
     def _add(self, template: Viewer | None = None):
-        v = template or Viewer(tr("Eigener Viewer"), "")
+        v = template or Viewer(tr("Eigener Viewer"), "", protocol=self.protocol)
         self.viewers.append(v)
-        if not self.default_id:
-            self.default_id = v.id
-        self._reload_list(keep_row=len(self.viewers) - 1)
+        if not self.default_ids.get(self.protocol):
+            self.default_ids[self.protocol] = v.id
+        self._reload_list(keep_row=len(self._shown()) - 1)
 
     def _remove(self):
         row = self.list.currentRow()
-        if row < 0:
+        shown = self._shown()
+        if row < 0 or row >= len(shown):
             return
-        removed = self.viewers.pop(row)
-        if removed.id == self.default_id:
-            self.default_id = self.viewers[0].id if self.viewers else ""
-        self._reload_list(keep_row=min(row, len(self.viewers) - 1))
+        removed = shown[row]
+        self.viewers.remove(removed)
+        if removed.id == self.default_ids.get(self.protocol):
+            rest = self._shown()
+            self.default_ids[self.protocol] = rest[0].id if rest else ""
+        self._reload_list(keep_row=min(row, len(self._shown()) - 1))
         self._select(self.list.currentRow())
 
     def _make_default(self):
         if self._current:
-            self.default_id = self._current.id
+            self.default_ids[self.protocol] = self._current.id
             self._reload_list()
 
-    def result_values(self) -> tuple[list[Viewer], str]:
-        default = self.default_id if any(v.id == self.default_id for v in self.viewers) else ""
-        if not default and self.viewers:
-            default = self.viewers[0].id
-        return self.viewers, default
+    def result_values(self) -> tuple[list[Viewer], str, str]:
+        """Viewer sowie Standard-Viewer für VNC und RDP (ein ungültiger Standard wird durch den ersten Viewer des Protokolls ersetzt)."""
+        defaults = []
+        for protocol in ("vnc", "rdp"):
+            own = [v for v in self.viewers if v.protocol == protocol]
+            current = self.default_ids.get(protocol)
+            defaults.append(current if any(v.id == current for v in own) else (own[0].id if own else ""))
+        return self.viewers, defaults[0], defaults[1]

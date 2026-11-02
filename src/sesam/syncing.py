@@ -40,7 +40,7 @@ PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync
 GIT_PASSWORD_KEY = "sync:git-password"  # Schlüssel im Schlüsselbund für das Repository-Passwort bzw. den Token
 FORMAT = 1
 KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey), "s": ("snippets", Snippet)}
-VOLATILE = {"use_password", "vnc_use_password"}  # lokal abgeleitet, nicht Teil des Vergleichs (VNC-Passwörter werden nicht synchronisiert)
+VOLATILE = {"use_password", "remote_use_password"}  # lokal abgeleitet, nicht Teil des Vergleichs (Passwörter des Fernzugriffs werden nicht synchronisiert)
 SAFE_ID = keystore._SAFE_ID  # IDs werden zu Dateinamen im Repository: keine Pfadtrenner, kein „..“
 _SAFE_BRANCH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}")
 _UNSAFE_URL = re.compile(r"[\x00-\x20\x7f]")
@@ -754,8 +754,8 @@ class SyncEngine:
             else:
                 source = existing or moved_obj
                 obj.use_password = bool(source.use_password) if source else False
-            if k[0] == "c":  # das VNC-Passwort bleibt lokal im Schlüsselbund
-                obj.vnc_use_password = bool(existing.vnc_use_password) if existing is not None else False
+            if k[0] == "c":  # das Passwort des Fernzugriffs bleibt lokal im Schlüsselbund
+                obj.remote_use_password = bool(existing.remote_use_password) if existing is not None else False
             if existing is None:
                 if moved_obj is not None:
                     report.merged += 1

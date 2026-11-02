@@ -18,7 +18,7 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme
-from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, tunnels, vnc, wireguard
+from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, remote, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -114,7 +114,7 @@ class MainWindow(QMainWindow):
         self._sftp_windows: list[SftpWindow] = []  # offene Dateibrowser (SFTP)
         self._fav_collapsed = False  # Favoriten-Abschnitt zugeklappt (nur zur Laufzeit)
         self.tunnels = tunnels.Manager()  # laufende Port-Weiterleitungen (SSH-Tunnel)
-        self.vnc = vnc.Manager(self.tunnels)  # offene VNC-Sitzungen (Viewer, bei Bedarf mit kurzlebigem Tunnel)
+        self.remote = remote.Manager(self.tunnels)  # offene Sitzungen des Fernzugriffs (VNC/RDP; Viewer, bei Bedarf mit kurzlebigem Tunnel)
         self._tunnel_up: set[tuple[str, str]] = set()  # Tunnel, deren „aktiv“ schon gemeldet wurde
         self._tunnel_sig: tuple = ()
         self._tunnel_timer = QTimer(self)
@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
         self.a_dup = act(tr("Duplizieren"), self.duplicate_selected, "Ctrl+D")
         self.a_del = act(tr("Löschen"), self.delete_selected, "Del")
         self.a_terms = act(tr("Terminals …"), self.edit_terminals)
-        self.a_viewers = act(tr("VNC-Viewer …"), self.edit_viewers)
+        self.a_viewers = act(tr("Viewer …"), self.edit_viewers)
         self.a_identities = act(tr("Identitäten …"), self.edit_identities)
         self.a_keys = act(tr("Schlüssel …"), self.edit_keys)
         self.a_snippets = act(tr("Snippets …"), self.edit_snippets, "Ctrl+Shift+S")
@@ -534,7 +534,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.wg_indicator.stop()
         self._tunnel_timer.stop()
-        self.vnc.stop_all()  # VNC-Viewer und ihre Tunnel enden mit dem Programm
+        self.remote.stop_all()  # die Tunnel des Fernzugriffs enden mit dem Programm
         self.tunnels.stop_all()  # Tunnel gehören zu dieser Sitzung und enden mit ihr
         self._flush_window_size()
         for window in list(self._sftp_windows):
@@ -671,7 +671,7 @@ class MainWindow(QMainWindow):
             cid = item.data(0, ID_ROLE)
             if not cid or item.data(0, CONTAINER_ROLE):
                 continue
-            state = launcher.is_open(cid) or self.vnc.is_open(cid)
+            state = launcher.is_open(cid) or self.remote.is_open(cid)
             if bool(item.data(0, OPEN_ROLE)) == state:
                 continue
             conn = self.cfg.connection_by_id(cid)
@@ -777,10 +777,10 @@ class MainWindow(QMainWindow):
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
-            if conn.vnc == "direct":
+            if conn.remote and conn.remote_mode == "direct":
                 menu.addAction(tr("Per SSH verbinden")).triggered.connect(lambda: self._open_connection(conn))
             menu.addAction(self.a_files)
-            self._vnc_menu(menu, conn)
+            self._remote_menu(menu, conn)
             if self.cfg.favorites:
                 menu.addAction(tr("Aus Favoriten entfernen") if conn.favorite else tr("Zu Favoriten hinzufügen")).triggered.connect(
                     lambda: self.toggle_favorite([conn]))
@@ -1465,47 +1465,48 @@ class MainWindow(QMainWindow):
         self._poll_tunnels()
         return True
 
-    # --- VNC ---
-    def _vnc_menu(self, menu: QMenu, conn: Connection) -> None:
-        if not conn.vnc:
+    # --- Fernzugriff (VNC und RDP) ---
+    def _remote_menu(self, menu: QMenu, conn: Connection) -> None:
+        if not conn.remote:
             return
-        if self.vnc.is_open(conn.id):
-            menu.addAction(tr("VNC beenden")).triggered.connect(lambda: self.close_vnc(conn))
+        proto = remote.label(conn.remote)
+        if self.remote.is_open(conn.id):
+            menu.addAction(tr("{proto} beenden", proto=proto)).triggered.connect(lambda: self.close_remote(conn))
         else:
-            menu.addAction(tr("VNC öffnen")).triggered.connect(lambda: self.open_vnc(conn))
+            menu.addAction(tr("{proto} öffnen", proto=proto)).triggered.connect(lambda: self.open_remote(conn))
 
-    def open_vnc(self, conn: Connection | None = None) -> None:
+    def open_remote(self, conn: Connection | None = None) -> None:
         conn = conn or self._selected()
         if conn is None:
             return
-        if not conn.vnc:
-            self.toasts.notify(tr("Für „{name}“ ist VNC nicht eingeschaltet (Verbindung bearbeiten → VNC).", name=conn.name or conn.host), 6000)
+        if not conn.remote:
+            self.toasts.notify(tr("Für „{name}“ ist der Fernzugriff nicht eingeschaltet (Verbindung bearbeiten → Fernzugriff).", name=conn.name or conn.host), 6000)
             return
         try:
-            events = self.vnc.begin(self.cfg, conn, lambda c, f: self.start_tunnel(c, f, ephemeral=True))
+            events = self.remote.begin(self.cfg, conn, lambda c, f: self.start_tunnel(c, f, ephemeral=True))
         except launcher.LaunchError as exc:
-            QMessageBox.critical(self, tr("VNC konnte nicht geöffnet werden"), str(exc))
+            QMessageBox.critical(self, tr("{proto} konnte nicht geöffnet werden", proto=remote.label(conn.remote)), str(exc))
             return
         self._touch(conn)
-        self._show_vnc_events(events)
+        self._show_remote_events(events)
         self._update_open_markers()
 
-    def close_vnc(self, conn: Connection) -> None:
-        self.vnc.stop(conn.id)
+    def close_remote(self, conn: Connection) -> None:
+        self.remote.stop(conn.id)
         self._update_open_markers()
 
-    def _show_vnc_events(self, events: list[tuple[str, bool]]) -> None:
+    def _show_remote_events(self, events: list[tuple[str, bool]]) -> None:
         for text, error in events:
             self.toasts.notify(text, 0 if error else 4000, error=error)
 
-    def _poll_vnc(self) -> None:
-        if self.vnc.sessions:
-            self._show_vnc_events(self.vnc.poll(self.cfg))
+    def _poll_remote(self) -> None:
+        if self.remote.sessions:
+            self._show_remote_events(self.remote.poll(self.cfg))
             self._update_open_markers()
 
     def _poll_tunnels(self) -> None:
         """Meldet beendete und aktive Tunnel und aktualisiert die Anzeige im Baum (läuft jede Sekunde)."""
-        self._poll_vnc()
+        self._poll_remote()
         for t in self.tunnels.newly_failed():
             conn = self.cfg.connection_by_id(t.conn_id)
             text = tr("Tunnel „{name}“ wurde beendet: {error}", name=tunnels.label(t.forward), error=t.error)
@@ -1536,8 +1537,8 @@ class MainWindow(QMainWindow):
                 self.connect_container(terminal)
             return
         terminal = terminal if isinstance(terminal, Terminal) else None
-        if conn.vnc == "direct" and not (new or sudo or terminal):  # Gerät, das nur VNC spricht: Doppelklick öffnet VNC
-            self.open_vnc(conn)
+        if conn.remote and conn.remote_mode == "direct" and not (new or sudo or terminal):  # Gerät, das nur VNC/RDP spricht: Doppelklick öffnet den Fernzugriff
+            self.open_remote(conn)
             return
         if not (new or sudo or terminal) and launcher.is_open(conn.id):
             self.toasts.notify(tr("„{name}“ ist bereits geöffnet. Eine weitere Sitzung: Rechtsklick → „Neue Sitzung“.", name=conn.name or conn.host), 6000)
@@ -1634,20 +1635,25 @@ class MainWindow(QMainWindow):
         except passwords.PasswordError as exc:
             QMessageBox.critical(self, tr("Passwort"), str(exc))
 
-    def _apply_vnc_password(self, conn: Connection, change: str | None) -> None:
-        if change is None:
-            return
+    def _apply_remote_password(self, conn: Connection, change: str | None, before: tuple[str, bool] | None = None) -> None:
+        """Wendet die Passwortänderung des Fernzugriffs an. ``before`` = (Protokoll, Passwort gespeichert) vor dem Bearbeiten:
+        wechselt das Protokoll, wird das Passwort des alten gelöscht (es gehört zum alten Protokoll)."""
         try:
-            vnc.apply_password_change(conn, change)
+            if before and before[0] and before[1] and conn.remote != before[0]:
+                try:
+                    passwords.delete_password(remote.password_key(conn.id, before[0]))
+                finally:
+                    conn.remote_use_password = False
+            remote.apply_password_change(conn, change)
         except passwords.PasswordError as exc:
-            QMessageBox.critical(self, tr("VNC-Passwort"), str(exc))
+            QMessageBox.critical(self, tr("Passwort"), str(exc))
 
     def new_connection(self):
         dlg = ConnectionDialog(self.cfg, parent=self, default_group=self._current_group_context(), save_callback=self._save)
         if dlg.exec():
             conn = dlg.result_connection()
             self._apply_password(conn, dlg.password_change)
-            self._apply_vnc_password(conn, dlg.vnc_password_change)
+            self._apply_remote_password(conn, dlg.remote_password_change)
             self.cfg.connections.append(conn)
             self._save()
             self.refresh()
@@ -1665,7 +1671,7 @@ class MainWindow(QMainWindow):
             dlg.name.selectAll()  # der Name lässt sich sofort überschreiben
         if dlg.exec():
             self._apply_password(conn, dlg.password_change)
-            self._apply_vnc_password(conn, dlg.vnc_password_change)
+            self._apply_remote_password(conn, dlg.remote_password_change, dlg.remote_before)
             self._docker_forget(conn.id)  # Zugang oder Docker-Einstellungen können sich geändert haben
             self._save()
             self.refresh()
@@ -1690,28 +1696,28 @@ class MainWindow(QMainWindow):
             except passwords.PasswordError as exc:
                 clone.use_password = False
                 QMessageBox.warning(self, tr("Passwort nicht kopiert"), str(exc))
-        if conn.vnc_use_password:
+        if conn.remote_use_password and conn.remote:
             try:
-                pw = passwords.get_password(vnc.password_key(conn.id))
+                pw = passwords.get_password(remote.password_key(conn.id, conn.remote))
                 if pw is not None:
-                    passwords.set_password(vnc.password_key(clone.id), pw)
+                    passwords.set_password(remote.password_key(clone.id, conn.remote), pw)
                 else:
-                    clone.vnc_use_password = False
+                    clone.remote_use_password = False
             except passwords.PasswordError as exc:
-                clone.vnc_use_password = False
+                clone.remote_use_password = False
                 QMessageBox.warning(self, tr("Passwort nicht kopiert"), str(exc))
         # Die Kopie erst nach dem Bestätigen des Dialogs anlegen; bei „Abbrechen“ entsteht nichts.
         dlg = ConnectionDialog(self.cfg, clone, parent=self, save_callback=self._save)
         dlg.name.selectAll()  # der Name lässt sich sofort überschreiben
         if dlg.exec():
             self._apply_password(clone, dlg.password_change)
-            self._apply_vnc_password(clone, dlg.vnc_password_change)
+            self._apply_remote_password(clone, dlg.remote_password_change, dlg.remote_before)
             self.cfg.connections.append(clone)
             self._save()
             self.refresh()
             self._select_connection(clone.id)
         else:
-            for secret in (clone.id, vnc.password_key(clone.id)):
+            for secret in (clone.id, remote.password_key(clone.id, conn.remote)):
                 try:
                     passwords.delete_password(secret)  # die vorab kopierten Passwörter wieder entfernen
                 except passwords.PasswordError:
@@ -1761,10 +1767,10 @@ class MainWindow(QMainWindow):
                     passwords.delete_password(conn.id)
                 except passwords.PasswordError as exc:
                     failed.append(f"{conn.name}: {exc}")
-            self.vnc.stop(conn.id)
-            if conn.vnc_use_password:
+            self.remote.stop(conn.id)
+            if conn.remote_use_password:
                 try:
-                    passwords.delete_password(vnc.password_key(conn.id))
+                    remote.forget_passwords(conn.id)
                 except passwords.PasswordError as exc:
                     failed.append(f"{conn.name}: {exc}")
             if conn in self.cfg.connections:
@@ -1882,11 +1888,11 @@ class MainWindow(QMainWindow):
     def edit_viewers(self):
         dlg = ViewersDialog(self.cfg, self)
         if dlg.exec():
-            self.cfg.viewers, self.cfg.default_viewer_id = dlg.result_values()
+            self.cfg.viewers, self.cfg.default_viewer_id, self.cfg.default_rdp_viewer_id = dlg.result_values()
             valid = {v.id for v in self.cfg.viewers}
             for c in self.cfg.connections:
-                if c.vnc_viewer_id and c.vnc_viewer_id not in valid:
-                    c.vnc_viewer_id = ""
+                if c.remote_viewer_id and c.remote_viewer_id not in valid:
+                    c.remote_viewer_id = ""
             self._save()
 
     # --- Synchronisation ---

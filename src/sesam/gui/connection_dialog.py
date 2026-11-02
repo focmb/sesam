@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from .. import colors
 from .. import groups as grp
 from .. import tags as tag_util
-from ..models import Config, Connection
+from ..models import REMOTE_DEFAULT_PORTS, Config, Connection
 from .forwards_dialog import ForwardsPage
 from .identities_dialog import IdentityEditDialog, save_identity
 from .keys_dialog import fill_key_combo
@@ -188,43 +188,71 @@ class ConnectionDialog(QDialog):
         self.notes = QPlainTextEdit(self.conn.notes)
         self.notes.setFixedHeight(70)
 
-        self.vnc_mode = QComboBox()
-        self.vnc_mode.addItem(tr("Aus"), "")
-        self.vnc_mode.addItem(tr("Über SSH-Tunnel (Port ist nur auf dem Server erreichbar)"), "tunnel")
-        self.vnc_mode.addItem(tr("Direkt (Gerät spricht nur VNC)"), "direct")
-        self.vnc_mode.setCurrentIndex(max(self.vnc_mode.findData(self.conn.vnc), 0))
-        self.vnc_host = QLineEdit(self.conn.vnc_host)
-        self.vnc_host.setPlaceholderText(tr("localhost (Standard)"))
-        self.vnc_host.setToolTip(tr("Ziel vom Server aus gesehen, z. B. ein Gerät im Netz hinter dem Server."))
-        self.vnc_port = QSpinBox()
-        self.vnc_port.setRange(1, 65535)
-        self.vnc_port.setValue(self.conn.vnc_port or 5900)
-        self.vnc_viewer = QComboBox()
-        self.vnc_viewer.addItem(tr("Standard-Viewer"), "")
-        for v in cfg.viewers:
-            self.vnc_viewer.addItem(v.name, v.id)
-        self.vnc_viewer.setCurrentIndex(max(self.vnc_viewer.findData(self.conn.vnc_viewer_id), 0))
-        self.vnc_password = QLineEdit()
-        self.vnc_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.vnc_password.setPlaceholderText(
-            tr("gespeichert – leer lassen zum Beibehalten") if self.conn.vnc_use_password else tr("optional")
+        self._remote_before = (self.conn.remote, self.conn.remote_use_password)  # für den Wechsel des Protokolls (siehe MainWindow)
+        self.remote_protocol = QComboBox()
+        self.remote_protocol.addItem(tr("Aus"), "")
+        self.remote_protocol.addItem("VNC", "vnc")
+        self.remote_protocol.addItem("RDP", "rdp")
+        self.remote_protocol.setCurrentIndex(max(self.remote_protocol.findData(self.conn.remote), 0))
+        self.remote_mode = QComboBox()
+        self.remote_mode.addItem(tr("Über SSH-Tunnel (Port ist nur auf dem Server erreichbar)"), "tunnel")
+        self.remote_mode.addItem(tr("Direkt (Gerät spricht nur VNC oder RDP)"), "direct")
+        self.remote_mode.setCurrentIndex(max(self.remote_mode.findData(self.conn.remote_mode), 0))
+        self.remote_host = QLineEdit(self.conn.remote_host)
+        self.remote_host.setPlaceholderText(tr("localhost (Standard)"))
+        self.remote_host.setToolTip(tr("Ziel vom Server aus gesehen, z. B. ein Gerät im Netz hinter dem Server."))
+        self.remote_port = QSpinBox()
+        self.remote_port.setRange(1, 65535)
+        self._port_protocol = self.conn.remote or "vnc"  # aus = wie VNC: der Port folgt dem Standard des später gewählten Protokolls
+        self.remote_port.setValue(self.conn.remote_port or REMOTE_DEFAULT_PORTS[self._port_protocol])
+        self.remote_viewer = QComboBox()
+        self.remote_user = QLineEdit(self.conn.remote_user)
+        self.remote_domain = QLineEdit(self.conn.remote_domain)
+        self.remote_args = QLineEdit(self.conn.remote_args)
+        self.remote_args.setPlaceholderText(tr("z. B. /f +clipboard"))
+        self.remote_args.setToolTip(tr("Zusätzliche Argumente für den RDP-Viewer, getrennt wie in einer Shell."))
+        self.remote_password = QLineEdit()
+        self.remote_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.remote_password.setPlaceholderText(
+            tr("gespeichert – leer lassen zum Beibehalten") if self.conn.remote_use_password else tr("optional")
         )
-        self.vnc_password.setToolTip(
+        self.remote_password.setToolTip(
             tr("Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei, und nicht synchronisiert. "
                "VNC verwendet nur die ersten 8 Zeichen.")
         )
-        self.vnc_clear_password = QCheckBox(tr("Gespeichertes VNC-Passwort löschen"))
-        self.vnc_clear_password.setVisible(self.conn.vnc_use_password)
-        self.vnc_password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
+        self.remote_clear_password = QCheckBox(tr("Gespeichertes Passwort löschen"))
+        self.remote_clear_password.setVisible(self.conn.remote_use_password)
+        self.remote_password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
 
-        def _vnc_toggled(*_):
-            mode = self.vnc_mode.currentData()
-            for w in (self.vnc_port, self.vnc_viewer, self.vnc_password, self.vnc_clear_password):
-                w.setEnabled(bool(mode))
-            self.vnc_host.setEnabled(mode == "tunnel")
+        def _fill_remote_viewers(selected: str = ""):
+            protocol = self.remote_protocol.currentData()
+            self.remote_viewer.blockSignals(True)
+            self.remote_viewer.clear()
+            self.remote_viewer.addItem(tr("Standard-Viewer"), "")
+            for v in cfg.viewers:
+                if v.protocol == protocol:
+                    self.remote_viewer.addItem(v.name, v.id)
+            self.remote_viewer.setCurrentIndex(max(self.remote_viewer.findData(selected), 0))
+            self.remote_viewer.blockSignals(False)
 
-        self.vnc_mode.currentIndexChanged.connect(_vnc_toggled)
-        _vnc_toggled()
+        def _remote_toggled(*_):
+            protocol = self.remote_protocol.currentData()
+            if protocol and protocol != self._port_protocol:  # der Port folgt dem Standard des Protokolls, solange er nicht geändert wurde
+                if self.remote_port.value() == REMOTE_DEFAULT_PORTS.get(self._port_protocol):
+                    self.remote_port.setValue(REMOTE_DEFAULT_PORTS[protocol])
+                self._port_protocol = protocol
+            _fill_remote_viewers(self.remote_viewer.currentData() or "")
+            on = bool(protocol)
+            for w in (self.remote_mode, self.remote_port, self.remote_viewer, self.remote_password, self.remote_clear_password):
+                w.setEnabled(on)
+            self.remote_host.setEnabled(on and self.remote_mode.currentData() == "tunnel")
+            for w in (self.remote_user, self.remote_domain, self.remote_args):
+                w.setEnabled(protocol == "rdp")
+
+        _fill_remote_viewers(self.conn.remote_viewer_id)
+        self.remote_protocol.currentIndexChanged.connect(_remote_toggled)
+        self.remote_mode.currentIndexChanged.connect(_remote_toggled)
+        _remote_toggled()
 
         def make_form() -> QFormLayout:
             f = QFormLayout()
@@ -271,20 +299,24 @@ class ConnectionDialog(QDialog):
         tree.addRow(tr("Benutzer in VMs"), self.proxmox_vm_user)
         tree.addRow(tr("Cisco"), self.cisco)
 
-        vnc_form = make_form()
-        vnc_form.addRow(tr("VNC"), self.vnc_mode)
-        vnc_form.addRow(tr("Ziel vom Server aus"), self.vnc_host)
-        vnc_form.addRow(tr("VNC-Port"), self.vnc_port)
-        vnc_form.addRow(tr("Viewer"), self.vnc_viewer)
-        vnc_form.addRow(tr("VNC-Passwort"), self.vnc_password)
-        vnc_form.addRow("", self.vnc_clear_password)
+        remote_form = make_form()
+        remote_form.addRow(tr("Fernzugriff"), self.remote_protocol)
+        remote_form.addRow(tr("Art"), self.remote_mode)
+        remote_form.addRow(tr("Ziel vom Server aus"), self.remote_host)
+        remote_form.addRow(tr("Port"), self.remote_port)
+        remote_form.addRow(tr("Viewer"), self.remote_viewer)
+        remote_form.addRow(tr("Benutzer (RDP)"), self.remote_user)
+        remote_form.addRow(tr("Domäne (RDP)"), self.remote_domain)
+        remote_form.addRow(tr("Zusatzargumente (RDP)"), self.remote_args)
+        remote_form.addRow(tr("Passwort"), self.remote_password)
+        remote_form.addRow("", self.remote_clear_password)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(make_page(general), tr("Allgemein"))
         self.tabs.addTab(make_page(access), tr("Zugang"))
         self.tabs.addTab(make_page(advanced), tr("Erweitert"))
         self.tabs.addTab(make_page(tree), tr("Baum-Erweiterungen"))
-        self.tabs.addTab(make_page(vnc_form), tr("VNC"))
+        self.tabs.addTab(make_page(remote_form), tr("Fernzugriff"))
         self.forwards_page = ForwardsPage(self.conn.forwards)
         self.tabs.addTab(self.forwards_page, tr("Weiterleitungen"))
 
@@ -372,19 +404,30 @@ class ConnectionDialog(QDialog):
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()
         c.forwards = list(self.forwards_page.forwards)
-        c.vnc = self.vnc_mode.currentData() or ""
-        c.vnc_host = self.vnc_host.text().strip() if c.vnc == "tunnel" else ""
-        c.vnc_port = self.vnc_port.value()
-        c.vnc_viewer_id = self.vnc_viewer.currentData() or ""
-        if self.vnc_password.text():
-            self.vnc_password_change = self.vnc_password.text()
-        elif self.vnc_clear_password.isChecked():
-            self.vnc_password_change = ""
+        c.remote = self.remote_protocol.currentData() or ""
+        c.remote_mode = self.remote_mode.currentData() or "tunnel"
+        c.remote_host = self.remote_host.text().strip() if c.remote_mode == "tunnel" else ""
+        port = self.remote_port.value()
+        c.remote_port = 0 if port == REMOTE_DEFAULT_PORTS.get(c.remote) else port
+        c.remote_viewer_id = self.remote_viewer.currentData() or ""
+        rdp = c.remote == "rdp"
+        c.remote_user = self.remote_user.text().strip() if rdp else ""
+        c.remote_domain = self.remote_domain.text().strip() if rdp else ""
+        c.remote_args = self.remote_args.text().strip() if rdp else ""
+        if self.remote_password.text():
+            self.remote_password_change = self.remote_password.text()
+        elif self.remote_clear_password.isChecked():
+            self.remote_password_change = ""
         if self.password.text():
             self.password_change = self.password.text()
         elif self.clear_password.isChecked():
             self.password_change = ""
         self.accept()
+
+    @property
+    def remote_before(self) -> tuple[str, bool]:
+        """Protokoll und „Passwort gespeichert“ vor dem Bearbeiten."""
+        return self._remote_before
 
     def result_connection(self) -> Connection:
         return self.conn

@@ -1,14 +1,14 @@
-"""VNC: Viewer starten, bei Bedarf durch einen SSH-Tunnel.
+"""Fernzugriff (VNC und RDP): Viewer starten, bei Bedarf durch einen SSH-Tunnel.
 
-Zwei Arten pro Verbindung (``Connection.vnc``):
+Pro Verbindung ein Ziel (``Connection.remote`` = Protokoll, ``Connection.remote_mode`` = Art):
 
-* ``tunnel``: Sesam startet einen kurzlebigen ``ssh -N -L 127.0.0.1:<freier Port>:<Ziel>:<VNC-Port>`` (über den Tunnel-Manager,
+* ``tunnel``: Sesam startet einen kurzlebigen ``ssh -N -L 127.0.0.1:<freier Port>:<Ziel>:<Port>`` (über den Tunnel-Manager,
   also mit Jump-Host, Schlüssel, Passwort und Host-Key-Rückfrage wie bei den Weiterleitungen) und öffnet den Viewer auf
   ``127.0.0.1:<freier Port>``. Endet der Viewer, wird der Tunnel wieder beendet.
-* ``direct``: Der Viewer verbindet sich direkt mit ``host:vnc_port`` (Geräte, die nur VNC sprechen, ohne SSH).
+* ``direct``: Der Viewer verbindet sich direkt mit ``host:port`` (Geräte, die nur VNC oder RDP sprechen, ohne SSH).
 
-Das VNC-Passwort liegt im Schlüsselbund (Schlüssel ``<Verbindungs-ID>:vnc``) und wird dem Viewer über eine Datei übergeben,
-nie als Argument (sichtbar in der Prozessliste).
+Das Passwort liegt im Schlüsselbund (Schlüssel ``<Verbindungs-ID>:vnc`` bzw. ``:rdp``) und wird dem Viewer nie als Argument übergeben
+(sichtbar in der Prozessliste), sondern je nach Viewer über eine Datei (VNC), ein Remmina-Profil oder die Standardeingabe (xfreerdp).
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from pathlib import Path
 
 from . import launcher, passwords, runtime, tunnels
 from .i18n import tr
-from .models import Config, Connection, Forward, Viewer
+from .models import REMOTE_DEFAULT_PORTS, Config, Connection, Forward, Viewer
 from .terminals import current_platform
 
 IS_WINDOWS = sys.platform.startswith("win")
@@ -39,21 +39,41 @@ STARTING, VIEWING, DETACHED, CLOSED = "starting", "viewing", "detached", "closed
 ACTIVE = (STARTING, VIEWING, DETACHED)
 
 
-def password_key(conn_id: str) -> str:
-    """Schlüssel des VNC-Passworts im Schlüsselbund (getrennt vom SSH-Passwort der Verbindung)."""
-    return f"{conn_id}:vnc"
+def label(protocol: str) -> str:
+    return protocol.upper()
+
+
+def port_of(conn: Connection) -> int:
+    return conn.remote_port or REMOTE_DEFAULT_PORTS.get(conn.remote, 0)
+
+
+def password_key(conn_id: str, protocol: str = "vnc") -> str:
+    """Schlüssel des Passworts im Schlüsselbund (getrennt vom SSH-Passwort der Verbindung und je Protokoll)."""
+    return f"{conn_id}:{protocol}"
 
 
 def apply_password_change(conn: Connection, change: str | None) -> None:
-    """Wendet eine Änderung des VNC-Passworts an (None = unverändert, "" = löschen, sonst neues Passwort)."""
-    if change is None:
+    """Wendet eine Änderung des Passworts des Fernzugriffs an (None = unverändert, "" = löschen, sonst neues Passwort)."""
+    if change is None or not conn.remote:
         return
     if change:
-        passwords.set_password(password_key(conn.id), change)
-        conn.vnc_use_password = True
+        passwords.set_password(password_key(conn.id, conn.remote), change)
+        conn.remote_use_password = True
     else:
-        passwords.delete_password(password_key(conn.id))
-        conn.vnc_use_password = False
+        passwords.delete_password(password_key(conn.id, conn.remote))
+        conn.remote_use_password = False
+
+
+def forget_passwords(conn_id: str) -> None:
+    """Entfernt die gespeicherten Passwörter beider Protokolle (beim Löschen einer Verbindung)."""
+    error = None
+    for protocol in ("vnc", "rdp"):
+        try:
+            passwords.delete_password(password_key(conn_id, protocol))
+        except passwords.PasswordError as exc:
+            error = exc
+    if error is not None:
+        raise error
 
 
 # ---------------------------------------------------------------- Ziel und Tunnel
@@ -66,9 +86,9 @@ def free_port() -> int:
 
 
 def tunnel_forward(conn: Connection, local_port: int) -> Forward:
-    """Kurzlebige Weiterleitung für VNC (wird nicht in der Konfiguration gespeichert)."""
+    """Kurzlebige Weiterleitung für den Fernzugriff (wird nicht in der Konfiguration gespeichert)."""
     return Forward(kind="local", listen_port=local_port, listen_host="127.0.0.1",
-                   dest_host=conn.vnc_host.strip() or "localhost", dest_port=conn.vnc_port, name="VNC")
+                   dest_host=conn.remote_host.strip() or "localhost", dest_port=port_of(conn), name=label(conn.remote))
 
 
 def title(conn: Connection) -> str:
@@ -78,13 +98,15 @@ def title(conn: Connection) -> str:
 # ---------------------------------------------------------------- Viewer wählen und Befehl bauen
 
 def resolve_viewer(cfg: Config, conn: Connection) -> Viewer:
-    viewer = cfg.viewer_by_id(conn.vnc_viewer_id) if conn.vnc_viewer_id else None
-    viewer = viewer or cfg.viewer_by_id(cfg.default_viewer_id)
-    if viewer is None:
-        usable = [v for v in cfg.viewers if v.platform in ("all", current_platform())]
+    protocol = conn.remote
+    viewer = cfg.viewer_by_id(conn.remote_viewer_id) if conn.remote_viewer_id else None
+    if viewer is None or viewer.protocol != protocol:
+        viewer = cfg.viewer_by_id(cfg.default_viewer_for(protocol))
+    if viewer is None or viewer.protocol != protocol:
+        usable = [v for v in cfg.viewers if v.protocol == protocol and v.platform in ("all", current_platform())]
         viewer = usable[0] if usable else None
     if viewer is None:
-        raise launcher.LaunchError(tr("Es ist kein VNC-Viewer konfiguriert. Bitte unter „VNC-Viewer“ einen anlegen."))
+        raise launcher.LaunchError(tr("Es ist kein {proto}-Viewer konfiguriert. Bitte unter „Viewer“ einen anlegen.", proto=label(protocol)))
     return viewer
 
 
@@ -96,21 +118,33 @@ def uses_password_file(viewer: Viewer) -> bool:
     return "{password_file}" in viewer.command
 
 
+def uses_rdp_file(viewer: Viewer) -> bool:
+    return "{rdp_file}" in viewer.command
+
+
+def uses_stdin_password(viewer: Viewer) -> bool:
+    """xfreerdp liest das Passwort mit ``/from-stdin`` von der Standardeingabe."""
+    return any(t == "/from-stdin" or t.startswith("/from-stdin:") for t in launcher.split_command(viewer.command))
+
+
 def viewer_command(viewer: Viewer, host: str, port: int, name: str, profile: str | None = None,
-                   password_file: str | None = None) -> list[str]:
+                   password_file: str | None = None, user: str = "", domain: str = "", rdp_file: str | None = None,
+                   extra: str = "") -> list[str]:
     """Befehl des Viewers als Argumentliste (nie über eine Shell).
 
-    Ohne ``password_file`` entfallen Argumente mit ``{password_file}`` samt einer davorstehenden Option (``-passwd {password_file}``)."""
-    ctx = {"{host}": host, "{port}": str(port), "{display}": str(port - 5900), "{url}": f"vnc://{host}:{port}", "{title}": name}
-    if profile is not None:
-        ctx["{profile}"] = profile
-    if password_file is not None:
-        ctx["{password_file}"] = password_file
+    Argumente mit einem leeren Platzhalter (``{user}``, ``{domain}``, ``{rdp_file}``, ``{password_file}``) entfallen; bei ``{password_file}``
+    auch die davorstehende Option (``-passwd {password_file}``). ``extra`` (Zusatzargumente der Verbindung) wird hinten angehängt."""
+    scheme = "rdp" if viewer.protocol == "rdp" else "vnc"
+    ctx = {"{host}": host, "{port}": str(port), "{display}": str(port - 5900), "{url}": f"{scheme}://{host}:{port}", "{title}": name,
+           "{user}": user, "{domain}": domain}
+    for key, value in (("{profile}", profile), ("{password_file}", password_file), ("{rdp_file}", rdp_file)):
+        ctx[key] = value if value is not None else ""
     tokens = launcher.split_command(viewer.command)
     out: list[str] = []
     for i, token in enumerate(tokens):
-        if "{password_file}" in token and password_file is None:
-            # ohne Passwort entfällt das Argument samt seiner Option („-passwd {password_file}“)
+        empty = [k for k in ("{user}", "{domain}", "{password_file}", "{rdp_file}") if k in token and not ctx[k]]
+        if empty:
+            # ohne Wert entfällt das Argument samt seiner Option („-passwd {password_file}“)
             if token == "{password_file}" and out and i and tokens[i - 1] == out[-1] and out[-1].startswith("-") and "{" not in out[-1]:
                 out.pop()
             continue
@@ -119,14 +153,15 @@ def viewer_command(viewer: Viewer, host: str, port: int, name: str, profile: str
         out.append(token)
     if not out:
         raise launcher.LaunchError(tr("Die Befehlsvorlage von „{name}“ ist leer.", name=viewer.name))
+    out += launcher.split_command(extra) if extra.strip() else []
     return out
 
 
 def check_target(conn: Connection, host: str) -> None:
     """Host und Port dürfen nicht wie eine Option aussehen (der Wert landet als Argument im Viewer-Aufruf)."""
     launcher._check_target_part(host, tr("Host"))
-    if not 1 <= conn.vnc_port <= 65535:
-        raise launcher.LaunchError(tr("Ungültiger Wert für {what}: {value}", what=tr("Port"), value=repr(conn.vnc_port)))
+    if not 1 <= port_of(conn) <= 65535:
+        raise launcher.LaunchError(tr("Ungültiger Wert für {what}: {value}", what=tr("Port"), value=repr(conn.remote_port)))
 
 
 # ---------------------------------------------------------------- Passwortübergabe
@@ -209,11 +244,26 @@ def _ini_value(text: str) -> str:
     return re.sub(r"[\x00-\x1f\x7f]", " ", text).strip()
 
 
-def remmina_profile(name: str, host: str, port: int, password: str | None = None, secret: bytes | None = None) -> str:
-    lines = ["[remmina]", f"name={_ini_value(name)}", "protocol=VNC", f"server={_ini_value(host)}:{port}"]
+def remmina_profile(name: str, host: str, port: int, password: str | None = None, secret: bytes | None = None,
+                    protocol: str = "vnc", user: str = "", domain: str = "") -> str:
+    lines = ["[remmina]", f"name={_ini_value(name)}", f"protocol={protocol.upper()}", f"server={_ini_value(host)}:{port}"]
+    if protocol == "rdp":
+        if user:
+            lines.append(f"username={_ini_value(user)}")
+        if domain:
+            lines.append(f"domain={_ini_value(domain)}")
     if password and secret:
         lines.append(f"password={remmina_encrypt(password, secret)}")
     return "\n".join(lines) + "\n"
+
+
+def rdp_file_text(host: str, port: int, user: str = "", domain: str = "") -> str:
+    """Inhalt einer .rdp-Datei (für mstsc). Das Passwort steht nie darin."""
+    lines = [f"full address:s:{_ini_value(host)}:{port}"]
+    if user:
+        account = f"{_ini_value(domain)}\\{_ini_value(user)}" if domain else _ini_value(user)
+        lines.append(f"username:s:{account}")
+    return "\r\n".join(lines) + "\r\n"
 
 
 # ---------------------------------------------------------------- Sitzungen
@@ -223,6 +273,7 @@ class Session:
     conn_id: str
     mode: str
     viewer: Viewer
+    protocol: str = "vnc"
     port: int = 0  # lokaler Tunnelport (nur "tunnel")
     forward: Forward | None = None
     state: str = STARTING
@@ -237,7 +288,7 @@ Event = tuple[str, bool]  # (Text, Fehler?)
 
 
 class Manager:
-    """Alle VNC-Sitzungen dieser Sesam-Sitzung, je Verbindung höchstens eine."""
+    """Alle Sitzungen des Fernzugriffs (VNC und RDP) dieser Sesam-Sitzung, je Verbindung höchstens eine."""
 
     def __init__(self, tunnel_manager: tunnels.Manager):
         self.tunnels = tunnel_manager
@@ -249,42 +300,48 @@ class Manager:
 
     # --- Start ---
     def begin(self, cfg: Config, conn: Connection, start_tunnel) -> list[Event]:
-        """Startet VNC für die Verbindung. ``start_tunnel(conn, forward)`` startet den kurzlebigen Tunnel (Rückfragen, Passwort) und liefert False bei Abbruch.
+        """Startet den Fernzugriff für die Verbindung. ``start_tunnel(conn, forward)`` startet den kurzlebigen Tunnel (Rückfragen, Passwort) und liefert False bei Abbruch.
 
         Bei ``direct`` startet der Viewer sofort, bei ``tunnel`` erst, wenn ``poll`` den Tunnel als aktiv meldet."""
-        if conn.vnc not in ("tunnel", "direct"):
-            raise launcher.LaunchError(tr("Für diese Verbindung ist VNC nicht eingeschaltet."))
+        if conn.remote not in ("vnc", "rdp"):
+            raise launcher.LaunchError(tr("Für diese Verbindung ist der Fernzugriff nicht eingeschaltet."))
+        proto = label(conn.remote)
         if self.is_open(conn.id):
-            return [(tr("VNC zu „{name}“ ist bereits geöffnet.", name=title(conn)), False)]
+            return [(tr("{proto} zu „{name}“ ist bereits geöffnet.", proto=proto, name=title(conn)), False)]
         viewer = resolve_viewer(cfg, conn)
-        if conn.vnc == "direct":
+        if conn.remote_mode == "direct":
             check_target(conn, conn.host)
-            sess = Session(conn.id, "direct", viewer)
+            sess = Session(conn.id, "direct", viewer, protocol=conn.remote)
             events = self._launch(cfg, conn, sess)
             self.sessions[conn.id] = sess
             return events
         port = free_port()
         forward = tunnel_forward(conn, port)
-        sess = Session(conn.id, "tunnel", viewer, port=port, forward=forward)
+        sess = Session(conn.id, "tunnel", viewer, protocol=conn.remote, port=port, forward=forward)
         if not start_tunnel(conn, forward):
             return []
         self.sessions[conn.id] = sess
-        return [(tr("VNC-Tunnel wird gestartet: {name}", name=title(conn)), False)]
+        return [(tr("{proto}-Tunnel wird gestartet: {name}", proto=proto, name=title(conn)), False)]
 
     def _launch(self, cfg: Config, conn: Connection, sess: Session) -> list[Event]:
         events: list[Event] = []
-        host, port = ("127.0.0.1", sess.port) if sess.mode == "tunnel" else (conn.host, conn.vnc_port)
+        proto = label(sess.protocol)
+        host, port = ("127.0.0.1", sess.port) if sess.mode == "tunnel" else (conn.host, port_of(conn))
         password = None
-        if conn.vnc_use_password:
+        if conn.remote_use_password:
             try:
-                password = passwords.get_password(password_key(conn.id))
+                password = passwords.get_password(password_key(conn.id, sess.protocol))
             except passwords.PasswordError as exc:
-                events.append((tr("VNC-Passwort nicht gelesen: {exc}", exc=exc), True))
+                events.append((tr("{proto}-Passwort nicht gelesen: {exc}", proto=proto, exc=exc), True))
         viewer = sess.viewer
-        profile = password_file = None
+        rdp = sess.protocol == "rdp"
+        profile = password_file = rdp_file = None
+        stdin_password = password if (rdp and password and uses_stdin_password(viewer)) else None
+        user, domain = (conn.remote_user.strip(), conn.remote_domain.strip()) if rdp else ("", "")
+        want_file = uses_password_file(viewer) and password and not rdp
         try:
-            if uses_profile(viewer) or (uses_password_file(viewer) and password):
-                sess.tmpdir = tempfile.mkdtemp(prefix="sesam-vnc-")  # nur für den Benutzer lesbar (0700)
+            if uses_profile(viewer) or want_file or (rdp and uses_rdp_file(viewer)):
+                sess.tmpdir = tempfile.mkdtemp(prefix="sesam-remote-")  # nur für den Benutzer lesbar (0700)
             if uses_profile(viewer):
                 secret = remmina_secret() if password else None
                 if password and secret is None:
@@ -292,22 +349,36 @@ class Manager:
                 profile = os.path.join(sess.tmpdir, "sesam.remmina")
                 fd = os.open(profile, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                    fh.write(remmina_profile(title(conn), host, port, password, secret))
-            if uses_password_file(viewer) and password:
+                    fh.write(remmina_profile(title(conn), host, port, password, secret, sess.protocol, user, domain))
+            if want_file:
                 password_file = sess.password_file = write_password_file(sess.tmpdir, password)
-            cmd = viewer_command(viewer, host, port, title(conn), profile, password_file)
+            if rdp and uses_rdp_file(viewer):
+                rdp_file = os.path.join(sess.tmpdir, "sesam.rdp")
+                fd = os.open(rdp_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(rdp_file_text(host, port, user, domain))
+            if password and not (profile or password_file or stdin_password):
+                events.append((tr("Dieser Viewer übernimmt das gespeicherte Passwort nicht; er fragt danach."), False))
+            cmd = viewer_command(viewer, host, port, title(conn), profile, password_file, user, domain, rdp_file,
+                                 conn.remote_args if rdp else "")
             if shutil.which(cmd[0]) is None:
-                raise launcher.LaunchError(tr("Programm „{v}“ wurde nicht gefunden (VNC-Viewer „{name}“).", v=cmd[0], name=viewer.name))
+                raise launcher.LaunchError(tr("Programm „{v}“ wurde nicht gefunden ({proto}-Viewer „{name}“).", v=cmd[0], proto=proto, name=viewer.name))
             kwargs: dict = {}
             if IS_WINDOWS:
                 kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
             else:
                 kwargs["start_new_session"] = True
             try:
-                sess.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                             env=runtime.clean_env(), **kwargs)
+                sess.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE if stdin_password else subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                             stderr=subprocess.DEVNULL, env=runtime.clean_env(), **kwargs)
             except OSError as exc:
-                raise launcher.LaunchError(tr("VNC-Viewer konnte nicht gestartet werden: {exc}", exc=exc)) from exc
+                raise launcher.LaunchError(tr("{proto}-Viewer konnte nicht gestartet werden: {exc}", proto=proto, exc=exc)) from exc
+            if stdin_password:
+                try:
+                    sess.proc.stdin.write((stdin_password + "\n").encode("utf-8"))
+                    sess.proc.stdin.close()
+                except OSError:  # der Viewer hat die Eingabe schon geschlossen
+                    pass
         except Exception:
             self._cleanup_files(sess)
             raise
@@ -330,7 +401,7 @@ class Manager:
                 if tunnel is None or tunnel.state == tunnels.STOPPED:
                     self._close(conn_id)
                 elif tunnel.state == tunnels.FAILED:
-                    events.append((tr("VNC-Tunnel zu „{name}“ wurde beendet: {error}", name=name, error=tunnel.error), True))
+                    events.append((tr("{proto}-Tunnel zu „{name}“ wurde beendet: {error}", proto=label(sess.protocol), name=name, error=tunnel.error), True))
                     self._close(conn_id)
                 elif tunnel.state == tunnels.RUNNING:
                     try:
@@ -339,14 +410,14 @@ class Manager:
                         events.append((str(exc), True))
                         self._close(conn_id)
                 elif now - sess.started > START_TIMEOUT:
-                    events.append((tr("Der VNC-Tunnel zu „{name}“ ist nicht rechtzeitig aktiv geworden.", name=name), True))
+                    events.append((tr("Der {proto}-Tunnel zu „{name}“ ist nicht rechtzeitig aktiv geworden.", proto=label(sess.protocol), name=name), True))
                     self._close(conn_id)
                 continue
             if sess.password_file and now - sess.viewer_started > PASSWORD_FILE_TTL:
                 self._remove_password_file(sess)
             if tunnel is not None and tunnel.state in (tunnels.FAILED, tunnels.STOPPED):
                 if tunnel.state == tunnels.FAILED:
-                    events.append((tr("VNC-Tunnel zu „{name}“ wurde beendet: {error}", name=name, error=tunnel.error), True))
+                    events.append((tr("{proto}-Tunnel zu „{name}“ wurde beendet: {error}", proto=label(sess.protocol), name=name, error=tunnel.error), True))
                 self._close(conn_id)
                 continue
             if sess.state == VIEWING and sess.proc is not None:
@@ -355,15 +426,15 @@ class Manager:
                     continue
                 handed_over = code == 0 and now - sess.viewer_started < DETACH_SECONDS
                 if handed_over and sess.mode == "tunnel":
-                    sess.state = DETACHED  # eine schon laufende Viewer-Instanz hat übernommen: Tunnel bleibt bis „VNC beenden“
-                    events.append((tr("VNC läuft im Viewer weiter. Der Tunnel bleibt bis „VNC beenden“ bestehen."), False))
+                    sess.state = DETACHED  # eine schon laufende Viewer-Instanz hat übernommen: Tunnel bleibt bis „Beenden“
+                    events.append((tr("{proto} läuft im Viewer weiter. Der Tunnel bleibt bis „{proto} beenden“ bestehen.", proto=label(sess.protocol)), False))
                 else:
                     self._close(conn_id)
         return events
 
     # --- Ende ---
     def stop(self, conn_id: str) -> None:
-        """„VNC beenden“: Viewer und Tunnel beenden."""
+        """„Beenden“: Viewer und Tunnel beenden."""
         self._close(conn_id, terminate=True)
 
     def stop_all(self) -> None:

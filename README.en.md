@@ -34,7 +34,7 @@ Connections open in a **freely configurable terminal**.
 - **Snippets:** Run saved commands (with categories) on one or several hosts at once, optionally with sudo, then keep the shell open, wait for a key or close the terminal.
 - **File transfer (SFTP):** Two-pane file browser with drag & drop, background progress, rename, delete and new folder; no `sftp` or `scp` needed on your computer.
 - **Port forwarding (tunnels):** Save local (`-L`), remote (`-R`) and dynamic SOCKS (`-D`) forwardings per connection and start and stop them with a click; running tunnels show in the tree.
-- **VNC:** Open a device's screen in the VNC viewer of your choice (Remmina, TigerVNC, KRDC), through an SSH tunnel or directly if the device only speaks VNC; the password lives in the keyring.
+- **Remote access (VNC and RDP):** Open a device's screen in the viewer of your choice (Remmina, TigerVNC, FreeRDP, mstsc), through an SSH tunnel or directly if the device only speaks VNC or RDP; the password lives in the keyring.
 - **Docker:** Show a host’s containers in the connection tree; start, stop, restart and delete them, and open a shell in a container with a double-click.
 - **Proxmox:** VMs and LXC containers in the tree, shell in LXC and VMs, start, shut down, stop and restart.
 - **Cisco switches:** Ports in the tree with state, VLAN and speed; switch them on and off, change descriptions, save the configuration.
@@ -138,7 +138,7 @@ The detailed guide is in the [`docs/en/`](docs/en/) folder:
 | [Credentials and sudo](docs/en/zugangsdaten.md) | Identities, SSH keys, sudo, passwords |
 | [Terminals and snippets](docs/en/terminals-snippets.md) | Configuring terminals, connection errors and host keys, snippets |
 | [Files and tunnels](docs/en/dateien-tunnel.md) | SFTP file browser, port forwarding |
-| [VNC](docs/en/vnc.md) | VNC viewers, tunnel and direct connection, password |
+| [Remote access (VNC and RDP)](docs/en/fernzugriff.md) | Viewers, tunnel and direct connection, password |
 | [Docker, Proxmox, Cisco and WireGuard](docs/en/geraete.md) | Containers, guests, switch ports, WireGuard indicator |
 | [Synchronization and data](docs/en/synchronisation.md) | Syncing via Git, where the data lives |
 | [Development: building, builds and tests](docs/en/entwicklung.md) | Building the program, automatic builds, tests |

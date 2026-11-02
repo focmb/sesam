@@ -1,4 +1,4 @@
-"""Standard-Vorlagen für VNC-Viewer (wie ``terminals`` für Terminals)."""
+"""Standard-Vorlagen für VNC- und RDP-Viewer (wie ``terminals`` für Terminals)."""
 from __future__ import annotations
 
 import shutil
@@ -20,16 +20,33 @@ _WINDOWS = [
     (Viewer("RealVNC Viewer", "vncviewer.exe {host}:{port}", platform="windows"), "vncviewer.exe"),
 ]
 
+_FREERDP_ARGS = "/v:{host}:{port} /u:{user} /d:{domain} /cert:tofu +clipboard /dynamic-resolution /from-stdin"
+_LINUX_RDP = [
+    (Viewer("Remmina", "remmina -c {profile}", platform="linux", protocol="rdp"), "remmina"),
+    (Viewer("FreeRDP", "xfreerdp " + _FREERDP_ARGS, platform="linux", protocol="rdp"), "xfreerdp"),
+    (Viewer("FreeRDP 3", "xfreerdp3 " + _FREERDP_ARGS, platform="linux", protocol="rdp"), "xfreerdp3"),
+]
 
-def default_viewers() -> list[Viewer]:
+_WINDOWS_RDP = [
+    (Viewer("Remotedesktopverbindung (mstsc)", "mstsc {rdp_file}", platform="windows", protocol="rdp"), "mstsc"),
+]
+
+
+def _candidates(protocol: str):
+    windows = current_platform() == "windows"
+    if protocol == "rdp":
+        return _WINDOWS_RDP if windows else _LINUX_RDP
+    return _WINDOWS if windows else _LINUX
+
+
+def default_viewers(protocol: str = "vnc") -> list[Viewer]:
     """Standard-Viewer der aktuellen Plattform: bevorzugt die gefundenen, sonst alle Vorlagen (zum Anpassen)."""
-    candidates = _WINDOWS if current_platform() == "windows" else _LINUX
+    candidates = _candidates(protocol)
     found = [v for v, exe in candidates if shutil.which(exe)]
     chosen = found or [v for v, _ in candidates]
     return [replace(v, id=new_id(), name=tr(v.name)) for v in chosen]
 
 
-def template_viewers() -> list[Viewer]:
+def template_viewers(protocol: str = "vnc") -> list[Viewer]:
     """Alle bekannten Vorlagen der aktuellen Plattform (auch nicht installierte)."""
-    candidates = _WINDOWS if current_platform() == "windows" else _LINUX
-    return [replace(v, id=new_id(), name=tr(v.name)) for v, _ in candidates]
+    return [replace(v, id=new_id(), name=tr(v.name)) for v, _ in _candidates(protocol)]
