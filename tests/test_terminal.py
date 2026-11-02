@@ -187,7 +187,14 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             patcher.start()
             self.addCleanup(patcher.stop)
             self.w = self._window()
-            self.addCleanup(self.w.close)
+            self.addCleanup(self._shutdown)
+
+        def _shutdown(self):
+            # erst alle Sitzungen beenden und abwarten, sonst fragt closeEvent (modal, im Test gesperrt)
+            for v in self.w._terminal_views():
+                v.terminate(force=True)
+            self.pump(lambda: all(v.poll() is not None for v in self.w._terminal_views()), timeout=10)
+            self.w.close()
 
         def pump(self, until, timeout=5.0):
             end = time.time() + timeout
