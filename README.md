@@ -25,6 +25,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - [Gruppen](#gruppen)
 - [Favoriten und Schnellstarter](#favoriten-und-schnellstarter)
 - [Farben und Tags](#farben-und-tags)
+- [Offene Verbindungen](#offene-verbindungen)
 - [Terminals konfigurieren](#terminals-konfigurieren)
 - [Identitäten](#identitäten)
 - [SSH-Schlüssel](#ssh-schlüssel)
@@ -199,6 +200,16 @@ Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z.
   Der Baum zeigt sie in der Spalte *Tags*, und das Suchfeld findet sie wie Namen, Hosts und Gruppen. Groß-/Kleinschreibung spielt keine Rolle.
 - Farben und Tags werden mit synchronisiert (Gruppenfarben in `groups.json`). Bei widersprüchlichen Änderungen derselben Gruppenfarbe gewinnt die lokale.
 - Die Spaltenbreiten der Hauptansicht werden einmalig auf die Standardwerte zurückgesetzt, weil eine Spalte dazukam.
+
+## Offene Verbindungen
+
+Eine Verbindung, die Sesam in einem Terminal geöffnet hat, zeigt am Server-Symbol einen **grünen Punkt** – auch wenn sie über ein Snippet gestartet wurde.
+Der Punkt verschwindet, sobald das Terminal geschlossen wird.
+
+- **Doppelklick oder Enter** auf eine bereits offene Verbindung öffnet kein zweites Terminal, sondern zeigt nur einen Hinweis.
+- **Rechtsklick → *Neue Sitzung*** öffnet bewusst ein weiteres Terminal. *Als root verbinden* und *Verbinden mit …* öffnen ebenfalls immer ein neues.
+- Sesam erkennt offene Verbindungen am laufenden Terminal-Prozess. Terminals, die sich sofort vom Startprozess lösen (z. B. GNOME Terminal), werden nicht erkannt; dort gibt es keinen Punkt und Doppelklick öffnet wie gewohnt ein neues Terminal.
+- Sitzungen in Docker-Containern, Proxmox-Gästen und auf Cisco-Ports zählen nicht für den Host.
 
 ## Terminals konfigurieren
 

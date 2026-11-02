@@ -25,6 +25,7 @@ Connections open in a **freely configurable terminal**.
 - [Groups](#groups)
 - [Favorites and quick launcher](#favorites-and-quick-launcher)
 - [Colors and tags](#colors-and-tags)
+- [Open connections](#open-connections)
 - [Configuring terminals](#configuring-terminals)
 - [Identities](#identities)
 - [SSH keys](#ssh-keys)
@@ -201,6 +202,16 @@ Connections can be organized in nested groups (path with “/”, e.g. `Customer
   The tree shows them in the *Tags* column, and the search field finds them just like names, hosts and groups. Case does not matter.
 - Colors and tags are synchronized too (group colors in `groups.json`). If the same group color was changed in conflicting ways, the local one wins.
 - The column widths of the main view are reset once to the defaults because a column was added.
+
+## Open connections
+
+A connection that Sesam has opened in a terminal shows a **green dot** on its server icon – also when it was started from a snippet.
+The dot disappears as soon as the terminal is closed.
+
+- **Double-click or Enter** on a connection that is already open does not open a second terminal; it only shows a notice.
+- **Right-click → *New session*** deliberately opens another terminal. *Connect as root* and *Connect with …* also always open a new one.
+- Sesam detects open connections by the running terminal process. Terminals that detach from their launcher right away (e.g. GNOME Terminal) are not detected; they get no dot and a double-click opens a new terminal as before.
+- Sessions in Docker containers, Proxmox guests and on Cisco ports do not count for the host.
 
 ## Configuring terminals
 
