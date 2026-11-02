@@ -25,22 +25,53 @@ Connections open in a **freely configurable terminal**.
 
 ## Features
 
-- **Connection management:** SSH connections in nested groups with drag & drop, colors, tags, search and multi-select; import from `~/.ssh/config`.
-- **Favorites and quick launcher:** Frequent connections as favorites at the top of the tree (synced too); Ctrl+K opens a fuzzy search over all connections with the recently used ones.
-- **Your own terminal:** Every connection opens in the terminal of your choice (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, custom programs) through freely configurable command templates, also different per connection.
-- **Credentials:** Passwords live in the operating system’s keychain, not in the configuration file. Identities bundle user, key and password for many connections.
-- **SSH keys in the app:** Generate or import Ed25519/RSA keys, view fingerprints, install them on servers with one click (like `ssh-copy-id`) and assign them to connections.
-- **sudo:** Switch straight to root or another user after login, optionally with the stored password and without typing it again.
-- **Snippets:** Run saved commands (with categories) on one or several hosts at once, optionally with sudo, then keep the shell open, wait for a key or close the terminal.
-- **File transfer (SFTP):** Two-pane file browser with drag & drop, background progress, rename, delete and new folder; no `sftp` or `scp` needed on your computer.
-- **Port forwarding (tunnels):** Save local (`-L`), remote (`-R`) and dynamic SOCKS (`-D`) forwardings per connection and start and stop them with a click; running tunnels show in the tree.
-- **Remote access (VNC and RDP):** Open a device's screen in the **built-in VNC viewer** or in the viewer of your choice (Remmina, TigerVNC, FreeRDP, mstsc), through an SSH tunnel or directly if the device only speaks VNC or RDP; the password lives in the keyring. Badges in the *Type* column show what a connection can do (SSH, VNC, RDP).
-- **Docker:** Show a host’s containers in the connection tree; start, stop, restart and delete them, and open a shell in a container with a double-click.
-- **Proxmox:** VMs and LXC containers in the tree, shell in LXC and VMs, start, shut down, stop and restart.
-- **Cisco switches:** Ports in the tree with state, VLAN and speed; switch them on and off, change descriptions, save the configuration.
-- **WireGuard indicator (optional):** The status bar shows whether the computer is connected to a WireGuard tunnel (tunnel name; connected, stale or disconnected); a click shows details.
-- **Git synchronization:** Sync connections, groups, identities, keys and snippets between several devices; passwords and private keys are stored encrypted only (AES-256-GCM).
-- **Windows and Linux:** The same experience on both systems, light and dark theme, adjustable font size, interface in German and English.
+### Connection management
+SSH connections in nested groups with drag & drop, colors, tags, search and multi-select; import from `~/.ssh/config`.
+
+### Favorites and quick launcher
+Frequent connections as favorites at the top of the tree (synced too); Ctrl+K opens a fuzzy search over all connections with the recently used ones.
+
+### Your own terminal
+Every connection opens in the terminal of your choice (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, custom programs) through freely configurable command templates, also different per connection.
+
+### Credentials
+Passwords live in the operating system’s keychain, not in the configuration file. Identities bundle user, key and password for many connections.
+
+### SSH keys in the app
+Generate or import Ed25519/RSA keys, view fingerprints, install them on servers with one click (like `ssh-copy-id`) and assign them to connections.
+
+### sudo
+Switch straight to root or another user after login, optionally with the stored password and without typing it again.
+
+### Snippets
+Run saved commands (with categories) on one or several hosts at once, optionally with sudo, then keep the shell open, wait for a key or close the terminal.
+
+### File transfer (SFTP)
+Two-pane file browser with drag & drop, background progress, rename, delete and new folder; no `sftp` or `scp` needed on your computer.
+
+### Port forwarding (tunnels)
+Save local (`-L`), remote (`-R`) and dynamic SOCKS (`-D`) forwardings per connection and start and stop them with a click; running tunnels show in the tree.
+
+### Remote access (VNC and RDP)
+Open a device's screen in the **built-in VNC viewer** or in the viewer of your choice (Remmina, TigerVNC, FreeRDP, mstsc), through an SSH tunnel or directly if the device only speaks VNC or RDP; the password lives in the keyring. Badges in the *Type* column show what a connection can do (SSH, VNC, RDP).
+
+### Docker
+Show a host’s containers in the connection tree; start, stop, restart and delete them, and open a shell in a container with a double-click.
+
+### Proxmox
+VMs and LXC containers in the tree, shell in LXC and VMs, start, shut down, stop and restart.
+
+### Cisco switches
+Ports in the tree with state, VLAN and speed; switch them on and off, change descriptions, save the configuration.
+
+### WireGuard indicator (optional)
+The status bar shows whether the computer is connected to a WireGuard tunnel (tunnel name; connected, stale or disconnected); a click shows details.
+
+### Git synchronization
+Sync connections, groups, identities, keys and snippets between several devices; passwords and private keys are stored encrypted only (AES-256-GCM).
+
+### Windows and Linux
+The same experience on both systems, light and dark theme, adjustable font size, interface in German and English.
 
 ## Getting started
 

@@ -1,10 +1,10 @@
-
 [![Build](https://github.com/focmb/sesam/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/focmb/sesam/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/focmb/sesam)](https://github.com/focmb/sesam/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/focmb/sesam/total)](https://github.com/focmb/sesam/releases)
 [![License: MIT](https://img.shields.io/github/license/focmb/sesam)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey)
+
 <p align="center"><img src="packaging/linux/sesam.svg" alt="Sesam-Icon" width="128" height="128"></p>
 
 # Sesam
@@ -25,22 +25,53 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 
 ## Funktionen
 
-- **Verbindungsverwaltung:** SSH-Verbindungen in verschachtelten Gruppen mit Drag & Drop, Farben, Tags, Suche und Mehrfachauswahl; Import aus `~/.ssh/config`.
-- **Favoriten und Schnellstarter:** Häufige Verbindungen als Favoriten oben im Baum (werden mit synchronisiert); Strg+K öffnet eine unscharfe Suche über alle Verbindungen mit den zuletzt verwendeten.
-- **Eigenes Terminal:** Jede Verbindung öffnet sich im Terminal deiner Wahl (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, eigene Programme) über frei konfigurierbare Befehlsvorlagen, auch pro Verbindung verschieden.
-- **Zugangsdaten:** Passwörter im Schlüsselbund des Betriebssystems, nicht in der Konfigurationsdatei. Identitäten bündeln Benutzer, Schlüssel und Passwort für viele Verbindungen.
-- **SSH-Schlüssel in der App:** Ed25519/RSA erzeugen oder importieren, Fingerabdruck ansehen, per Klick auf Server installieren (wie `ssh-copy-id`) und Verbindungen zuweisen.
-- **sudo:** Nach dem Login direkt zu root oder einem anderen Benutzer wechseln, auf Wunsch mit dem gespeicherten Passwort und ohne erneute Eingabe.
-- **Snippets:** Gespeicherte Befehle (mit Kategorien) auf einem oder mehreren Hosts gleichzeitig ausführen, optional mit sudo, danach Shell offen lassen, auf eine Taste warten oder das Terminal schließen.
-- **Dateien übertragen (SFTP):** Zweigeteilter Dateibrowser mit Drag & Drop, Fortschritt im Hintergrund, Umbenennen, Löschen und Ordner anlegen, ohne `sftp` oder `scp` auf dem Rechner.
-- **Port-Weiterleitungen (Tunnel):** Lokale (`-L`), Remote- (`-R`) und dynamische SOCKS-Weiterleitungen (`-D`) je Verbindung speichern und per Klick starten und beenden; laufende Tunnel zeigt der Baum an.
-- **Fernzugriff (VNC und RDP):** Den Bildschirm eines Geräts öffnen, im **eingebauten VNC-Viewer** oder im Viewer deiner Wahl (Remmina, TigerVNC, FreeRDP, mstsc), durch einen SSH-Tunnel oder direkt, wenn das Gerät nur VNC oder RDP spricht; das Passwort liegt im Schlüsselbund. Abzeichen in der Spalte *Typ* zeigen, was eine Verbindung kann (SSH, VNC, RDP).
-- **Docker:** Container eines Hosts im Verbindungsbaum anzeigen, starten, stoppen, neu starten, löschen und per Doppelklick eine Shell im Container öffnen.
-- **Proxmox:** VMs und LXC-Container im Baum, Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
-- **Cisco-Switches:** Ports im Baum mit Zustand, VLAN und Geschwindigkeit; ein- und ausschalten, Beschreibung ändern, Konfiguration speichern.
-- **WireGuard-Anzeige (optional):** Die Statuszeile zeigt, ob der Rechner mit einem WireGuard-Tunnel verbunden ist (Tunnelname, verbunden, veraltet oder getrennt); ein Klick zeigt Einzelheiten.
-- **Synchronisation über Git:** Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets zwischen mehreren Geräten abgleichen; Passwörter und private Schlüssel nur verschlüsselt (AES-256-GCM).
-- **Windows und Linux:** Gleiche Bedienung auf beiden Systemen, helles und dunkles Design, einstellbare Schriftgröße, Oberfläche auf Deutsch und Englisch.
+### Verbindungsverwaltung
+SSH-Verbindungen in verschachtelten Gruppen mit Drag & Drop, Farben, Tags, Suche und Mehrfachauswahl; Import aus `~/.ssh/config`.
+
+### Favoriten und Schnellstarter
+Häufige Verbindungen als Favoriten oben im Baum (werden mit synchronisiert); Strg+K öffnet eine unscharfe Suche über alle Verbindungen mit den zuletzt verwendeten.
+
+### Eigenes Terminal
+Jede Verbindung öffnet sich im Terminal deiner Wahl (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, eigene Programme) über frei konfigurierbare Befehlsvorlagen, auch pro Verbindung verschieden.
+
+### Zugangsdaten
+Passwörter im Schlüsselbund des Betriebssystems, nicht in der Konfigurationsdatei. Identitäten bündeln Benutzer, Schlüssel und Passwort für viele Verbindungen.
+
+### SSH-Schlüssel in der App
+Ed25519/RSA erzeugen oder importieren, Fingerabdruck ansehen, per Klick auf Server installieren (wie `ssh-copy-id`) und Verbindungen zuweisen.
+
+### sudo
+Nach dem Login direkt zu root oder einem anderen Benutzer wechseln, auf Wunsch mit dem gespeicherten Passwort und ohne erneute Eingabe.
+
+### Snippets
+Gespeicherte Befehle (mit Kategorien) auf einem oder mehreren Hosts gleichzeitig ausführen, optional mit sudo, danach Shell offen lassen, auf eine Taste warten oder das Terminal schließen.
+
+### Dateien übertragen (SFTP)
+Zweigeteilter Dateibrowser mit Drag & Drop, Fortschritt im Hintergrund, Umbenennen, Löschen und Ordner anlegen, ohne `sftp` oder `scp` auf dem Rechner.
+
+### Port-Weiterleitungen (Tunnel)
+Lokale (`-L`), Remote- (`-R`) und dynamische SOCKS-Weiterleitungen (`-D`) je Verbindung speichern und per Klick starten und beenden; laufende Tunnel zeigt der Baum an.
+
+### Fernzugriff (VNC und RDP)
+Den Bildschirm eines Geräts öffnen, im **eingebauten VNC-Viewer** oder im Viewer deiner Wahl (Remmina, TigerVNC, FreeRDP, mstsc), durch einen SSH-Tunnel oder direkt, wenn das Gerät nur VNC oder RDP spricht; das Passwort liegt im Schlüsselbund. Abzeichen in der Spalte *Typ* zeigen, was eine Verbindung kann (SSH, VNC, RDP).
+
+### Docker
+Container eines Hosts im Verbindungsbaum anzeigen, starten, stoppen, neu starten, löschen und per Doppelklick eine Shell im Container öffnen.
+
+### Proxmox
+VMs und LXC-Container im Baum, Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
+
+### Cisco-Switches
+Ports im Baum mit Zustand, VLAN und Geschwindigkeit; ein- und ausschalten, Beschreibung ändern, Konfiguration speichern.
+
+### WireGuard-Anzeige (optional)
+Die Statuszeile zeigt, ob der Rechner mit einem WireGuard-Tunnel verbunden ist (Tunnelname, verbunden, veraltet oder getrennt); ein Klick zeigt Einzelheiten.
+
+### Synchronisation über Git
+Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets zwischen mehreren Geräten abgleichen; Passwörter und private Schlüssel nur verschlüsselt (AES-256-GCM).
+
+### Windows und Linux
+Gleiche Bedienung auf beiden Systemen, helles und dunkles Design, einstellbare Schriftgröße, Oberfläche auf Deutsch und Englisch.
 
 ## Start
 
@@ -112,16 +143,19 @@ Der Befehl `sesam` liegt in `~/.local/bin` (bei manchen Distributionen muss der 
 
 ![Hauptfenster (hell)](docs/screenshots/hauptfenster-hell.png)
 
-| Dunkel | Verbindung bearbeiten |
-| --- | --- |
+
+| Dunkel                                                             | Verbindung bearbeiten                                                           |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
 | ![Hauptfenster (dunkel)](docs/screenshots/hauptfenster-dunkel.png) | ![Dialog „Verbindung bearbeiten“](docs/screenshots/verbindung-bearbeiten.png) |
 
-| Dateibrowser (SFTP, hell) | Dateibrowser (SFTP, dunkel) |
-| --- | --- |
+
+| Dateibrowser (SFTP, hell)                                      | Dateibrowser (SFTP, dunkel)                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------ |
 | ![Dateibrowser (hell)](docs/screenshots/dateibrowser-hell.png) | ![Dateibrowser (dunkel)](docs/screenshots/dateibrowser-dunkel.png) |
 
-| Snippets (hell) | Snippets (dunkel) |
-| --- | --- |
+
+| Snippets (hell)                                        | Snippets (dunkel)                                          |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
 | ![Snippets (hell)](docs/screenshots/snippets-hell.png) | ![Snippets (dunkel)](docs/screenshots/snippets-dunkel.png) |
 
 Die Bilder zeigen Beispieldaten (erfundene Hosts) und wurden mit dem Qt-Plattform-Plugin „offscreen“ erzeugt; echte Fenster können je nach Desktop in Rahmen und Schrift abweichen.
@@ -130,14 +164,15 @@ Die Bilder zeigen Beispieldaten (erfundene Hosts) und wurden mit dem Qt-Plattfor
 
 Die ausführliche Anleitung steht im Ordner [`docs/`](docs/):
 
-| Seite | Inhalt |
-|---|---|
-| [Verbindungen verwalten](docs/verbindungen.md) | Darstellung, Gruppen, Favoriten und Schnellstarter, Farben und Tags, offene Verbindungen |
-| [Zugangsdaten und sudo](docs/zugangsdaten.md) | Identitäten, SSH-Schlüssel, sudo, Passwörter |
-| [Terminals und Snippets](docs/terminals-snippets.md) | Terminals konfigurieren, Verbindungsfehler und Host-Schlüssel, Snippets |
-| [Dateien und Tunnel](docs/dateien-tunnel.md) | SFTP-Dateibrowser, Port-Weiterleitungen |
-| [Fernzugriff (VNC und RDP)](docs/fernzugriff.md) | Eingebauter VNC-Viewer, externe Viewer, Tunnel und Direktverbindung, Passwort |
-| [Docker, Proxmox, Cisco und WireGuard](docs/geraete.md) | Container, Gäste, Switch-Ports, WireGuard-Anzeige |
-| [Synchronisation und Daten](docs/synchronisation.md) | Abgleich über Git, Speicherort der Daten |
-| [Entwicklung: Bauen, Builds und Tests](docs/entwicklung.md) | Programm bauen, automatische Builds, Tests |
-| [Release-Ablauf](docs/release.md) | Von der Codeänderung zum installierten Paket (Manjaro) |
+
+| Seite                                                       | Inhalt                                                                                   |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [Verbindungen verwalten](docs/verbindungen.md)              | Darstellung, Gruppen, Favoriten und Schnellstarter, Farben und Tags, offene Verbindungen |
+| [Zugangsdaten und sudo](docs/zugangsdaten.md)               | Identitäten, SSH-Schlüssel, sudo, Passwörter                                          |
+| [Terminals und Snippets](docs/terminals-snippets.md)        | Terminals konfigurieren, Verbindungsfehler und Host-Schlüssel, Snippets                 |
+| [Dateien und Tunnel](docs/dateien-tunnel.md)                | SFTP-Dateibrowser, Port-Weiterleitungen                                                  |
+| [Fernzugriff (VNC und RDP)](docs/fernzugriff.md)            | Eingebauter VNC-Viewer, externe Viewer, Tunnel und Direktverbindung, Passwort            |
+| [Docker, Proxmox, Cisco und WireGuard](docs/geraete.md)     | Container, Gäste, Switch-Ports, WireGuard-Anzeige                                       |
+| [Synchronisation und Daten](docs/synchronisation.md)        | Abgleich über Git, Speicherort der Daten                                                |
+| [Entwicklung: Bauen, Builds und Tests](docs/entwicklung.md) | Programm bauen, automatische Builds, Tests                                               |
+| [Release-Ablauf](docs/release.md)                           | Von der Codeänderung zum installierten Paket (Manjaro)                                  |
