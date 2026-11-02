@@ -166,7 +166,7 @@ class SessionTests(unittest.TestCase):
         return Path(self.tmp.name, "out.txt").read_text(encoding="utf-8")
 
     def test_direct_starts_viewer_on_host_and_stops_it(self):
-        viewer = fake_viewer(self.tmp.name, "open(OUT, 'w').write(' '.join(sys.argv[1:]))\ntime.sleep(60)\n")
+        viewer = fake_viewer(self.tmp.name, "open(OUT, 'w', encoding='utf-8', newline='').write(' '.join(sys.argv[1:]))\ntime.sleep(60)\n")
         conn = Connection("Gerät", "10.1.2.3", vnc="direct", vnc_port=5901)
         cfg = self._cfg(viewer, conn)
         self.assertEqual(self.mgr.begin(cfg, conn, None), [])
@@ -217,14 +217,14 @@ class SessionTests(unittest.TestCase):
         body = """
             import os
             path = sys.argv[1]  # {host}
-            open(OUT, 'w').write(path)
+            open(OUT, 'w', encoding='utf-8', newline='').write(path)
             time.sleep(60)
         """
         script = Path(self.tmp.name) / "viewer.py"
         script.write_text(textwrap.dedent("""
             import sys, time
             data = open(sys.argv[1], 'rb').read()
-            open(%r, 'w').write(data.hex())
+            open(%r, 'w', encoding='utf-8', newline='').write(data.hex())
             time.sleep(60)
         """ % str(Path(self.tmp.name) / "out.txt")), encoding="utf-8")
         viewer = Viewer("fake", f'"{sys.executable}" "{script}" {{password_file}}')
@@ -260,7 +260,7 @@ class SessionTests(unittest.TestCase):
 
     def test_missing_password_still_starts_viewer(self):
         script = Path(self.tmp.name) / "viewer.py"
-        script.write_text("import sys, time\nopen(%r, 'w').write(' '.join(sys.argv[1:]))\ntime.sleep(60)\n" % str(Path(self.tmp.name) / "out.txt"), encoding="utf-8")
+        script.write_text("import sys, time\nopen(%r, 'w', encoding='utf-8', newline='').write(' '.join(sys.argv[1:]))\ntime.sleep(60)\n" % str(Path(self.tmp.name) / "out.txt"), encoding="utf-8")
         viewer = Viewer("fake", f'"{sys.executable}" "{script}" -passwd {{password_file}} {{host}}')
         conn = Connection("Gerät", "10.1.2.3", vnc="direct", vnc_use_password=True)
         cfg = self._cfg(viewer, conn)
@@ -271,7 +271,7 @@ class SessionTests(unittest.TestCase):
 
     def test_remmina_profile_is_written_with_encrypted_password(self):
         script = Path(self.tmp.name) / "viewer.py"
-        script.write_text("import sys, time\nopen(%r, 'w').write(open(sys.argv[1], encoding='utf-8').read())\ntime.sleep(60)\n"
+        script.write_text("import sys, time\nopen(%r, 'w', encoding='utf-8', newline='').write(open(sys.argv[1], encoding='utf-8').read())\ntime.sleep(60)\n"
                           % str(Path(self.tmp.name) / "out.txt"), encoding="utf-8")
         viewer = Viewer("fake", f'"{sys.executable}" "{script}" {{profile}}')
         conn = Connection("Gerät", "10.1.2.3", vnc="direct", vnc_port=5902, vnc_use_password=True)
@@ -287,7 +287,7 @@ class SessionTests(unittest.TestCase):
 
     def test_remmina_without_secret_warns_and_omits_password(self):
         script = Path(self.tmp.name) / "viewer.py"
-        script.write_text("import sys, time\nopen(%r, 'w').write(open(sys.argv[1], encoding='utf-8').read())\ntime.sleep(60)\n"
+        script.write_text("import sys, time\nopen(%r, 'w', encoding='utf-8', newline='').write(open(sys.argv[1], encoding='utf-8').read())\ntime.sleep(60)\n"
                           % str(Path(self.tmp.name) / "out.txt"), encoding="utf-8")
         viewer = Viewer("fake", f'"{sys.executable}" "{script}" {{profile}}')
         conn = Connection("Gerät", "10.1.2.3", vnc="direct", vnc_use_password=True)
@@ -321,7 +321,7 @@ class SessionTests(unittest.TestCase):
     """
 
     def test_tunnel_mode_starts_viewer_on_the_local_port(self):
-        viewer = fake_viewer(self.tmp.name, "open(OUT, 'w').write(' '.join(sys.argv[1:]))\ntime.sleep(60)\n")
+        viewer = fake_viewer(self.tmp.name, "open(OUT, 'w', encoding='utf-8', newline='').write(' '.join(sys.argv[1:]))\ntime.sleep(60)\n")
         conn = Connection("Server", "srv", vnc="tunnel", vnc_port=5901, vnc_host="gerät")
         cfg = self._cfg(viewer, conn)
         start, seen = self._fake_tunnel(self.READY)
