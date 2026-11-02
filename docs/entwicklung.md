@@ -34,20 +34,9 @@ Ergebnis in `dist/`: der Ordner `sesam/` und ein Archiv (`sesam-<Version>-linux-
   Das Icon der `.exe` liegt als `packaging/windows/sesam.ico` im Repository; bei geändertem Programm-Icon neu erzeugen mit `python packaging/make_icon.py`.
 - Es ist bewusst keine Ein-Datei-Variante: der Wrapper startet Sesam bei jeder Verbindung erneut, Entpacken würde jedes Mal dauern.
 
-## Automatischer Build (Gitea Actions)
-
-`.gitea/workflows/build.yml` läuft bei jedem Tag `v*` (z. B. `git tag v1.2.0 && git push --tags`) und auf Knopfdruck
-(*Actions → Build → Run workflow*). Der Linux-Job installiert die Qt-Systembibliotheken, führt die Tests aus und baut mit
-`packaging/build.py` und `packaging/build_deb.py`; `.tar.gz`, `.deb` und `SHA256SUMS` hängen als Artefakt `sesam-linux` am Lauf
-(von dort lassen sie sich herunterladen und als Release anhängen).
-
-Voraussetzung ist ein Gitea-Runner (`act_runner`, z. B. als Container neben Gitea) mit dem Label `ubuntu-22.04`,
-etwa `ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04`. Der Windows-Job steht auskommentiert im Workflow, bis ein Windows-Runner
-(Label `windows`, mit Python und Git) existiert; bis dahin wird Windows von Hand gebaut (siehe oben).
-
 ## Automatischer Build (GitHub Actions)
 
-Im GitHub-Spiegel (`github.com/focmb/sesam`) baut `.github/workflows/build.yml` mit GitHub-Runnern, eigene Runner sind nicht nötig.
+Gebaut wird nur im GitHub-Spiegel (`github.com/focmb/sesam`); Gitea selbst hat keine Actions. `.github/workflows/build.yml` nutzt GitHub-Runner, eigene Runner sind nicht nötig.
 Der Workflow läuft bei jedem Push auf `main`, bei jedem Tag `v*` und auf Knopfdruck (*Actions → Build → Run workflow*):
 
 - **Linux** (Ubuntu 22.04): Tests, dann `sesam-<Version>-linux-x86_64.tar.gz` und `sesam_<Version>_amd64.deb`.
@@ -57,7 +46,6 @@ Der Workflow läuft bei jedem Push auf `main`, bei jedem Tag `v*` und auf Knopfd
 
 Ablauf einer neuen Version: Version in `pyproject.toml` und `src/sesam/__init__.py` erhöhen, committen, `git tag -a v<Version> -m "Version <Version>"`
 und `git push origin main --follow-tags`. Der Gitea-Spiegel überträgt Commits und Tag nach GitHub, dort startet der Build.
-Der Workflow in `.gitea/workflows/` bleibt unabhängig davon bestehen.
 
 ## Tests
 
