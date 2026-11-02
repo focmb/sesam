@@ -176,6 +176,14 @@ def wrapper_args(conn: Connection, remote_command: str | None = None) -> list[st
     return args
 
 
+_embedded_opener = None  # vom Hauptfenster gesetzt: (Argumente, Titel, Umgebung) -> Sitzung mit ``poll()``
+
+
+def set_embedded_opener(opener) -> None:
+    global _embedded_opener
+    _embedded_opener = opener
+
+
 def resolve_terminal(cfg: Config, conn: Connection) -> Terminal:
     term = cfg.terminal_by_id(conn.terminal_id) if conn.terminal_id else None
     term = term or cfg.terminal_by_id(cfg.default_terminal_id)
@@ -244,6 +252,14 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remo
         conn = replace(conn, remote_command=remote_command, sudo_mode="login" if sudo else "",
                        sudo_user=conn.sudo_user if sudo else "")
     terminal = terminal or resolve_terminal(cfg, conn)
+    if terminal.embedded:  # Tab in Sesam statt eines Terminal-Programms; der Wrapper läuft dort im Pseudoterminal
+        if _embedded_opener is None:
+            raise LaunchError(tr("Das integrierte Terminal ist nur in der Oberfläche verfügbar."))
+        cmd = wrapper_args(conn, remote_command)
+        session = _embedded_opener(cmd, conn.name or conn.host, runtime.clean_env())
+        if track if track is not None else remote_command is None:
+            _terminals.setdefault(conn.id, []).append(session)
+        return cmd
     # Immer über den Wrapper: Er hält das Fenster bei Verbindungsfehlern offen (sonst verschwindet die Meldung mit dem Terminal)
     # und kann einen geänderten Host-Schlüssel nach Rückfrage aus known_hosts entfernen.
     cmd = build_terminal_command(terminal, conn, wrapper_args(conn, remote_command) if uses_ssh_command(terminal) else None)

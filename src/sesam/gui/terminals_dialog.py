@@ -43,7 +43,7 @@ class TerminalsDialog(QDialog):
         for tpl in template_terminals():
             add_menu.addAction(tr("Vorlage: {name}", name=tpl.name)).triggered.connect(lambda _=False, t=tpl: self._add(t))
         add.setMenu(add_menu)
-        remove = QPushButton(tr("Löschen"))
+        self.remove = remove = QPushButton(tr("Löschen"))
         remove.clicked.connect(self._remove)
         make_default = QPushButton(tr("Als Standard"))
         make_default.clicked.connect(self._make_default)
@@ -58,8 +58,8 @@ class TerminalsDialog(QDialog):
         self.name = QLineEdit()
         self.command = QLineEdit()
         self.command.setPlaceholderText(tr("z. B. /opt/ghostty/ghostty --title={title} -e {ssh_args}"))
-        pick = QPushButton(tr("Programm wählen …"))
-        pick.clicked.connect(self._pick_program)
+        self.pick = QPushButton(tr("Programm wählen …"))
+        self.pick.clicked.connect(self._pick_program)
         self.platform = QComboBox()
         for label, value in PLATFORMS:
             label = tr(label)
@@ -77,7 +77,7 @@ class TerminalsDialog(QDialog):
         form.setVerticalSpacing(8)
         form.addRow(tr("Name"), self.name)
         form.addRow(tr("Befehlsvorlage"), self.command)
-        form.addRow("", pick)
+        form.addRow("", self.pick)
         form.addRow(tr("Plattform"), self.platform)
         form.addRow("", self.new_console)
         help_label = QLabel(tr(HELP))
@@ -134,6 +134,12 @@ class TerminalsDialog(QDialog):
         self.new_console.setChecked(t.new_console)
         for w in (self.name, self.command, self.platform, self.new_console):
             w.blockSignals(False)
+        embedded = bool(self._current and self._current.embedded)  # das integrierte Terminal hat keine Befehlsvorlage und bleibt immer erhalten
+        for w in (self.command, self.platform, self.new_console, self.pick):
+            w.setEnabled(enabled and not embedded)
+        self.remove.setEnabled(enabled and not embedded)
+        self.command.setPlaceholderText(tr("Kein Befehl nötig: Die Sitzung öffnet sich als Reiter in Sesam.") if embedded
+                                        else tr("z. B. /opt/ghostty/ghostty --title={title} -e {ssh_args}"))
 
     def _store(self, *_):
         t = self._current
@@ -167,7 +173,7 @@ class TerminalsDialog(QDialog):
 
     def _remove(self):
         row = self.list.currentRow()
-        if row < 0:
+        if row < 0 or self.terminals[row].embedded:
             return
         removed = self.terminals.pop(row)
         if removed.id == self.default_id:

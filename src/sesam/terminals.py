@@ -27,6 +27,19 @@ _WINDOWS = [
 ]
 
 
+INTEGRATED_ID = "integriert"  # feste ID, damit die Synchronisation auf mehreren Geräten keinen zweiten Eintrag erzeugt
+
+
+def integrated_terminal() -> Terminal:
+    return Terminal(tr("Integriert (in Sesam)"), "", id=INTEGRATED_ID, embedded=True)
+
+
+def ensure_integrated(terminals: list[Terminal]) -> None:
+    """Das integrierte Terminal gehört immer zur Auswahl (es lässt sich nicht löschen)."""
+    if not any(t.embedded for t in terminals):
+        terminals.append(integrated_terminal())
+
+
 def current_platform() -> str:
     return "windows" if sys.platform.startswith("win") else "linux"
 
@@ -40,7 +53,9 @@ def default_terminals() -> list[Terminal]:
     candidates = _WINDOWS if current_platform() == "windows" else _LINUX
     found = [t for t, exe in candidates if shutil.which(exe)]
     chosen = found or [t for t, _ in candidates]
-    return [replace(t, id=new_id(), name=tr(t.name)) for t in chosen]
+    terminals = [replace(t, id=new_id(), name=tr(t.name)) for t in chosen]
+    ensure_integrated(terminals)
+    return terminals
 
 
 def template_terminals() -> list[Terminal]:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from sesam import launcher, storage
 from sesam.models import Config, Connection, Terminal, Viewer
+from sesam.terminals import integrated_terminal
 from sesam.viewers import builtin_viewer
 from sesam.ssh_config import parse_ssh_config
 
@@ -53,8 +54,8 @@ class StorageTests(unittest.TestCase):
             p = Path(d) / "sub" / "config.json"
             t = Terminal("T", "xterm -e {ssh_args}")
             v, r = Viewer("V", "viewer {host}::{port}"), Viewer("R", "rdp {host}", protocol="rdp")
-            cfg = Config(terminals=[t], connections=[Connection("n", "h", group="g", remote="vnc", remote_mode="direct")], default_terminal_id=t.id,
-                         viewers=[v, r, builtin_viewer()], default_viewer_id=v.id, default_rdp_viewer_id=r.id)  # der eingebaute Viewer gehört immer dazu
+            cfg = Config(terminals=[t, integrated_terminal()], connections=[Connection("n", "h", group="g", remote="vnc", remote_mode="direct")], default_terminal_id=t.id,
+                         viewers=[v, r, builtin_viewer()], default_viewer_id=v.id, default_rdp_viewer_id=r.id)  # der eingebaute Viewer und das integrierte Terminal gehören immer dazu
             storage.save(cfg, p)
             loaded = storage.load(p)
             self.assertEqual(loaded, cfg)

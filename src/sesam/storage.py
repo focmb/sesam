@@ -11,7 +11,7 @@ from pathlib import Path
 from .i18n import normalize as _normalize_language
 from .i18n import tr
 from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal, Viewer
-from .terminals import default_terminals
+from .terminals import default_terminals, ensure_integrated
 from .viewers import BUILTIN_COMMAND, BUILTIN_ID, builtin_viewer, default_viewers, is_builtin
 
 
@@ -56,6 +56,7 @@ def load(path: Path | None = None) -> Config:
         raise ConfigError(path, tr("unerwarteter Inhalt ({kind}: {exc})", kind=type(exc).__name__, exc=exc)) from exc
     if not cfg.terminals:
         cfg.terminals = default_terminals()
+    ensure_integrated(cfg.terminals)
     if not cfg.terminal_by_id(cfg.default_terminal_id) and cfg.terminals:
         cfg.default_terminal_id = cfg.terminals[0].id
     _ensure_viewers(cfg)

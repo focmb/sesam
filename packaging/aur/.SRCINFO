@@ -16,6 +16,7 @@ pkgbase = sesam
 	depends = python-paramiko
 	depends = openssh
 	depends = hicolor-icon-theme
+	optdepends = python-pyte: integriertes Terminal (Reiter in Sesam)
 	optdepends = wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige
 	optdepends = gnome-keyring: Passwörter im Schlüsselbund speichern
 	optdepends = kwallet: Passwörter im Schlüsselbund speichern

@@ -22,6 +22,17 @@ Eigene Terminals (z. B. Ghostty) legst du über *Neu ▾ → Eigenes Terminal* a
 ausführbare Datei auswählen, falls sie nicht im `PATH` liegt (z. B. AppImage). Die Vorlagen für nicht installierte Terminals
 findest du ebenfalls unter *Neu ▾*.
 
+## Integriertes Terminal
+
+Der Eintrag *Integriert (in Sesam)* öffnet die Verbindung als Reiter im Hauptfenster, ohne ein externes Terminal-Programm.
+Er steht neben den anderen Terminals zur Wahl (als Standard oder pro Verbindung, auch über „Verbinden mit …“) und lässt sich nicht löschen.
+
+- **Reiter:** Vorn bleibt die Verbindungsliste, jede Sitzung bekommt einen eigenen Reiter. Sobald `ssh` endet, schließt sich der Reiter; das Schließen einer laufenden Sitzung fragt nach.
+- **Bedienung:** Auswahl mit der Maus kopiert in die Auswahl-Zwischenablage (Mittelklick fügt ein), Strg+Umschalt+C / Strg+Umschalt+V bzw. Strg+Einfg / Umschalt+Einfg kopieren und einfügen, Umschalt+Bild↑/↓ und das Mausrad blättern im Verlauf (10 000 Zeilen), Strg+Mausrad ändert die Schriftgröße des Reiters. Rechtsklick zeigt ein Menü. Programme wie vim, less oder htop laufen im Alternativbildschirm.
+- **Gleiche Technik wie extern:** Es läuft derselbe Wrapper mit `ssh`, also gelten `~/.ssh/config`, Jump-Hosts, gespeicherte Passwörter, sudo und die Rückfrage bei geänderten Host-Schlüsseln unverändert.
+- **Voraussetzungen:** Das Python-Paket `pyte` (unter Windows zusätzlich `pywinpty` für ConPTY). Die fertigen Pakete bringen beides mit; bei Arch ist `python-pyte` eine optionale Abhängigkeit.
+- **Grenzen:** Mausunterstützung innerhalb von Programmen (Mausmodi) und Sixel-Grafiken werden nicht ausgewertet.
+
 ## Verbindungsfehler und geänderte Host-Schlüssel
 
 Jede Verbindung startet im Terminal über einen kleinen Wrapper (auch ohne gespeichertes Passwort), der `ssh` als Unterprozess ausführt.

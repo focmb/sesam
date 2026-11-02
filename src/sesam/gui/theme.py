@@ -42,6 +42,10 @@ def colors() -> dict[str, str]:
     return style.tokens(_effective)
 
 
+def is_dark() -> bool:
+    return _effective == "dark"
+
+
 def system_is_dark(app) -> bool:
     scheme = getattr(Qt, "ColorScheme", None)  # ab Qt 6.5
     get = getattr(app.styleHints(), "colorScheme", None)

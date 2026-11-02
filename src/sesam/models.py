@@ -71,6 +71,7 @@ class Terminal:
     id: str = field(default_factory=new_id)
     platform: str = "all"  # "all", "linux", "windows"
     new_console: bool = False  # Windows: eigenes Konsolenfenster (cmd, powershell)
+    embedded: bool = False  # integriertes Terminal: öffnet einen Tab in Sesam, die Befehlsvorlage entfällt
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Terminal":

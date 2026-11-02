@@ -31,6 +31,13 @@ if not IS_WIN:
 hiddenimports += ["cryptography.hazmat.primitives.ciphers.aead"]
 # paramiko (SFTP-Dateibrowser) wird erst beim Öffnen des Fensters importiert
 hiddenimports += collect_submodules("paramiko")
+# integriertes Terminal: pyte wird in der Oberfläche importiert, pywinpty (ConPTY) nur unter Windows
+hiddenimports += ["pyte"]
+if IS_WIN:
+    d, b, h = collect_all("winpty")
+    datas += d
+    binaries += b
+    hiddenimports += h
 
 a = Analysis(
     [str(ROOT / "packaging" / "entry.py")],

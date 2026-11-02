@@ -9,7 +9,8 @@ license=('MIT')
 depends=('python' 'pyside6' 'python-keyring' 'python-cryptography'
          'python-paramiko' 'openssh' 'hicolor-icon-theme')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
-optdepends=('wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige'
+optdepends=('python-pyte: integriertes Terminal (Reiter in Sesam)'
+            'wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige'
             'gnome-keyring: Passwörter im Schlüsselbund speichern'
             'kwallet: Passwörter im Schlüsselbund speichern'
             'remmina: VNC- und RDP-Viewer'

@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QIcon, QKeySequence, QPainter
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QButtonGroup, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
+    QTabBar, QTabWidget, QAbstractItemView, QApplication, QButtonGroup, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QPushButton,
     QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
 )
@@ -35,6 +35,7 @@ from .sftp_window import SftpWindow
 from .sync_conflict_dialog import SyncConflictDialog
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
+from .terminal_view import TerminalView, available as terminal_available
 from .terminals_dialog import TerminalsDialog
 from .toast import ToastHost
 from .viewers_dialog import ViewersDialog
@@ -207,7 +208,19 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tree)
         outer.addLayout(layout, 1)
         self._outer_layout = outer  # die Seitenleiste kommt rechts dazu, sobald die Aktionen existieren
-        self.setCentralWidget(central)
+        # Reiter: vorn die Verbindungsliste, dahinter die Sitzungen des integrierten Terminals (ohne Sitzung blendet Qt die Leiste aus)
+        self.tabs = QTabWidget()
+        self.tabs.setObjectName("mainTabs")
+        self.tabs.setDocumentMode(True)
+        self.tabs.setTabsClosable(True)
+        self.tabs.setTabBarAutoHide(True)
+        self.tabs.addTab(central, tr("Verbindungen"))
+        for side in (QTabBar.ButtonPosition.LeftSide, QTabBar.ButtonPosition.RightSide):
+            self.tabs.tabBar().setTabButton(0, side, None)  # der erste Reiter lässt sich nicht schließen
+        self.tabs.tabCloseRequested.connect(self._close_terminal_tab)
+        self.tabs.currentChanged.connect(self._tab_changed)
+        self.setCentralWidget(self.tabs)
+        launcher.set_embedded_opener(self._open_embedded)
 
         self.sync = SyncController(self.cfg, lambda: storage.save(self.cfg, self.path), self, resolver=self._ask_sync_conflicts)
         self.sync.status.connect(self._sync_status)
@@ -427,6 +440,8 @@ class MainWindow(QMainWindow):
             action.setVisible(bool(text))
 
     def _theme_changed(self):
+        for view in self._terminal_views():
+            view.set_dark(theme.is_dark())
         self._fit_to_font()
         QTimer.singleShot(0, self._fit_to_font)  # Qt reicht die neue Schrift erst danach an alle Widgets weiter
         self._refresh_icons()
@@ -552,7 +567,64 @@ class MainWindow(QMainWindow):
             except OSError:
                 pass
 
+    # --- Integriertes Terminal ---
+    def _terminal_views(self) -> list[TerminalView]:
+        return [w for i in range(1, self.tabs.count()) if isinstance(w := self.tabs.widget(i), TerminalView)]
+
+    def _open_embedded(self, args: list[str], title: str, env: dict[str, str]) -> TerminalView:
+        """Wird vom Launcher gerufen, wenn das gewählte Terminal das integrierte ist: öffnet einen Reiter."""
+        if not terminal_available():
+            raise launcher.LaunchError(tr("Das Paket „pyte“ ist nicht installiert (pip install pyte)."))
+        view = TerminalView(title, theme.scale(), theme.is_dark())
+        view.closed.connect(lambda _code, v=view: self._terminal_closed(v))
+        index = self.tabs.addTab(view, title)
+        self.tabs.setTabToolTip(index, title)
+        self.tabs.setCurrentIndex(index)
+        view.start(args, env)
+        view.setFocus()
+        return view
+
+    def _terminal_closed(self, view: TerminalView):
+        """Der Prozess ist zu Ende: der Reiter verschwindet wie ein geschlossenes Terminalfenster."""
+        index = self.tabs.indexOf(view)
+        if index > 0:
+            self.tabs.removeTab(index)
+        view.deleteLater()
+        self._update_open_markers()
+
+    def _close_terminal_tab(self, index: int):
+        view = self.tabs.widget(index)
+        if index == 0 or not isinstance(view, TerminalView):
+            return
+        if view.poll() is None:
+            answer = QMessageBox.question(
+                self, tr("Sitzung beenden"), tr("Die Sitzung „{name}“ läuft noch. Beenden?", name=view.title),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            view.terminate()  # der Reiter schließt, sobald der Prozess endet
+        else:
+            self._terminal_closed(view)
+
+    def _tab_changed(self, index: int):
+        widget = self.tabs.widget(index)
+        if index > 0 and widget is not None:
+            widget.setFocus()
+        else:
+            self.tree.setFocus()
+
     def closeEvent(self, event):
+        running = [v for v in self._terminal_views() if v.poll() is None]
+        if running:
+            answer = QMessageBox.question(
+                self, tr("Beenden"), tr("Es laufen noch {n} Sitzungen im integrierten Terminal. Sesam beenden und die Sitzungen schließen?", n=len(running)),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+        for view in running:
+            view.terminate(force=True)
+        launcher.set_embedded_opener(None)
         self.wg_indicator.stop()
         self._tunnel_timer.stop()
         self.remote.stop_all()  # die Tunnel des Fernzugriffs enden mit dem Programm
@@ -1980,6 +2052,8 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             percent = theme.apply_scale(app, percent)
+        for view in self._terminal_views():
+            view.set_scale(percent)
         if percent != self.cfg.font_scale:
             self.cfg.font_scale = percent
             self._save_no_sync()  # reiner Anzeigezustand: kein Abgleich nötig

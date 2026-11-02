@@ -181,6 +181,8 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QTabBar::tab { background: transparent; color: @muted@; padding: 8px 14px; border: none; border-bottom: 2px solid transparent; }
     QTabBar::tab:selected { color: @text@; border-bottom: 2px solid @accent@; }
     QTabBar::tab:hover:!selected { color: @text@; }
+    QTabWidget#mainTabs::pane { border: none; background: transparent; }
+    QTabWidget#mainTabs QTabBar::tab { padding: 8px 16px; }
 
     /* Werkzeugknöpfe (Dateibrowser) und Fortschrittsbalken */
     QToolButton { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 5px; }
