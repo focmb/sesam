@@ -33,6 +33,17 @@ It is available alongside the other terminals (as the default or per connection,
 - **Requirements:** The Python package `pyte` (on Windows also `pywinpty` for ConPTY). The ready-made packages include both; on Arch `python-pyte` is an optional dependency.
 - **Limits:** Mouse support inside programs (mouse modes) and Sixel graphics are not interpreted.
 
+## Clipboard history
+
+Text you copy in Sesam stays available and can be pasted into several terminal tabs.
+
+- **What is recorded:** Copies in the integrated terminal (Ctrl+Shift+C, right click → Copy) and text from other programs as soon as Sesam is in the foreground. While Sesam is in the background it does not read the clipboard. Password managers mark secret copies; Sesam skips those. Empty text and entries over 1 MB are not recorded; the history holds at most 200 entries or 20 MB (older, unpinned ones drop out first).
+- **Popup in the terminal:** Ctrl+Shift+H (or right click → History …) opens a list with a search field. Enter pastes the entry, Shift+Enter pastes and runs it, Alt+1…9 picks one of the first nine entries directly, Ctrl+Del deletes. Pinned entries come first and so keep their numbers.
+- **“Clipboard …” dialog** (sidebar): preview of long texts too, pin, delete, create your own entries, copy back to the clipboard and **paste into several tabs at once** (tick the tabs, optionally append Enter). Sesam asks first for very long or multi-line text going into several tabs, because a terminal may run it immediately.
+- **Tab menu:** right click a tab → “Paste clipboard into all tabs”.
+- **Clear all:** in the dialog under “Clear all …”. “Clear history” keeps pinned entries, “Clear all” deletes those too and renews the file's key; optionally the system clipboard is cleared as well.
+- **Storage:** The history survives a restart. It lives in `clipboard.json` next to the configuration (readable by the user only), is **encrypted** (AES-GCM, the key is in the keyring) and **never goes through synchronization**. Without a keyring it stays in memory unless you allow unencrypted saving in the dialog. Options: switch the history off entirely, do not save it, clear it on exit (pinned entries stay).
+
 ## Connection errors and changed host keys
 
 Every connection starts in the terminal through a small wrapper (even without a stored password) that runs `ssh` as a subprocess.

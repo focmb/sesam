@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QIcon, QKeySequence, QPainter
+from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QGuiApplication, QIcon, QKeySequence, QPainter
 from PySide6.QtWidgets import (
     QTabBar, QTabWidget, QAbstractItemView, QApplication, QButtonGroup, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QPushButton,
@@ -18,10 +18,12 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme, type_badges
+from ..clipboard_history import History as ClipboardHistory
 from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, remote, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
+from .clipboard_dialog import ClipboardDialog, ClipboardPopup, confirm_paste
 from .connection_dialog import ConnectionDialog, swatch
 from .docker_dialog import DockerConnectDialog
 from .hostkey import HostKeyAsker
@@ -221,6 +223,7 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
         launcher.set_embedded_opener(self._open_embedded)
+        self._init_clipboard()
 
         self.sync = SyncController(self.cfg, lambda: storage.save(self.cfg, self.path), self, resolver=self._ask_sync_conflicts)
         self.sync.status.connect(self._sync_status)
@@ -274,6 +277,7 @@ class MainWindow(QMainWindow):
         self.a_identities = act(tr("Identitäten …"), self.edit_identities)
         self.a_keys = act(tr("Schlüssel …"), self.edit_keys)
         self.a_snippets = act(tr("Snippets …"), self.edit_snippets, "Ctrl+Shift+S")
+        self.a_clipboard = act(tr("Zwischenablage …"), self.open_clipboard)
         self.a_sync = act(tr("Jetzt synchronisieren"), lambda: self.sync.sync(manual=True), "F5")
         self.a_sync_settings = act(tr("Synchronisation …"), self.edit_sync)
         self.a_import = act(tr("Aus ~/.ssh/config importieren"), self.import_ssh_config)
@@ -300,7 +304,7 @@ class MainWindow(QMainWindow):
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
         ("a_connect", "a_quick", "a_files", "a_new", "a_new_group", "a_fav", "a_edit", "a_dup", "a_del"),
-        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_snippets", "a_terms", "a_viewers"),
+        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_snippets", "a_clipboard", "a_terms", "a_viewers"),
     )
 
     def _build_sidebar(self):
@@ -310,7 +314,7 @@ class MainWindow(QMainWindow):
         side.setFixedWidth(self.SIDEBAR_MIN_WIDTH)
         lay = QVBoxLayout(side)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(4)
+        lay.setSpacing(2)  # eng gesetzt: mit jedem Knopf wächst die Mindesthöhe des Fensters (Laptop-Bildschirme mit 768 Pixeln)
         self.side_buttons: dict[str, QPushButton] = {}
         for index, group in enumerate(self.SIDEBAR_GROUPS):
             if index:
@@ -398,7 +402,7 @@ class MainWindow(QMainWindow):
     # --- Icons ---
     ACTION_ICONS = (
         ("a_connect", "connect"), ("a_quick", "search"), ("a_fav", "star"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
-        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_snippets", "snippet"), ("a_terms", "sliders"), ("a_viewers", "monitor"),
+        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_snippets", "snippet"), ("a_clipboard", "clipboard"), ("a_terms", "sliders"), ("a_viewers", "monitor"),
     )
 
     def _refresh_icons(self):
@@ -577,6 +581,8 @@ class MainWindow(QMainWindow):
             raise launcher.LaunchError(tr("Das Paket „pyte“ ist nicht installiert (pip install pyte)."))
         view = TerminalView(title, theme.scale(), theme.is_dark())
         view.closed.connect(lambda _code, v=view: self._terminal_closed(v))
+        view.copied.connect(lambda text, v=view: self._terminal_copied(text, v.title))
+        view.history_requested.connect(lambda v=view: self.show_clipboard_popup(v))
         index = self.tabs.addTab(view, title)
         self.tabs.setTabToolTip(index, title)
         self.tabs.setCurrentIndex(index)
@@ -606,6 +612,105 @@ class MainWindow(QMainWindow):
         else:
             self._terminal_closed(view)
 
+    # --- Zwischenablage-Verlauf ---
+    def _init_clipboard(self):
+        """Verlauf laden und die Zwischenablage beobachten – nur solange Sesam im Vordergrund ist."""
+        self.clipboard = ClipboardHistory(Path(self.path).parent / "clipboard.json")
+        self.clipboard.load()
+        self._internal_copy = ""  # zuletzt im Terminal kopierter Text: die Systemmeldung dazu nicht noch einmal aufnehmen
+        self._clip_save = QTimer(self)
+        self._clip_save.setSingleShot(True)
+        self._clip_save.setInterval(800)  # Änderungen bündeln, große Texte nicht bei jedem Tastendruck verschlüsseln
+        self._clip_save.timeout.connect(self.clipboard.save)
+        self.clipboard.listeners.append(self._clip_save.start)
+        QGuiApplication.clipboard().dataChanged.connect(self._system_clipboard_changed)
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._app_state_changed)
+        self.tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabs.tabBar().customContextMenuRequested.connect(self._tab_menu)
+        if self.clipboard.notice and self.clipboard.locked:
+            QTimer.singleShot(0, lambda: self.toasts.notify(self.clipboard.notice, 8000))
+
+    def _system_clipboard_changed(self):
+        if QGuiApplication.applicationState() == Qt.ApplicationState.ApplicationActive:  # was in anderen Programmen kopiert wird, bleibt unberührt
+            self._read_system_clipboard()
+
+    def _app_state_changed(self, state):
+        if state == Qt.ApplicationState.ApplicationActive:  # Kopien aus anderen Programmen, die Sesam im Hintergrund nicht sehen durfte
+            self._read_system_clipboard()
+
+    PRIVATE_CLIPBOARD_FORMATS = ("x-kde-passwordManagerHint", "ExcludeClipboardContentFromMonitorProcessing", "org.nspasteboard.ConcealedType")
+
+    def _read_system_clipboard(self):
+        if not self.clipboard.settings.enabled:
+            return
+        mime = QGuiApplication.clipboard().mimeData()
+        if mime is None or not mime.hasText() or any(mime.hasFormat(f) for f in self.PRIVATE_CLIPBOARD_FORMATS):
+            return  # Passwortmanager markieren geheime Kopien
+        text = mime.text()
+        if text and text == self._internal_copy:
+            return
+        self._internal_copy = ""
+        self._record_clip(text, "")
+
+    def _terminal_copied(self, text: str, title: str):
+        self._internal_copy = text
+        self._record_clip(text, title)
+
+    def _record_clip(self, text: str, source: str):
+        if self.clipboard.too_large(text):
+            self.toasts.notify(tr("Der kopierte Text ist zu groß für den Verlauf."), 4000)
+            return
+        self.clipboard.add(text, source)
+
+    def _terminal_sessions(self) -> list[tuple[str, TerminalView]]:
+        return [(v.title, v) for v in self._terminal_views() if v.poll() is None]
+
+    def _paste_into(self, views: list, text: str, enter: bool = False):
+        for view in views:
+            view.paste_text(text, enter)
+
+    def show_clipboard_popup(self, view: TerminalView):
+        popup = ClipboardPopup(self.clipboard, self)
+        popup.chosen.connect(lambda entry_id, enter, v=view: self._paste_entry(v, entry_id, enter))
+        popup.move(view.mapToGlobal(view.rect().center()) - popup.rect().center())
+        popup.show()
+        popup.search.setFocus()
+        self._clip_popup = popup
+
+    def _paste_entry(self, view: TerminalView, entry_id: str, enter: bool):
+        entry = self.clipboard.get(entry_id)
+        if entry is None or self.tabs.indexOf(view) < 0:
+            return
+        view.paste_text(entry.text, enter)
+        view.setFocus()
+
+    def open_clipboard(self):
+        current = self.tabs.currentWidget()
+        ClipboardDialog(self.clipboard, self._terminal_sessions, self._paste_into,
+                        current if isinstance(current, TerminalView) else None, self).exec()
+
+    def _tab_menu(self, pos):
+        menu = QMenu(self)
+        index = self.tabs.tabBar().tabAt(pos)
+        view = self.tabs.widget(index) if index > 0 else None
+        if isinstance(view, TerminalView):
+            menu.addAction(tr("Sitzung beenden")).triggered.connect(lambda: self._close_terminal_tab(self.tabs.indexOf(view)))
+            menu.addSeparator()
+        sessions = self._terminal_sessions()
+        everywhere = menu.addAction(tr("Zwischenablage in alle Reiter einfügen"))
+        everywhere.setEnabled(bool(sessions) and bool(QGuiApplication.clipboard().text()))
+        everywhere.triggered.connect(self._paste_clipboard_everywhere)
+        menu.addAction(tr("Zwischenablage-Verlauf …")).triggered.connect(self.open_clipboard)
+        menu.exec(self.tabs.tabBar().mapToGlobal(pos))
+
+    def _paste_clipboard_everywhere(self):
+        text = QGuiApplication.clipboard().text()
+        views = [v for _, v in self._terminal_sessions()]
+        if text and views and confirm_paste(self, text, len(views)):
+            self._paste_into(views, text)
+
     def _tab_changed(self, index: int):
         widget = self.tabs.widget(index)
         if index > 0 and widget is not None:
@@ -625,6 +730,10 @@ class MainWindow(QMainWindow):
         for view in running:
             view.terminate(force=True)
         launcher.set_embedded_opener(None)
+        if self.clipboard.settings.clear_on_exit:
+            self.clipboard.clear(include_pinned=False)
+        self._clip_save.stop()  # nach dem Leeren: der Zeitgeber hat durch die Änderung neu gestartet
+        self.clipboard.save()
         self.wg_indicator.stop()
         self._tunnel_timer.stop()
         self.remote.stop_all()  # die Tunnel des Fernzugriffs enden mit dem Programm

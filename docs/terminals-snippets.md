@@ -33,6 +33,17 @@ Er steht neben den anderen Terminals zur Wahl (als Standard oder pro Verbindung,
 - **Voraussetzungen:** Das Python-Paket `pyte` (unter Windows zusätzlich `pywinpty` für ConPTY). Die fertigen Pakete bringen beides mit; bei Arch ist `python-pyte` eine optionale Abhängigkeit.
 - **Grenzen:** Mausunterstützung innerhalb von Programmen (Mausmodi) und Sixel-Grafiken werden nicht ausgewertet.
 
+## Zwischenablage-Verlauf
+
+Text, den du in Sesam kopierst, bleibt abrufbar und lässt sich in mehrere Terminal-Reiter einfügen.
+
+- **Was aufgenommen wird:** Kopien im integrierten Terminal (Strg+Umschalt+C, Rechtsklick → Kopieren) und Text aus anderen Programmen, sobald Sesam im Vordergrund ist. Solange Sesam im Hintergrund liegt, liest es die Zwischenablage nicht mit. Passwortmanager markieren geheime Kopien; die überspringt Sesam. Leerer Text und Einträge über 1 MB werden nicht aufgenommen, der Verlauf hält höchstens 200 Einträge bzw. 20 MB (ältere, nicht angeheftete fallen zuerst heraus).
+- **Popup im Terminal:** Strg+Umschalt+H (oder Rechtsklick → Verlauf …) öffnet eine Liste mit Suchfeld. Enter fügt den Eintrag ein, Umschalt+Enter fügt ein und führt aus, Alt+1…9 wählt einen der ersten neun Einträge direkt, Strg+Entf löscht. Angeheftete Einträge stehen oben und behalten so ihre Nummern.
+- **Dialog „Zwischenablage …“** (Seitenleiste): Vorschau auch langer Texte, Anheften, Löschen, eigene Einträge anlegen, in die Zwischenablage zurückkopieren und **in mehrere Reiter gleichzeitig einfügen** (Reiter ankreuzen, optional Enter anhängen). Bei sehr langem oder mehrzeiligem Text in mehreren Reitern fragt Sesam vorher nach, weil ein Terminal ihn sofort ausführen kann.
+- **Reiter-Menü:** Rechtsklick auf einen Reiter → „Zwischenablage in alle Reiter einfügen“.
+- **Alles leeren:** Im Dialog unter „Alles leeren …“. „Verlauf leeren“ behält das Angeheftete, „Alles leeren“ löscht auch das und erneuert den Schlüssel der Datei; optional wird die Zwischenablage des Systems mitgeleert.
+- **Speicherung:** Der Verlauf übersteht einen Neustart. Er liegt in `clipboard.json` neben der Konfiguration (nur für den Benutzer lesbar), ist **verschlüsselt** (AES-GCM, der Schlüssel liegt im Schlüsselbund) und läuft **nie durch die Synchronisation**. Ohne Schlüsselbund bleibt er im Arbeitsspeicher, außer du erlaubst im Dialog das unverschlüsselte Speichern. Optionen: Verlauf ganz abschalten, nicht speichern, beim Beenden leeren (Angeheftetes bleibt).
+
 ## Verbindungsfehler und geänderte Host-Schlüssel
 
 Jede Verbindung startet im Terminal über einen kleinen Wrapper (auch ohne gespeichertes Passwort), der `ssh` als Unterprozess ausführt.

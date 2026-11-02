@@ -145,9 +145,11 @@ def key_bytes(key: int, text: str, mods, app_cursor: bool) -> bytes | None:
 
 
 class TerminalView(QWidget):
-    """Zeigt eine Sitzung. Der Prozess startet, sobald das Widget sichtbar ist und seine Größe feststeht."""
+    """Zeigt eine Sitzung. Der Prozess startet kurz nach ``start`` mit der dann bekannten Größe."""
 
     closed = Signal(int)  # Prozess beendet (Exit-Code)
+    copied = Signal(str)  # Text wurde ausdrücklich kopiert (Strg+Umschalt+C, Menü)
+    history_requested = Signal()  # Strg+Umschalt+H oder Menü: Zwischenablage-Verlauf öffnen
 
     def __init__(self, title: str, scale: int = 100, dark: bool = True, parent=None):
         super().__init__(parent)
@@ -185,9 +187,11 @@ class TerminalView(QWidget):
         QTimer.singleShot(0, self._maybe_spawn)
 
     def _maybe_spawn(self):
-        if self._pending is None or not self.isVisible():
+        if self._pending is None:
             return
-        self._fit()
+        # Auch Reiter im Hintergrund starten (z. B. ein Snippet auf vielen Hosts); ihre Größe passt resizeEvent an, sobald sie sichtbar werden
+        if self.width() >= 100 and self.height() >= 60:
+            self._fit()
         args, env = self._pending
         self._pending = None
         env = dict(env)
@@ -450,6 +454,9 @@ class TerminalView(QWidget):
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_C or (mods == Mod.ControlModifier and key == Qt.Key.Key_Insert):
             self.copy()
             return
+        if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_H:
+            self.history_requested.emit()
+            return
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_V or (mods == Mod.ShiftModifier and key == Qt.Key.Key_Insert):
             self.paste()
             return
@@ -589,9 +596,16 @@ class TerminalView(QWidget):
         text = self.selected_text()
         if text:
             QGuiApplication.clipboard().setText(text)
+            self.copied.emit(text)
 
     def paste(self):
         self._paste_text(QGuiApplication.clipboard().text())
+
+    def paste_text(self, text: str, enter: bool = False):
+        """Fügt Text ein (bei mehrzeiligem Text im eingeklammerten Einfügemodus); ``enter`` sendet danach Enter."""
+        self._paste_text(text)
+        if text and enter:
+            self._send(b"\r")
 
     def _paste_text(self, text: str):
         if not text:
@@ -615,6 +629,7 @@ class TerminalView(QWidget):
         copy.triggered.connect(self.copy)
         menu.addAction(tr("Einfügen")).triggered.connect(self.paste)
         menu.addAction(tr("Alles auswählen")).triggered.connect(self.select_all)
+        menu.addAction(tr("Verlauf …")).triggered.connect(self.history_requested.emit)
         menu.addSeparator()
         menu.addAction(tr("Verlauf löschen")).triggered.connect(self.clear_scrollback)
         menu.exec(ev.globalPos())
