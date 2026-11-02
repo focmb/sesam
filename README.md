@@ -34,7 +34,7 @@ Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
 - **Snippets:** Gespeicherte Befehle (mit Kategorien) auf einem oder mehreren Hosts gleichzeitig ausführen, optional mit sudo, danach Shell offen lassen, auf eine Taste warten oder das Terminal schließen.
 - **Dateien übertragen (SFTP):** Zweigeteilter Dateibrowser mit Drag & Drop, Fortschritt im Hintergrund, Umbenennen, Löschen und Ordner anlegen, ohne `sftp` oder `scp` auf dem Rechner.
 - **Port-Weiterleitungen (Tunnel):** Lokale (`-L`), Remote- (`-R`) und dynamische SOCKS-Weiterleitungen (`-D`) je Verbindung speichern und per Klick starten und beenden; laufende Tunnel zeigt der Baum an.
-- **Fernzugriff (VNC und RDP):** Den Bildschirm eines Geräts im Viewer deiner Wahl (Remmina, TigerVNC, FreeRDP, mstsc) öffnen, durch einen SSH-Tunnel oder direkt, wenn das Gerät nur VNC oder RDP spricht; das Passwort liegt im Schlüsselbund.
+- **Fernzugriff (VNC und RDP):** Den Bildschirm eines Geräts öffnen, im **eingebauten VNC-Viewer** oder im Viewer deiner Wahl (Remmina, TigerVNC, FreeRDP, mstsc), durch einen SSH-Tunnel oder direkt, wenn das Gerät nur VNC oder RDP spricht; das Passwort liegt im Schlüsselbund. Abzeichen in der Spalte *Typ* zeigen, was eine Verbindung kann (SSH, VNC, RDP).
 - **Docker:** Container eines Hosts im Verbindungsbaum anzeigen, starten, stoppen, neu starten, löschen und per Doppelklick eine Shell im Container öffnen.
 - **Proxmox:** VMs und LXC-Container im Baum, Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
 - **Cisco-Switches:** Ports im Baum mit Zustand, VLAN und Geschwindigkeit; ein- und ausschalten, Beschreibung ändern, Konfiguration speichern.
@@ -136,7 +136,7 @@ Die ausführliche Anleitung steht im Ordner [`docs/`](docs/):
 | [Zugangsdaten und sudo](docs/zugangsdaten.md) | Identitäten, SSH-Schlüssel, sudo, Passwörter |
 | [Terminals und Snippets](docs/terminals-snippets.md) | Terminals konfigurieren, Verbindungsfehler und Host-Schlüssel, Snippets |
 | [Dateien und Tunnel](docs/dateien-tunnel.md) | SFTP-Dateibrowser, Port-Weiterleitungen |
-| [Fernzugriff (VNC und RDP)](docs/fernzugriff.md) | Viewer, Tunnel und Direktverbindung, Passwort |
+| [Fernzugriff (VNC und RDP)](docs/fernzugriff.md) | Eingebauter VNC-Viewer, externe Viewer, Tunnel und Direktverbindung, Passwort |
 | [Docker, Proxmox, Cisco und WireGuard](docs/geraete.md) | Container, Gäste, Switch-Ports, WireGuard-Anzeige |
 | [Synchronisation und Daten](docs/synchronisation.md) | Abgleich über Git, Speicherort der Daten |
 | [Entwicklung: Bauen, Builds und Tests](docs/entwicklung.md) | Programm bauen, automatische Builds, Tests |

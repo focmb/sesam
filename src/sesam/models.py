@@ -37,7 +37,7 @@ def _from_dict(cls, data: dict[str, Any]):
     return cls(**values)
 
 
-COLUMN_KEYS = ("target", "terminal", "tags", "os")  # ausblendbare Spalten der Hauptansicht (der Name bleibt immer sichtbar)
+COLUMN_KEYS = ("type", "target", "terminal", "tags", "os")  # ausblendbare Spalten der Hauptansicht (der Name bleibt immer sichtbar)
 DEFAULT_HIDDEN_COLUMNS = ("os",)
 FONT_SCALE_MIN, FONT_SCALE_MAX = 70, 200  # erlaubter Bereich der Schriftgröße in Prozent
 

@@ -206,11 +206,11 @@ class ColumnTests(GuiTestCase):
         item = w._find_item(w.cfg.connections[0].id)
         self.assertEqual(item.text(4), "Debian GNU/Linux 12 (bookworm)")
 
-    def test_os_column_sits_behind_the_target(self):
+    def test_os_column_sits_behind_the_target_and_the_type_behind_the_name(self):
         w = self._window()
         self.addCleanup(w.close)
         header = w.tree.header()
-        self.assertEqual([header.logicalIndex(v) for v in range(5)], [0, 1, 4, 2, 3])
+        self.assertEqual([header.logicalIndex(v) for v in range(6)], [0, 5, 1, 4, 2, 3])
 
     def test_hide_terminal_show_os_and_remember(self):
         w = self._window()
@@ -241,8 +241,8 @@ class ColumnTests(GuiTestCase):
         w = self._window()
         self.addCleanup(w.close)
         actions = {a.text(): a for a in open_menu(lambda: w._header_menu(QPoint(5, 5)))}
-        self.assertEqual(list(actions), ["Ziel", "Terminal", "Tags", "Betriebssystem"])  # der Name fehlt: er bleibt immer sichtbar
-        self.assertEqual([a.isChecked() for a in actions.values()], [True, True, True, False])
+        self.assertEqual(list(actions), ["Typ", "Ziel", "Terminal", "Tags", "Betriebssystem"])  # der Name fehlt: er bleibt immer sichtbar
+        self.assertEqual([a.isChecked() for a in actions.values()], [True, True, True, True, False])
         actions["Betriebssystem"].toggle()
         actions["Tags"].toggle()
         self.assertEqual(w.cfg.hidden_columns, ["tags"])

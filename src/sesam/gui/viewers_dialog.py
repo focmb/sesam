@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from .. import launcher
 from ..i18n import tr
 from ..models import Config, Viewer
-from ..viewers import template_viewers
+from ..viewers import is_builtin, template_viewers
 
 HELP = (
     "<b>Platzhalter:</b><br>"
@@ -83,8 +83,13 @@ class ViewersDialog(QDialog):
         help_label = QLabel(tr(HELP))
         help_label.setWordWrap(True)
         help_label.setTextFormat(Qt.TextFormat.RichText)
+        self.builtin_note = QLabel(tr("Der eingebaute Viewer braucht keine Einstellungen: Sesam zeigt den Bildschirm in einem eigenen Fenster. Das Passwort bleibt im Programm."))
+        self.builtin_note.setWordWrap(True)
+        self.builtin_note.hide()
+        self.remove_button = remove
         right = QVBoxLayout()
         right.addLayout(form)
+        right.addWidget(self.builtin_note)
         right.addWidget(help_label)
         right.addStretch(1)
 
@@ -140,9 +145,12 @@ class ViewersDialog(QDialog):
         shown = self._shown()
         self._current = shown[row] if 0 <= row < len(shown) else None
         widgets = (self.name, self.command, self.platform)
+        editable = self._current is not None and not is_builtin(self._current)  # der eingebaute Viewer hat nichts einzustellen
         for w in widgets:
-            w.setEnabled(self._current is not None)
+            w.setEnabled(editable)
             w.blockSignals(True)
+        self.builtin_note.setVisible(self._current is not None and not editable)
+        self.remove_button.setEnabled(editable)
         v = self._current or Viewer("", "")
         self.name.setText(v.name)
         self.command.setText(v.command)
@@ -185,6 +193,8 @@ class ViewersDialog(QDialog):
         if row < 0 or row >= len(shown):
             return
         removed = shown[row]
+        if is_builtin(removed):
+            return
         self.viewers.remove(removed)
         if removed.id == self.default_ids.get(self.protocol):
             rest = self._shown()

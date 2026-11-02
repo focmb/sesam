@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import launcher, passwords, runtime, tunnels
+from . import launcher, passwords, rfb, runtime, tunnels, viewers
 from .i18n import tr
 from .models import REMOTE_DEFAULT_PORTS, Config, Connection, Forward, Viewer
 from .terminals import current_platform
@@ -95,6 +95,13 @@ def title(conn: Connection) -> str:
     return conn.name or conn.host
 
 
+def kinds(conn: Connection) -> list[str]:
+    """Arten der Verbindung für die Anzeige: SSH, SSH mit VNC oder RDP, bei Direktzugriff nur VNC oder RDP."""
+    if conn.remote in ("vnc", "rdp") and conn.remote_mode == "direct":
+        return [label(conn.remote)]
+    return ["SSH"] + ([label(conn.remote)] if conn.remote in ("vnc", "rdp") else [])
+
+
 # ---------------------------------------------------------------- Viewer wählen und Befehl bauen
 
 def resolve_viewer(cfg: Config, conn: Connection) -> Viewer:
@@ -108,6 +115,39 @@ def resolve_viewer(cfg: Config, conn: Connection) -> Viewer:
     if viewer is None:
         raise launcher.LaunchError(tr("Es ist kein {proto}-Viewer konfiguriert. Bitte unter „Viewer“ einen anlegen.", proto=label(protocol)))
     return viewer
+
+
+def viewer_available(viewer: Viewer) -> bool:
+    """Ist das Programm des Viewers vorhanden? (Der eingebaute Viewer ist es immer; leere Befehle meldet ``viewer_command``.)"""
+    if viewers.is_builtin(viewer):
+        return True
+    tokens = launcher.split_command(viewer.command)
+    return not tokens or shutil.which(tokens[0]) is not None
+
+
+def ensure_viewer(cfg: Config, protocol: str, viewer: Viewer, allow_builtin: bool) -> tuple[Viewer, list["Event"]]:
+    """Fehlt das Programm des gewählten Viewers, nimmt Sesam für diesen Start den ersten gefundenen Viewer des Protokolls
+    (bei VNC zuletzt den eingebauten) und weist auf das fehlende Paket hin. Die Einstellung bleibt unverändert."""
+    if viewer_available(viewer) and not (viewers.is_builtin(viewer) and not allow_builtin):
+        return viewer, []
+    tokens = launcher.split_command(viewer.command)
+    wanted = tokens[0] if tokens else viewer.name
+    candidates = [v for v in cfg.viewers if v is not viewer and v.protocol == protocol and v.platform in ("all", current_platform())]
+    if protocol == "vnc" and allow_builtin and not any(viewers.is_builtin(v) for v in candidates):
+        candidates.append(viewers.builtin_viewer())
+    for other in candidates:
+        if viewers.is_builtin(other) and not allow_builtin:
+            continue
+        if viewer_available(other):
+            note = tr("{proto}-Viewer „{wanted}“ wurde nicht gefunden. Stattdessen wird „{used}“ verwendet.", proto=label(protocol), wanted=viewer.name, used=other.name)
+            package = viewers.package_for(wanted)
+            if package:
+                note += " " + tr("Zum Installieren: Paket „{package}“.", package=package)
+            return other, [(note, False)]
+    hints = viewers.package_hints(protocol)
+    if hints:
+        raise launcher.LaunchError(tr("Kein {proto}-Viewer gefunden. Bitte eines dieser Pakete installieren: {packages}.", proto=label(protocol), packages=", ".join(hints)))
+    return viewer, []  # der Fehler „Programm nicht gefunden“ entsteht beim Start
 
 
 def uses_profile(viewer: Viewer) -> bool:
@@ -169,16 +209,7 @@ def check_target(conn: Connection, host: str) -> None:
 _VNC_DES_KEY = bytes([0xE8, 0x4A, 0xD6, 0x60, 0xC4, 0x72, 0x1A, 0xE0])  # festes Schlüssel von vncpasswd (bitweise gespiegelt)
 
 
-def _des(key: bytes, mode):
-    from cryptography.hazmat.primitives.ciphers import Cipher
-
-    try:  # ab cryptography 43 liegt TripleDES unter „decrepit“
-        from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
-    except ImportError:
-        from cryptography.hazmat.primitives.ciphers.algorithms import TripleDES
-    if len(key) == 8:
-        key *= 3  # drei gleiche Teilschlüssel = einfaches DES, ohne Warnung zu 8-Byte-Schlüsseln
-    return Cipher(TripleDES(key), mode)
+_des = rfb.des_cipher  # gemeinsame DES-Hilfe (auch für die Anmeldung des eingebauten Viewers)
 
 
 def obfuscate_password(password: str) -> bytes:
@@ -282,6 +313,7 @@ class Session:
     proc: subprocess.Popen | None = None
     tmpdir: str | None = None
     password_file: str | None = None
+    window: object | None = None  # eingebauter Viewer: sein Fenster (``is_open()``, ``end()``)
 
 
 Event = tuple[str, bool]  # (Text, Fehler?)
@@ -293,6 +325,7 @@ class Manager:
     def __init__(self, tunnel_manager: tunnels.Manager):
         self.tunnels = tunnel_manager
         self.sessions: dict[str, Session] = {}
+        self.open_builtin = None  # von der Oberfläche gesetzt: ``(conn, host, port, password, direct) -> Fenster`` des eingebauten Viewers
 
     def is_open(self, conn_id: str) -> bool:
         s = self.sessions.get(conn_id)
@@ -308,11 +341,11 @@ class Manager:
         proto = label(conn.remote)
         if self.is_open(conn.id):
             return [(tr("{proto} zu „{name}“ ist bereits geöffnet.", proto=proto, name=title(conn)), False)]
-        viewer = resolve_viewer(cfg, conn)
+        viewer, notes = ensure_viewer(cfg, conn.remote, resolve_viewer(cfg, conn), self.open_builtin is not None)
         if conn.remote_mode == "direct":
             check_target(conn, conn.host)
             sess = Session(conn.id, "direct", viewer, protocol=conn.remote)
-            events = self._launch(cfg, conn, sess)
+            events = notes + self._launch(cfg, conn, sess)
             self.sessions[conn.id] = sess
             return events
         port = free_port()
@@ -321,7 +354,7 @@ class Manager:
         if not start_tunnel(conn, forward):
             return []
         self.sessions[conn.id] = sess
-        return [(tr("{proto}-Tunnel wird gestartet: {name}", proto=proto, name=title(conn)), False)]
+        return notes + [(tr("{proto}-Tunnel wird gestartet: {name}", proto=proto, name=title(conn)), False)]
 
     def _launch(self, cfg: Config, conn: Connection, sess: Session) -> list[Event]:
         events: list[Event] = []
@@ -334,6 +367,13 @@ class Manager:
             except passwords.PasswordError as exc:
                 events.append((tr("{proto}-Passwort nicht gelesen: {exc}", proto=proto, exc=exc), True))
         viewer = sess.viewer
+        if viewers.is_builtin(viewer):  # eingebauter Viewer: das Passwort bleibt im Programm, es gibt weder Datei noch Prozess
+            if self.open_builtin is None or sess.protocol != "vnc":
+                raise launcher.LaunchError(tr("Der eingebaute Viewer ist hier nicht verfügbar."))
+            sess.window = self.open_builtin(conn, host, port, password, sess.mode == "direct")
+            sess.state = VIEWING
+            sess.viewer_started = time.monotonic()
+            return events
         rdp = sess.protocol == "rdp"
         profile = password_file = rdp_file = None
         stdin_password = password if (rdp and password and uses_stdin_password(viewer)) else None
@@ -420,6 +460,10 @@ class Manager:
                     events.append((tr("{proto}-Tunnel zu „{name}“ wurde beendet: {error}", proto=label(sess.protocol), name=name, error=tunnel.error), True))
                 self._close(conn_id)
                 continue
+            if sess.state == VIEWING and sess.window is not None:
+                if not sess.window.is_open():  # Fenster geschlossen: Sitzung und Tunnel enden
+                    self._close(conn_id)
+                continue
             if sess.state == VIEWING and sess.proc is not None:
                 code = sess.proc.poll()
                 if code is None:
@@ -446,6 +490,11 @@ class Manager:
         if sess is None:
             return
         sess.state = CLOSED
+        if sess.window is not None:
+            try:
+                sess.window.end()
+            finally:
+                sess.window = None
         if terminate and sess.proc is not None and sess.proc.poll() is None:
             sess.proc.terminate()
         if sess.forward is not None:

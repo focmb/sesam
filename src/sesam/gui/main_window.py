@@ -17,7 +17,7 @@ from .. import __version__
 from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
-from . import safe, style, theme
+from . import safe, style, theme, type_badges
 from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, remote, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
@@ -47,6 +47,21 @@ OPEN_ROLE = ID_ROLE + 4  # Verbindung ist gerade in einem Terminal offen (grüne
 OPEN_COLOR = "#2ecc71"
 FAV_ROLE = ID_ROLE + 3  #„head“ beim Favoriten-Kopf, „entry“ bei einer Verbindung in diesem Abschnitt (Verweis, nicht die Verbindung selbst)
 GOLD = "#e8a317"  # Stern der Favoriten
+
+
+TYPE_FILTERS = ("ssh", "vnc", "rdp")
+
+
+def _split_type_filter(needle: str) -> tuple[set[str], str]:
+    """Trennt „typ:vnc“ (auch mehrfach) vom übrigen Suchtext; ohne gültigen Filter bleibt der Text unverändert."""
+    wanted: set[str] = set()
+    rest: list[str] = []
+    for token in needle.split():
+        if token.startswith("typ:") and token[4:] in TYPE_FILTERS:
+            wanted.add(token[4:])
+        else:
+            rest.append(token)
+    return (wanted, " ".join(rest)) if wanted else (set(), needle)
 
 
 def _has_children(conn: Connection) -> bool:
@@ -115,6 +130,7 @@ class MainWindow(QMainWindow):
         self._fav_collapsed = False  # Favoriten-Abschnitt zugeklappt (nur zur Laufzeit)
         self.tunnels = tunnels.Manager()  # laufende Port-Weiterleitungen (SSH-Tunnel)
         self.remote = remote.Manager(self.tunnels)  # offene Sitzungen des Fernzugriffs (VNC/RDP; Viewer, bei Bedarf mit kurzlebigem Tunnel)
+        self.remote.open_builtin = self._open_builtin_viewer
         self._tunnel_up: set[tuple[str, str]] = set()  # Tunnel, deren „aktiv“ schon gemeldet wurde
         self._tunnel_sig: tuple = ()
         self._tunnel_timer = QTimer(self)
@@ -143,11 +159,12 @@ class MainWindow(QMainWindow):
 
         self.search = QLineEdit()
         self.search.setPlaceholderText(tr("Suchen (Name, Host, Benutzer, Gruppe) …"))
+        self.search.setToolTip(tr("Tipp: „typ:vnc“, „typ:rdp“ oder „typ:ssh“ zeigt nur diese Verbindungen."))
         self.search.textChanged.connect(self.refresh)
         self.search.textChanged.connect(self._search_text_changed)
 
         self.tree = ConnectionTree()
-        self.tree.setHeaderLabels([tr("Name"), tr("Ziel"), tr("Terminal"), tr("Tags"), tr("Betriebssystem")])
+        self.tree.setHeaderLabels([tr("Name"), tr("Ziel"), tr("Terminal"), tr("Tags"), tr("Betriebssystem"), tr("Typ")])
         self.tree.setAlternatingRowColors(False)
         self.tree.setIndentation(22)
         self.tree.setUniformRowHeights(True)
@@ -158,6 +175,8 @@ class MainWindow(QMainWindow):
         header.setStretchLastSection(True)
         header.setMinimumSectionSize(60)
         header.moveSection(4, 2)  # Betriebssystem steht optisch hinter dem Ziel (logische Spalte bleibt 4)
+        header.moveSection(5, 1)  # der Typ (SSH, VNC, RDP) steht optisch direkt hinter dem Namen (logische Spalte bleibt 5)
+        self.tree.setItemDelegateForColumn(5, type_badges.TypeBadgeDelegate(self.tree))
         self._apply_column_widths()
         self._apply_column_visibility()
         header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -432,17 +451,19 @@ class MainWindow(QMainWindow):
         return t.name if t else tr("Standard")
 
     def _target(self, conn: Connection) -> str:
+        if conn.remote and conn.remote_mode == "direct":  # Gerät ohne SSH: das Ziel ist der VNC- bzw. RDP-Anschluss
+            return f"{conn.remote}://{conn.host}:{remote.port_of(conn)}"
         conn, _ = launcher.resolve(self.cfg, conn)
         base = f"{conn.user}@{conn.host}" if conn.user else conn.host
         return f"{base}:{conn.port}" if conn.port != 22 else base
 
-    DEFAULT_WIDTHS = (250, 230, 150, 180, 200)
-    COLUMN_INDEX = {"target": 1, "terminal": 2, "tags": 3, "os": 4}
+    DEFAULT_WIDTHS = (250, 230, 150, 180, 200, 120)
+    COLUMN_INDEX = {"target": 1, "terminal": 2, "tags": 3, "os": 4, "type": 5}
 
     def _apply_column_widths(self):
         widths = list(self.cfg.column_widths)
-        if len(widths) == len(self.DEFAULT_WIDTHS) - 1:  # Konfiguration aus der Zeit vor der Betriebssystem-Spalte
-            widths.append(self.DEFAULT_WIDTHS[-1])
+        if 4 <= len(widths) < len(self.DEFAULT_WIDTHS):  # Konfiguration aus der Zeit vor der Betriebssystem- bzw. Typ-Spalte
+            widths += self.DEFAULT_WIDTHS[len(widths):]
         if len(widths) != len(self.DEFAULT_WIDTHS) or any(w < 30 for w in widths):
             widths = list(self.DEFAULT_WIDTHS)
         header = self.tree.header()
@@ -471,7 +492,7 @@ class MainWindow(QMainWindow):
     def _header_menu(self, pos):
         """Rechtsklick auf die Spaltenköpfe: Spalten ein- und ausblenden."""
         menu = QMenu(self)
-        labels = {"target": tr("Ziel"), "terminal": tr("Terminal"), "tags": tr("Tags"), "os": tr("Betriebssystem")}
+        labels = {"type": tr("Typ"), "target": tr("Ziel"), "terminal": tr("Terminal"), "tags": tr("Tags"), "os": tr("Betriebssystem")}
         for key in COLUMN_KEYS:
             action = menu.addAction(labels[key])
             action.setCheckable(True)
@@ -570,10 +591,11 @@ class MainWindow(QMainWindow):
     def refresh(self, *_):
         self.tunnels.forget_missing(self.cfg)  # gelöschte oder geänderte Weiterleitungen laufen nicht weiter
         needle = self.search.text().strip().lower()
+        wanted, text = _split_type_filter(needle)  # „typ:vnc“ zeigt nur VNC-Verbindungen (SSH, VNC, RDP)
         matches = [
             c
             for c in sorted(self.cfg.connections, key=lambda c: c.name.lower())
-            if not needle or needle in " ".join([c.name, c.host, c.user, c.group, *c.tags]).lower()
+            if (not wanted or wanted <= {k.lower() for k in remote.kinds(c)}) and (not text or text in " ".join([c.name, c.host, c.user, c.group, *c.tags]).lower())
         ]
         if needle:
             visible: set[str] = set()
@@ -632,21 +654,34 @@ class MainWindow(QMainWindow):
 
     def _connection_item(self, conn: Connection, c: dict[str, str], muted, favorite_entry: bool = False) -> QTreeWidgetItem:
         """Zeile einer Verbindung. ``favorite_entry``: Verweis im Favoriten-Abschnitt (ohne Stern, ohne Docker-/Proxmox-Unterelemente)."""
-        item = QTreeWidgetItem([self._display_name(conn, favorite_entry), self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags), conn.os_info])
+        kinds = remote.kinds(conn)
+        item = QTreeWidgetItem([self._display_name(conn, favorite_entry), self._target(conn), self._terminal_name(conn), tag_util.format(conn.tags), conn.os_info, " · ".join(kinds)])
+        item.setData(5, type_badges.KIND_ROLE, kinds)
+        item.setToolTip(5, safe.tip(self._kind_tip(conn)))
         item.setData(0, ID_ROLE, conn.id)
         if favorite_entry:
             item.setData(0, FAV_ROLE, "entry")
         item.setIcon(0, self._server_icon(conn, launcher.is_open(conn.id)))
         item.setData(0, OPEN_ROLE, launcher.is_open(conn.id))
-        for column in (2, 3, 4):
+        for column in (2, 3, 4, 5):
             item.setForeground(column, muted)
         if conn.notes:
             item.setToolTip(0, safe.tip(conn.notes))
         return item
 
+    @staticmethod
+    def _kind_tip(conn: Connection) -> str:
+        if not conn.remote:
+            return tr("SSH-Verbindung")
+        proto, port = remote.label(conn.remote), remote.port_of(conn)
+        if conn.remote_mode == "direct":
+            return tr("{proto} direkt zu Port {port}, ohne SSH (unverschlüsselt)", proto=proto, port=port)
+        return tr("SSH-Verbindung; {proto} über einen SSH-Tunnel zu Port {port}", proto=proto, port=port)
+
     def _server_icon(self, conn: Connection, is_open: bool) -> QIcon:
-        """Server-Symbol der Verbindung; mit grünem Punkt unten rechts, wenn sie in einem Terminal offen ist."""
-        icon = style.icon("server", colors.hex_of(conn.color) or theme.colors()["muted"])
+        """Symbol der Verbindung (Server, bei reinem VNC/RDP-Ziel ein Bildschirm); mit grünem Punkt unten rechts, wenn sie offen ist."""
+        direct = bool(conn.remote) and conn.remote_mode == "direct"
+        icon = style.icon("monitor" if direct else "server", colors.hex_of(conn.color) or theme.colors()["muted"])
         if not is_open:
             return icon
         size = self.tree.iconSize()
@@ -1490,6 +1525,22 @@ class MainWindow(QMainWindow):
         self._touch(conn)
         self._show_remote_events(events)
         self._update_open_markers()
+
+    def _open_builtin_viewer(self, conn: Connection, host: str, port: int, password: str | None, direct: bool):
+        """Öffnet das Fenster des eingebauten VNC-Viewers (vom Fernzugriff-Manager aufgerufen)."""
+        from .vnc_window import VncWindow
+
+        window = VncWindow(remote.title(conn), host, port, password, direct)
+        window.reconnect_requested.connect(lambda cid=conn.id: QTimer.singleShot(0, lambda: self._reconnect_remote(cid)))
+        window.show()
+        return window
+
+    def _reconnect_remote(self, conn_id: str) -> None:
+        """„Neu verbinden“ im eingebauten Viewer: Sitzung (und Tunnel) beenden und neu öffnen."""
+        conn = self.cfg.connection_by_id(conn_id)
+        if conn is not None:
+            self.remote.stop(conn_id)
+            self.open_remote(conn)
 
     def close_remote(self, conn: Connection) -> None:
         self.remote.stop(conn.id)

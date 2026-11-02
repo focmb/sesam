@@ -1,6 +1,7 @@
 """Fernzugriff: Modell, Viewer-Befehl, Passwortübergabe, Sitzungen (direkt und über SSH-Tunnel)."""
 import base64
 import os
+import shutil
 import sys
 import tempfile
 import textwrap
@@ -538,6 +539,165 @@ class SessionTests(unittest.TestCase):
         self.mgr.poll(cfg)
         self.assertFalse(self.mgr.is_open(conn.id))
         self.assertTrue(wait_for(lambda: proc.poll() is not None))
+
+
+class FakeWindow:
+    """Ersatz für das Fenster des eingebauten Viewers."""
+
+    def __init__(self, *args):
+        self.args = args
+        self.open = True
+
+    def is_open(self):
+        return self.open
+
+    def end(self):
+        self.open = False
+
+
+class BuiltinAndFallbackTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.tunnels = tunnels.Manager()
+        self.mgr = remote.Manager(self.tunnels)
+        self.addCleanup(self.tunnels.stop_all)
+        self.addCleanup(self.mgr.stop_all)
+        self.windows = []
+
+    def _opener(self, conn, host, port, password, direct):
+        window = FakeWindow(conn.id, host, port, password, direct)
+        self.windows.append(window)
+        return window
+
+    def _out(self):
+        return Path(self.tmp.name, "out.txt").read_text(encoding="utf-8")
+
+    MISSING = "definitely-not-a-viewer-xyz"
+
+    def test_builtin_viewer_is_in_every_configuration_and_the_default_for_new_ones(self):
+        cfg = storage.load(Path(self.tmp.name) / "none.json")  # neue Konfiguration
+        builtin = [v for v in cfg.viewers if viewers.is_builtin(v)]
+        self.assertEqual(len(builtin), 1)
+        self.assertEqual((builtin[0].id, builtin[0].protocol, builtin[0].platform), (viewers.BUILTIN_ID, "vnc", "all"))
+        self.assertEqual(cfg.default_viewer_id, builtin[0].id)
+
+    def test_existing_configuration_keeps_its_default_viewer(self):
+        path = Path(self.tmp.name) / "c.json"
+        mine = Viewer("Mein Viewer", "meinviewer {host}")
+        storage.save(Config(viewers=[mine], default_viewer_id=mine.id), path)
+        cfg = storage.load(path)
+        self.assertEqual(cfg.default_viewer_id, mine.id)
+        self.assertEqual(sum(1 for v in cfg.viewers if viewers.is_builtin(v)), 1)
+        storage.save(cfg, path)
+        self.assertEqual(sum(1 for v in storage.load(path).viewers if viewers.is_builtin(v)), 1)  # nicht doppelt
+
+    def test_builtin_viewer_gets_the_password_in_process_and_ends_with_its_window(self):
+        self.mgr.open_builtin = self._opener
+        conn = Connection("Gerät", "10.1.2.3", remote="vnc", remote_mode="direct", remote_port=5901, remote_use_password=True)
+        cfg = Config(connections=[conn], viewers=[viewers.builtin_viewer()], default_viewer_id=viewers.BUILTIN_ID)
+        with mock.patch.object(passwords, "get_password", lambda key: "geheim" if key == f"{conn.id}:vnc" else None):
+            self.assertEqual(self.mgr.begin(cfg, conn, None), [])
+        self.assertEqual(self.windows[0].args, (conn.id, "10.1.2.3", 5901, "geheim", True))
+        self.assertTrue(self.mgr.is_open(conn.id))
+        self.assertIsNone(self.mgr.sessions[conn.id].proc)
+        self.assertEqual(self.mgr.poll(cfg), [])
+        self.windows[0].open = False  # Fenster geschlossen
+        self.mgr.poll(cfg)
+        self.assertFalse(self.mgr.is_open(conn.id))
+
+    def test_stop_closes_the_builtin_window(self):
+        self.mgr.open_builtin = self._opener
+        conn = Connection("Gerät", "10.1.2.3", remote="vnc", remote_mode="direct")
+        cfg = Config(connections=[conn], viewers=[viewers.builtin_viewer()], default_viewer_id=viewers.BUILTIN_ID)
+        self.mgr.begin(cfg, conn, None)
+        self.mgr.stop(conn.id)
+        self.assertFalse(self.windows[0].open)
+        self.assertFalse(self.mgr.is_open(conn.id))
+
+    def test_builtin_viewer_through_a_tunnel_uses_the_local_port_and_ends_the_tunnel(self):
+        self.mgr.open_builtin = self._opener
+        conn = Connection("Server", "srv", remote="vnc", remote_mode="tunnel", remote_host="gerät")
+        cfg = Config(connections=[conn], viewers=[viewers.builtin_viewer()], default_viewer_id=viewers.BUILTIN_ID)
+        script = Path(self.tmp.name) / "fake_ssh.py"
+        script.write_text("import sys, time\nsys.stderr.write('debug1: Entering interactive session.\\n'); sys.stderr.flush()\ntime.sleep(60)\n", encoding="utf-8")
+        seen = []
+
+        def start(conn, forward):
+            seen.append(forward)
+            t = tunnels.Tunnel(conn.id, forward, [sys.executable, str(script)], dict(os.environ), ephemeral=True)
+            self.tunnels._tunnels[t.key] = t
+            t.start()
+            return True
+
+        self.mgr.begin(cfg, conn, start)
+        self.assertTrue(wait_for(lambda: (self.mgr.poll(cfg), bool(self.windows))[1]))
+        self.assertEqual(self.windows[0].args[1:], ("127.0.0.1", seen[0].listen_port, None, False))
+        self.windows[0].open = False
+        self.mgr.poll(cfg)
+        self.assertEqual(self.tunnels.state(conn.id, seen[0].id), tunnels.STOPPED)
+
+    def test_builtin_viewer_is_refused_without_a_window_system(self):
+        conn = Connection("Gerät", "10.1.2.3", remote="vnc", remote_mode="direct")
+        cfg = Config(connections=[conn], viewers=[viewers.builtin_viewer()], default_viewer_id=viewers.BUILTIN_ID)
+        with self.assertRaises(launcher.LaunchError):
+            self.mgr.begin(cfg, conn, None)
+        self.assertFalse(self.mgr.is_open(conn.id))
+
+    def test_missing_viewer_falls_back_to_the_next_installed_one(self):
+        good = fake_viewer(self.tmp.name, "open(OUT, 'w', encoding='utf-8', newline='').write(' '.join(sys.argv[1:]))\ntime.sleep(60)\n")
+        broken = Viewer("Fehlend", self.MISSING + " {host}", platform="all")
+        conn = Connection("Gerät", "10.1.2.3", remote="vnc", remote_mode="direct")
+        cfg = Config(connections=[conn], viewers=[broken, good], default_viewer_id=broken.id)
+        events = self.mgr.begin(cfg, conn, None)
+        self.assertEqual(len(events), 1)
+        self.assertFalse(events[0][1])
+        self.assertIn("Fehlend", events[0][0])
+        self.assertIn("fake", events[0][0])
+        self.assertTrue(wait_for(lambda: Path(self.tmp.name, "out.txt").exists() and self._out() == "10.1.2.3 5900"))
+        self.assertEqual(cfg.default_viewer_id, broken.id)  # die Einstellung bleibt unverändert
+
+    def test_fallback_names_the_missing_package(self):
+        good = fake_viewer(self.tmp.name, "time.sleep(60)\n")
+        broken = Viewer("Remmina", "remmina -c {profile}", platform="all", protocol="rdp")
+        good.protocol = "rdp"
+        conn = Connection("PC", "10.1.2.3", remote="rdp", remote_mode="direct")
+        cfg = Config(connections=[conn], viewers=[broken, good], default_rdp_viewer_id=broken.id)
+        real_which = shutil.which
+        with mock.patch.object(viewers, "current_platform", lambda: "linux"), \
+                mock.patch.object(remote.shutil, "which", lambda exe, *a, **k: None if exe == "remmina" else real_which(exe, *a, **k)):
+            events = self.mgr.begin(cfg, conn, None)
+        self.assertIn("remmina", events[0][0])
+        self.assertIn("Paket", events[0][0])
+
+    def test_no_installed_viewer_lists_the_packages(self):
+        broken = Viewer("Remmina", "remmina -c {profile}", platform="all", protocol="rdp")
+        conn = Connection("PC", "10.1.2.3", remote="rdp", remote_mode="direct")
+        cfg = Config(connections=[conn], viewers=[broken], default_rdp_viewer_id=broken.id)
+        with mock.patch.object(viewers, "current_platform", lambda: "linux"), mock.patch.object(remote.shutil, "which", lambda *a, **k: None):
+            with self.assertRaises(launcher.LaunchError) as ctx:
+                self.mgr.begin(cfg, conn, None)
+        self.assertIn("remmina", str(ctx.exception))
+        self.assertIn("freerdp", str(ctx.exception))
+        self.assertFalse(self.mgr.is_open(conn.id))
+
+    def test_vnc_always_falls_back_to_the_builtin_viewer_when_the_window_system_is_there(self):
+        self.mgr.open_builtin = self._opener
+        broken = Viewer("Fehlend", self.MISSING + " {host}", platform="all")  # der eingebaute Viewer steht nicht in der Liste
+        conn = Connection("Gerät", "10.1.2.3", remote="vnc", remote_mode="direct")
+        cfg = Config(connections=[conn], viewers=[broken], default_viewer_id=broken.id)
+        events = self.mgr.begin(cfg, conn, None)
+        self.assertEqual(len(self.windows), 1)
+        self.assertIn("Sesam (eingebaut)", events[0][0])
+
+    def test_empty_command_keeps_its_own_error(self):
+        empty = Viewer("Leer", "", platform="all")
+        good = fake_viewer(self.tmp.name, "time.sleep(60)\n")
+        conn = Connection("Gerät", "10.1.2.3", remote="vnc", remote_mode="direct")
+        cfg = Config(connections=[conn], viewers=[empty, good], default_viewer_id=empty.id)
+        with self.assertRaises(launcher.LaunchError) as ctx:
+            self.mgr.begin(cfg, conn, None)
+        self.assertIn("leer", str(ctx.exception))
 
 
 if __name__ == "__main__":

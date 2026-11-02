@@ -12,7 +12,7 @@ from .i18n import normalize as _normalize_language
 from .i18n import tr
 from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal, Viewer
 from .terminals import default_terminals
-from .viewers import default_viewers
+from .viewers import BUILTIN_COMMAND, BUILTIN_ID, builtin_viewer, default_viewers, is_builtin
 
 
 class ConfigError(Exception):
@@ -64,9 +64,19 @@ def load(path: Path | None = None) -> Config:
 
 def _ensure_viewers(cfg: Config) -> None:
     """Je Protokoll mindestens ein Viewer und ein gültiger Standard (wie bei den Terminals); alte Konfigurationen bekommen so auch RDP-Viewer."""
+    builtin = next((v for v in cfg.viewers if v.id == BUILTIN_ID or is_builtin(v)), None)
     for protocol in ("vnc", "rdp"):
         if not any(v.protocol == protocol for v in cfg.viewers):
+            if protocol == "vnc" and builtin is None:  # neue Konfiguration: der eingebaute Viewer steht vorn und ist der Standard
+                builtin = builtin_viewer()
+                cfg.viewers.append(builtin)
             cfg.viewers.extend(default_viewers(protocol))
+    if builtin is None:  # bestehende Konfiguration: der Standard-Viewer bleibt unverändert
+        cfg.viewers.append(builtin_viewer())
+    else:
+        builtin.id, builtin.command, builtin.protocol, builtin.platform = BUILTIN_ID, BUILTIN_COMMAND, "vnc", "all"
+        builtin.name = tr("Sesam (eingebaut)")
+    for protocol in ("vnc", "rdp"):
         current = cfg.viewer_by_id(cfg.default_viewer_for(protocol))
         if current is None or current.protocol != protocol:
             first = next(v for v in cfg.viewers if v.protocol == protocol)
