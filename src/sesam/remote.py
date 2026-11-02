@@ -217,7 +217,7 @@ def obfuscate_password(password: str) -> bytes:
     from cryptography.hazmat.primitives.ciphers import modes
 
     raw = password.encode("latin-1", "replace")[:8].ljust(8, b"\0")
-    enc = _des(_VNC_DES_KEY, modes.ECB()).encryptor()
+    enc = _des(_VNC_DES_KEY, modes.ECB()).encryptor()  # codeql[py/weak-cryptographic-algorithm] DES/3DES ist durch Remmina-Profil und VNC-Protokoll vorgegeben
     return enc.update(raw) + enc.finalize()
 
 
@@ -260,14 +260,14 @@ def remmina_encrypt(password: str, secret: bytes) -> str:
 
     raw = password.encode("utf-8")
     raw += b"\0" * (8 - len(raw) % 8)  # wie Remmina: immer mindestens ein Nullbyte
-    enc = _des(secret[:24], modes.CBC(secret[24:32])).encryptor()
+    enc = _des(secret[:24], modes.CBC(secret[24:32])).encryptor()  # codeql[py/weak-cryptographic-algorithm] DES/3DES ist durch Remmina-Profil und VNC-Protokoll vorgegeben
     return base64.b64encode(enc.update(raw) + enc.finalize()).decode("ascii")
 
 
 def remmina_decrypt(value: str, secret: bytes) -> str:
     from cryptography.hazmat.primitives.ciphers import modes
 
-    dec = _des(secret[:24], modes.CBC(secret[24:32])).decryptor()
+    dec = _des(secret[:24], modes.CBC(secret[24:32])).decryptor()  # codeql[py/weak-cryptographic-algorithm] DES/3DES ist durch Remmina-Profil und VNC-Protokoll vorgegeben
     return (dec.update(base64.b64decode(value)) + dec.finalize()).rstrip(b"\0").decode("utf-8", "replace")
 
 

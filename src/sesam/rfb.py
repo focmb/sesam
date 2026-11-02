@@ -65,7 +65,7 @@ def vnc_response(password: str, challenge: bytes) -> bytes:
 
     raw = password.encode("latin-1", "replace")[:8].ljust(8, b"\0")
     key = bytes(int(f"{b:08b}"[::-1], 2) for b in raw)
-    enc = des_cipher(key, modes.ECB()).encryptor()
+    enc = des_cipher(key, modes.ECB()).encryptor()  # codeql[py/weak-cryptographic-algorithm] DES/3DES ist durch Remmina-Profil und VNC-Protokoll vorgegeben
     return enc.update(bytes(challenge)) + enc.finalize()
 
 
