@@ -188,6 +188,44 @@ class ConnectionDialog(QDialog):
         self.notes = QPlainTextEdit(self.conn.notes)
         self.notes.setFixedHeight(70)
 
+        self.vnc_mode = QComboBox()
+        self.vnc_mode.addItem(tr("Aus"), "")
+        self.vnc_mode.addItem(tr("Über SSH-Tunnel (Port ist nur auf dem Server erreichbar)"), "tunnel")
+        self.vnc_mode.addItem(tr("Direkt (Gerät spricht nur VNC)"), "direct")
+        self.vnc_mode.setCurrentIndex(max(self.vnc_mode.findData(self.conn.vnc), 0))
+        self.vnc_host = QLineEdit(self.conn.vnc_host)
+        self.vnc_host.setPlaceholderText(tr("localhost (Standard)"))
+        self.vnc_host.setToolTip(tr("Ziel vom Server aus gesehen, z. B. ein Gerät im Netz hinter dem Server."))
+        self.vnc_port = QSpinBox()
+        self.vnc_port.setRange(1, 65535)
+        self.vnc_port.setValue(self.conn.vnc_port or 5900)
+        self.vnc_viewer = QComboBox()
+        self.vnc_viewer.addItem(tr("Standard-Viewer"), "")
+        for v in cfg.viewers:
+            self.vnc_viewer.addItem(v.name, v.id)
+        self.vnc_viewer.setCurrentIndex(max(self.vnc_viewer.findData(self.conn.vnc_viewer_id), 0))
+        self.vnc_password = QLineEdit()
+        self.vnc_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.vnc_password.setPlaceholderText(
+            tr("gespeichert – leer lassen zum Beibehalten") if self.conn.vnc_use_password else tr("optional")
+        )
+        self.vnc_password.setToolTip(
+            tr("Wird im Schlüsselbund des Betriebssystems gespeichert, nicht in der Konfigurationsdatei, und nicht synchronisiert. "
+               "VNC verwendet nur die ersten 8 Zeichen.")
+        )
+        self.vnc_clear_password = QCheckBox(tr("Gespeichertes VNC-Passwort löschen"))
+        self.vnc_clear_password.setVisible(self.conn.vnc_use_password)
+        self.vnc_password_change: str | None = None  # None = unverändert, "" = löschen, sonst neues Passwort
+
+        def _vnc_toggled(*_):
+            mode = self.vnc_mode.currentData()
+            for w in (self.vnc_port, self.vnc_viewer, self.vnc_password, self.vnc_clear_password):
+                w.setEnabled(bool(mode))
+            self.vnc_host.setEnabled(mode == "tunnel")
+
+        self.vnc_mode.currentIndexChanged.connect(_vnc_toggled)
+        _vnc_toggled()
+
         def make_form() -> QFormLayout:
             f = QFormLayout()
             f.setVerticalSpacing(8)
@@ -233,11 +271,20 @@ class ConnectionDialog(QDialog):
         tree.addRow(tr("Benutzer in VMs"), self.proxmox_vm_user)
         tree.addRow(tr("Cisco"), self.cisco)
 
+        vnc_form = make_form()
+        vnc_form.addRow(tr("VNC"), self.vnc_mode)
+        vnc_form.addRow(tr("Ziel vom Server aus"), self.vnc_host)
+        vnc_form.addRow(tr("VNC-Port"), self.vnc_port)
+        vnc_form.addRow(tr("Viewer"), self.vnc_viewer)
+        vnc_form.addRow(tr("VNC-Passwort"), self.vnc_password)
+        vnc_form.addRow("", self.vnc_clear_password)
+
         self.tabs = QTabWidget()
         self.tabs.addTab(make_page(general), tr("Allgemein"))
         self.tabs.addTab(make_page(access), tr("Zugang"))
         self.tabs.addTab(make_page(advanced), tr("Erweitert"))
         self.tabs.addTab(make_page(tree), tr("Baum-Erweiterungen"))
+        self.tabs.addTab(make_page(vnc_form), tr("VNC"))
         self.forwards_page = ForwardsPage(self.conn.forwards)
         self.tabs.addTab(self.forwards_page, tr("Weiterleitungen"))
 
@@ -325,6 +372,14 @@ class ConnectionDialog(QDialog):
         c.terminal_id = self.terminal.currentData() or ""
         c.notes = self.notes.toPlainText().strip()
         c.forwards = list(self.forwards_page.forwards)
+        c.vnc = self.vnc_mode.currentData() or ""
+        c.vnc_host = self.vnc_host.text().strip() if c.vnc == "tunnel" else ""
+        c.vnc_port = self.vnc_port.value()
+        c.vnc_viewer_id = self.vnc_viewer.currentData() or ""
+        if self.vnc_password.text():
+            self.vnc_password_change = self.vnc_password.text()
+        elif self.vnc_clear_password.isChecked():
+            self.vnc_password_change = ""
         if self.password.text():
             self.password_change = self.password.text()
         elif self.clear_password.isChecked():

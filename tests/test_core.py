@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from sesam import launcher, storage
-from sesam.models import Config, Connection, Terminal
+from sesam.models import Config, Connection, Terminal, Viewer
 from sesam.ssh_config import parse_ssh_config
 
 
@@ -51,7 +51,9 @@ class StorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "sub" / "config.json"
             t = Terminal("T", "xterm -e {ssh_args}")
-            cfg = Config(terminals=[t], connections=[Connection("n", "h", group="g")], default_terminal_id=t.id)
+            v = Viewer("V", "viewer {host}::{port}")
+            cfg = Config(terminals=[t], connections=[Connection("n", "h", group="g", vnc="direct")], default_terminal_id=t.id,
+                         viewers=[v], default_viewer_id=v.id)
             storage.save(cfg, p)
             loaded = storage.load(p)
             self.assertEqual(loaded, cfg)

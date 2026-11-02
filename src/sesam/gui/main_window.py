@@ -18,7 +18,7 @@ from .. import i18n
 from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme
-from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, tunnels, wireguard
+from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, storage, tunnels, vnc, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -37,6 +37,7 @@ from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
 from .terminals_dialog import TerminalsDialog
 from .toast import ToastHost
+from .viewers_dialog import ViewersDialog
 from .wireguard_indicator import WireGuardIndicator
 
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
@@ -113,6 +114,7 @@ class MainWindow(QMainWindow):
         self._sftp_windows: list[SftpWindow] = []  # offene Dateibrowser (SFTP)
         self._fav_collapsed = False  # Favoriten-Abschnitt zugeklappt (nur zur Laufzeit)
         self.tunnels = tunnels.Manager()  # laufende Port-Weiterleitungen (SSH-Tunnel)
+        self.vnc = vnc.Manager(self.tunnels)  # offene VNC-Sitzungen (Viewer, bei Bedarf mit kurzlebigem Tunnel)
         self._tunnel_up: set[tuple[str, str]] = set()  # Tunnel, deren „aktiv“ schon gemeldet wurde
         self._tunnel_sig: tuple = ()
         self._tunnel_timer = QTimer(self)
@@ -236,6 +238,7 @@ class MainWindow(QMainWindow):
         self.a_dup = act(tr("Duplizieren"), self.duplicate_selected, "Ctrl+D")
         self.a_del = act(tr("Löschen"), self.delete_selected, "Del")
         self.a_terms = act(tr("Terminals …"), self.edit_terminals)
+        self.a_viewers = act(tr("VNC-Viewer …"), self.edit_viewers)
         self.a_identities = act(tr("Identitäten …"), self.edit_identities)
         self.a_keys = act(tr("Schlüssel …"), self.edit_keys)
         self.a_snippets = act(tr("Snippets …"), self.edit_snippets, "Ctrl+Shift+S")
@@ -265,7 +268,7 @@ class MainWindow(QMainWindow):
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
         ("a_connect", "a_quick", "a_files", "a_new", "a_new_group", "a_fav", "a_edit", "a_dup", "a_del"),
-        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_snippets", "a_terms"),
+        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_snippets", "a_terms", "a_viewers"),
     )
 
     def _build_sidebar(self):
@@ -363,7 +366,7 @@ class MainWindow(QMainWindow):
     # --- Icons ---
     ACTION_ICONS = (
         ("a_connect", "connect"), ("a_quick", "search"), ("a_fav", "star"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
-        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_snippets", "snippet"), ("a_terms", "sliders"),
+        ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_snippets", "snippet"), ("a_terms", "sliders"), ("a_viewers", "monitor"),
     )
 
     def _refresh_icons(self):
@@ -531,6 +534,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.wg_indicator.stop()
         self._tunnel_timer.stop()
+        self.vnc.stop_all()  # VNC-Viewer und ihre Tunnel enden mit dem Programm
         self.tunnels.stop_all()  # Tunnel gehören zu dieser Sitzung und enden mit ihr
         self._flush_window_size()
         for window in list(self._sftp_windows):
@@ -667,7 +671,7 @@ class MainWindow(QMainWindow):
             cid = item.data(0, ID_ROLE)
             if not cid or item.data(0, CONTAINER_ROLE):
                 continue
-            state = launcher.is_open(cid)
+            state = launcher.is_open(cid) or self.vnc.is_open(cid)
             if bool(item.data(0, OPEN_ROLE)) == state:
                 continue
             conn = self.cfg.connection_by_id(cid)
@@ -773,7 +777,10 @@ class MainWindow(QMainWindow):
             for t in self.cfg.terminals:
                 a = sub.addAction(t.name)
                 a.triggered.connect(lambda _=False, term=t: self.connect_selected(term))
+            if conn.vnc == "direct":
+                menu.addAction(tr("Per SSH verbinden")).triggered.connect(lambda: self._open_connection(conn))
             menu.addAction(self.a_files)
+            self._vnc_menu(menu, conn)
             if self.cfg.favorites:
                 menu.addAction(tr("Aus Favoriten entfernen") if conn.favorite else tr("Zu Favoriten hinzufügen")).triggered.connect(
                     lambda: self.toggle_favorite([conn]))
@@ -1421,7 +1428,7 @@ class MainWindow(QMainWindow):
         self.tunnels.stop_connection(conn.id)
         self._poll_tunnels()
 
-    def start_tunnel(self, conn: Connection, forward) -> bool:
+    def start_tunnel(self, conn: Connection, forward, ephemeral: bool = False) -> bool:
         """Startet die Weiterleitung. Unbekannte Host-Schlüssel werden vorher bestätigt (ein Tunnel hat kein Terminal für die Rückfrage)."""
         if self.tunnels.state(conn.id, forward.id) in (tunnels.STARTING, tunnels.RUNNING):
             return True
@@ -1448,17 +1455,57 @@ class MainWindow(QMainWindow):
                 if box.clickedButton() is not yes:
                     return False
                 tunnels.trust(key)
-            self.tunnels.start(eff, forward, password)
+            self.tunnels.start(eff, forward, password, **({"ephemeral": True} if ephemeral else {}))
         except (launcher.LaunchError, passwords.PasswordError) as exc:
             QMessageBox.critical(self, tr("Tunnel konnte nicht gestartet werden"), str(exc))
             return False
         self._touch(conn)
-        self.toasts.notify(tr("Tunnel wird gestartet: {label}", label=tunnels.label(forward)), 4000)
+        if not ephemeral:
+            self.toasts.notify(tr("Tunnel wird gestartet: {label}", label=tunnels.label(forward)), 4000)
         self._poll_tunnels()
         return True
 
+    # --- VNC ---
+    def _vnc_menu(self, menu: QMenu, conn: Connection) -> None:
+        if not conn.vnc:
+            return
+        if self.vnc.is_open(conn.id):
+            menu.addAction(tr("VNC beenden")).triggered.connect(lambda: self.close_vnc(conn))
+        else:
+            menu.addAction(tr("VNC öffnen")).triggered.connect(lambda: self.open_vnc(conn))
+
+    def open_vnc(self, conn: Connection | None = None) -> None:
+        conn = conn or self._selected()
+        if conn is None:
+            return
+        if not conn.vnc:
+            self.toasts.notify(tr("Für „{name}“ ist VNC nicht eingeschaltet (Verbindung bearbeiten → VNC).", name=conn.name or conn.host), 6000)
+            return
+        try:
+            events = self.vnc.begin(self.cfg, conn, lambda c, f: self.start_tunnel(c, f, ephemeral=True))
+        except launcher.LaunchError as exc:
+            QMessageBox.critical(self, tr("VNC konnte nicht geöffnet werden"), str(exc))
+            return
+        self._touch(conn)
+        self._show_vnc_events(events)
+        self._update_open_markers()
+
+    def close_vnc(self, conn: Connection) -> None:
+        self.vnc.stop(conn.id)
+        self._update_open_markers()
+
+    def _show_vnc_events(self, events: list[tuple[str, bool]]) -> None:
+        for text, error in events:
+            self.toasts.notify(text, 0 if error else 4000, error=error)
+
+    def _poll_vnc(self) -> None:
+        if self.vnc.sessions:
+            self._show_vnc_events(self.vnc.poll(self.cfg))
+            self._update_open_markers()
+
     def _poll_tunnels(self) -> None:
         """Meldet beendete und aktive Tunnel und aktualisiert die Anzeige im Baum (läuft jede Sekunde)."""
+        self._poll_vnc()
         for t in self.tunnels.newly_failed():
             conn = self.cfg.connection_by_id(t.conn_id)
             text = tr("Tunnel „{name}“ wurde beendet: {error}", name=tunnels.label(t.forward), error=t.error)
@@ -1489,6 +1536,9 @@ class MainWindow(QMainWindow):
                 self.connect_container(terminal)
             return
         terminal = terminal if isinstance(terminal, Terminal) else None
+        if conn.vnc == "direct" and not (new or sudo or terminal):  # Gerät, das nur VNC spricht: Doppelklick öffnet VNC
+            self.open_vnc(conn)
+            return
         if not (new or sudo or terminal) and launcher.is_open(conn.id):
             self.toasts.notify(tr("„{name}“ ist bereits geöffnet. Eine weitere Sitzung: Rechtsklick → „Neue Sitzung“.", name=conn.name or conn.host), 6000)
             return
@@ -1584,11 +1634,20 @@ class MainWindow(QMainWindow):
         except passwords.PasswordError as exc:
             QMessageBox.critical(self, tr("Passwort"), str(exc))
 
+    def _apply_vnc_password(self, conn: Connection, change: str | None) -> None:
+        if change is None:
+            return
+        try:
+            vnc.apply_password_change(conn, change)
+        except passwords.PasswordError as exc:
+            QMessageBox.critical(self, tr("VNC-Passwort"), str(exc))
+
     def new_connection(self):
         dlg = ConnectionDialog(self.cfg, parent=self, default_group=self._current_group_context(), save_callback=self._save)
         if dlg.exec():
             conn = dlg.result_connection()
             self._apply_password(conn, dlg.password_change)
+            self._apply_vnc_password(conn, dlg.vnc_password_change)
             self.cfg.connections.append(conn)
             self._save()
             self.refresh()
@@ -1606,6 +1665,7 @@ class MainWindow(QMainWindow):
             dlg.name.selectAll()  # der Name lässt sich sofort überschreiben
         if dlg.exec():
             self._apply_password(conn, dlg.password_change)
+            self._apply_vnc_password(conn, dlg.vnc_password_change)
             self._docker_forget(conn.id)  # Zugang oder Docker-Einstellungen können sich geändert haben
             self._save()
             self.refresh()
@@ -1630,20 +1690,32 @@ class MainWindow(QMainWindow):
             except passwords.PasswordError as exc:
                 clone.use_password = False
                 QMessageBox.warning(self, tr("Passwort nicht kopiert"), str(exc))
+        if conn.vnc_use_password:
+            try:
+                pw = passwords.get_password(vnc.password_key(conn.id))
+                if pw is not None:
+                    passwords.set_password(vnc.password_key(clone.id), pw)
+                else:
+                    clone.vnc_use_password = False
+            except passwords.PasswordError as exc:
+                clone.vnc_use_password = False
+                QMessageBox.warning(self, tr("Passwort nicht kopiert"), str(exc))
         # Die Kopie erst nach dem Bestätigen des Dialogs anlegen; bei „Abbrechen“ entsteht nichts.
         dlg = ConnectionDialog(self.cfg, clone, parent=self, save_callback=self._save)
         dlg.name.selectAll()  # der Name lässt sich sofort überschreiben
         if dlg.exec():
             self._apply_password(clone, dlg.password_change)
+            self._apply_vnc_password(clone, dlg.vnc_password_change)
             self.cfg.connections.append(clone)
             self._save()
             self.refresh()
             self._select_connection(clone.id)
         else:
-            try:
-                passwords.delete_password(clone.id)  # das vorab kopierte Passwort wieder entfernen
-            except passwords.PasswordError:
-                pass
+            for secret in (clone.id, vnc.password_key(clone.id)):
+                try:
+                    passwords.delete_password(secret)  # die vorab kopierten Passwörter wieder entfernen
+                except passwords.PasswordError:
+                    pass
 
     def _select_connection(self, conn_id: str, add: bool = False) -> bool:
         """Wählt die Verbindung im Baum aus (klappt übergeordnete Gruppen auf). Liefert False, wenn sie nicht sichtbar ist."""
@@ -1687,6 +1759,12 @@ class MainWindow(QMainWindow):
             if conn.use_password:
                 try:
                     passwords.delete_password(conn.id)
+                except passwords.PasswordError as exc:
+                    failed.append(f"{conn.name}: {exc}")
+            self.vnc.stop(conn.id)
+            if conn.vnc_use_password:
+                try:
+                    passwords.delete_password(vnc.password_key(conn.id))
                 except passwords.PasswordError as exc:
                     failed.append(f"{conn.name}: {exc}")
             if conn in self.cfg.connections:
@@ -1800,6 +1878,16 @@ class MainWindow(QMainWindow):
                     c.terminal_id = ""
             self._save()
             self.refresh()
+
+    def edit_viewers(self):
+        dlg = ViewersDialog(self.cfg, self)
+        if dlg.exec():
+            self.cfg.viewers, self.cfg.default_viewer_id = dlg.result_values()
+            valid = {v.id for v in self.cfg.viewers}
+            for c in self.cfg.connections:
+                if c.vnc_viewer_id and c.vnc_viewer_id not in valid:
+                    c.vnc_viewer_id = ""
+            self._save()
 
     # --- Synchronisation ---
     def _sync_status(self, text: str, error: bool):

@@ -10,8 +10,9 @@ from pathlib import Path
 
 from .i18n import normalize as _normalize_language
 from .i18n import tr
-from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal
+from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal, Viewer
 from .terminals import default_terminals
+from .viewers import default_viewers
 
 
 class ConfigError(Exception):
@@ -39,7 +40,9 @@ def load(path: Path | None = None) -> Config:
     path = path or config_path()
     if not path.exists():
         terminals = default_terminals()
-        cfg = Config(terminals=terminals, default_terminal_id=terminals[0].id if terminals else "")
+        viewers = default_viewers()
+        cfg = Config(terminals=terminals, default_terminal_id=terminals[0].id if terminals else "",
+                     viewers=viewers, default_viewer_id=viewers[0].id if viewers else "")
         return cfg
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -56,6 +59,10 @@ def load(path: Path | None = None) -> Config:
         cfg.terminals = default_terminals()
     if not cfg.terminal_by_id(cfg.default_terminal_id) and cfg.terminals:
         cfg.default_terminal_id = cfg.terminals[0].id
+    if not cfg.viewers:  # Konfiguration aus einer Version ohne VNC
+        cfg.viewers = default_viewers()
+    if not cfg.viewer_by_id(cfg.default_viewer_id) and cfg.viewers:
+        cfg.default_viewer_id = cfg.viewers[0].id
     return cfg
 
 
@@ -123,6 +130,8 @@ def _from_data(data: dict) -> Config:
         terminals=[Terminal.from_dict(t) for t in data.get("terminals", [])],
         connections=[Connection.from_dict(c) for c in data.get("connections", [])],
         default_terminal_id=data.get("default_terminal_id", ""),
+        viewers=[Viewer.from_dict(v) for v in data["viewers"] if isinstance(v, dict)] if isinstance(data.get("viewers"), list) else [],
+        default_viewer_id=data["default_viewer_id"] if isinstance(data.get("default_viewer_id"), str) else "",
         groups=list(data.get("groups", [])),
         group_colors=_group_colors(data.get("group_colors")),
         # reiner Anzeigezustand: ein beschädigter Wert darf den Start nie verhindern

@@ -181,8 +181,9 @@ def readable_error(log: list[str], code: int | None) -> str:
 class Tunnel:
     """Ein laufender ``ssh -N``-Prozess für eine Weiterleitung."""
 
-    def __init__(self, conn_id: str, forward: Forward, args: list[str], env: dict[str, str]):
+    def __init__(self, conn_id: str, forward: Forward, args: list[str], env: dict[str, str], ephemeral: bool = False):
         self.conn_id, self.forward = conn_id, forward
+        self.ephemeral = ephemeral  # kurzlebig (z. B. für VNC): steht nicht in der Konfiguration und wird nicht als Tunnel angezeigt
         self.args, self.env = args, env
         self.proc: subprocess.Popen | None = None
         self.started = 0.0
@@ -262,15 +263,17 @@ class Manager:
     def __init__(self):
         self._tunnels: dict[tuple[str, str], Tunnel] = {}
 
-    def start(self, conn: Connection, forward: Forward, password: str | None) -> Tunnel:
-        """Startet den Tunnel (``conn`` ist die wirksame Verbindung). Ein schon laufender Tunnel wird nicht doppelt gestartet."""
+    def start(self, conn: Connection, forward: Forward, password: str | None, ephemeral: bool = False) -> Tunnel:
+        """Startet den Tunnel (``conn`` ist die wirksame Verbindung). Ein schon laufender Tunnel wird nicht doppelt gestartet.
+
+        ``ephemeral``: kurzlebiger Tunnel, der nicht in der Konfiguration steht (VNC); er erscheint nicht in ``active`` und ``newly_failed``."""
         key = (conn.id, forward.id)
         current = self._tunnels.get(key)
         if current is not None and current.state in (STARTING, RUNNING):
             return current
         script = askpass.askpass_path() if password is not None else ""
         args, env = prepare(conn, forward, password, script)
-        tunnel = Tunnel(conn.id, forward, args, env)
+        tunnel = Tunnel(conn.id, forward, args, env, ephemeral)
         tunnel.start()
         self._tunnels[key] = tunnel
         return tunnel
@@ -283,7 +286,7 @@ class Manager:
         return t.state if t is not None else STOPPED
 
     def active(self, conn_id: str | None = None) -> list[Tunnel]:
-        return [t for t in self._tunnels.values() if t.state in (STARTING, RUNNING) and (conn_id is None or t.conn_id == conn_id)]
+        return [t for t in self._tunnels.values() if not t.ephemeral and t.state in (STARTING, RUNNING) and (conn_id is None or t.conn_id == conn_id)]
 
     def stop(self, conn_id: str, forward_id: str) -> None:
         t = self._tunnels.pop((conn_id, forward_id), None)
@@ -302,7 +305,7 @@ class Manager:
         """Tunnel, die seit dem letzten Aufruf von selbst beendet wurden (einmal gemeldet)."""
         out = []
         for t in self._tunnels.values():
-            if t.state == FAILED and not t._announced:
+            if not t.ephemeral and t.state == FAILED and not t._announced:
                 t._announced = True
                 out.append(t)
         return out
@@ -310,6 +313,8 @@ class Manager:
     def forget_missing(self, cfg: Config) -> None:
         """Beendet Tunnel, deren Verbindung oder Weiterleitung nicht mehr existiert (gelöscht oder geändert)."""
         for key, t in list(self._tunnels.items()):
+            if t.ephemeral:
+                continue
             conn = cfg.connection_by_id(key[0])
             f = next((f for f in conn.forwards if f.id == key[1]), None) if conn else None
             if f is None or f != t.forward:

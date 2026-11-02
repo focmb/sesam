@@ -78,6 +78,29 @@ class Terminal:
 
 
 @dataclass
+class Viewer:
+    """Ein VNC-Viewer, definiert über eine Befehlsvorlage.
+
+    Platzhalter in ``command``:
+      {host} {port} {display} {url} {title}   Ziel (bei VNC über SSH: lokaler Tunnelendpunkt 127.0.0.1)
+      {profile}        Remmina-Profildatei (wird von Sesam erzeugt, samt gespeichertem Passwort)
+      {password_file}  Passwortdatei im Format von ``vncpasswd`` (z. B. für TigerVNC ``-passwd``); ohne gespeichertes Passwort entfällt das Argument
+    """
+
+    name: str
+    command: str
+    id: str = field(default_factory=new_id)
+    platform: str = "all"  # "all", "linux", "windows"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Viewer":
+        return _from_dict(cls, data)
+
+
+VNC_MODES = ("", "tunnel", "direct")  # aus, über SSH-Tunnel, direkt (Gerät spricht nur VNC)
+
+
+@dataclass
 class Identity:
     """Wiederverwendbare Anmeldedaten: Benutzer, Schlüsseldatei und Passwort (im Schlüsselbund)."""
 
@@ -219,6 +242,11 @@ class Connection:
     color: str = ""  # Schlüssel aus sesam.colors.PALETTE, leer = keine Farbe
     tags: list[str] = field(default_factory=list)
     forwards: list[Forward] = field(default_factory=list)  # gespeicherte Port-Weiterleitungen (Tunnel)
+    vnc: str = ""  # "" = kein VNC, "tunnel" = VNC über einen SSH-Tunnel, "direct" = direkt zum Host (Gerät ohne SSH)
+    vnc_port: int = 5900
+    vnc_host: str = ""  # Ziel vom Server aus gesehen (nur bei "tunnel"), leer = localhost
+    vnc_viewer_id: str = ""  # leer = Standard-Viewer
+    vnc_use_password: bool = False  # VNC-Passwort liegt im Schlüsselbund (wird nicht synchronisiert)
     favorite: bool = False  # Favorit: steht zusätzlich oben im Baum und im Schnellstarter (wird synchronisiert)
 
     @classmethod
@@ -230,6 +258,10 @@ class Connection:
             conn.color = ""
         conn.tags = _clean_tags(conn.tags)
         conn.forwards = _clean_forwards(conn.forwards)
+        if conn.vnc not in VNC_MODES:
+            conn.vnc = ""
+        if not 1 <= conn.vnc_port <= 65535:
+            conn.vnc_port = 5900
         if not isinstance(conn.os_info, str):
             conn.os_info = ""
         if isinstance(conn.os_checked, bool) or not isinstance(conn.os_checked, (int, float)):
@@ -264,6 +296,8 @@ class Config:
     ssh_keys: list[SshKey] = field(default_factory=list)
     snippets: list[Snippet] = field(default_factory=list)
     default_terminal_id: str = ""
+    viewers: list[Viewer] = field(default_factory=list)  # VNC-Viewer (nur lokal, wird nicht synchronisiert)
+    default_viewer_id: str = ""
     sync: SyncSettings = field(default_factory=SyncSettings)
     theme: str = "system"  # "system", "light" oder "dark"
     language: str = "system"  # Oberflächensprache: "system", "de" oder "en" (nur lokal, wird nicht synchronisiert)
@@ -283,6 +317,9 @@ class Config:
 
     def terminal_by_id(self, terminal_id: str) -> Terminal | None:
         return next((t for t in self.terminals if t.id == terminal_id), None)
+
+    def viewer_by_id(self, viewer_id: str) -> Viewer | None:
+        return next((v for v in self.viewers if v.id == viewer_id), None)
 
     def snippet_by_id(self, snippet_id: str) -> Snippet | None:
         return next((s for s in self.snippets if s.id == snippet_id), None)
