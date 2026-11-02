@@ -232,10 +232,12 @@ def build_terminal_command(terminal: Terminal, conn: Connection, ssh_args: list[
 
 
 def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remote_command: str | None = None,
-           sudo: bool = False) -> list[str]:
+           sudo: bool = False, track: bool | None = None) -> list[str]:
     """Öffnet die Verbindung im Terminal. ``remote_command`` (z. B. ``docker exec …``) gilt nur für diesen Start.
 
-    Mit ``sudo`` läuft der Befehl per ``sudo -i`` (Zielbenutzer der Verbindung bzw. root) statt ohne sudo."""
+    Mit ``sudo`` läuft der Befehl per ``sudo -i`` (Zielbenutzer der Verbindung bzw. root) statt ohne sudo.
+
+    ``track``: Terminal als „Verbindung offen“ merken (grüner Punkt, kein zweites Terminal per Doppelklick). Standard: nur ohne ``remote_command``."""
     conn, _ = resolve(cfg, conn)
     check_key(cfg, conn)
     if remote_command is not None:  # sudo des Hosts passt nicht zu einem Befehl, der direkt in einen Container führt
@@ -262,7 +264,7 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remo
         )
     except OSError as exc:
         raise LaunchError(tr("Terminal konnte nicht gestartet werden: {exc}", exc=exc)) from exc
-    if remote_command is None:  # Container-/Gast-Sitzungen zählen nicht als „Host ist offen“
+    if track if track is not None else remote_command is None:  # Container-/Gast-Sitzungen zählen nicht als „Host ist offen“
         _terminals.setdefault(conn.id, []).append(proc)
     return cmd
 

@@ -54,7 +54,7 @@ def run(cfg: Config, snippet: Snippet, conns: list[Connection], terminal: Termin
     line = remote_command(snippet)
     for conn in conns:
         try:
-            launcher.launch(cfg, conn, terminal, remote_command=line, sudo=snippet.sudo)
+            launcher.launch(cfg, conn, terminal, remote_command=line, sudo=snippet.sudo, track=True)
         except launcher.LaunchError as exc:
             report.errors.append((conn.name, str(exc)))
         else:

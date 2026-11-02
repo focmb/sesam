@@ -1938,6 +1938,7 @@ class MainWindow(QMainWindow):
             if QMessageBox.question(self, tr("Snippet ausführen"), text) != QMessageBox.StandardButton.Yes:
                 return
         report = snippets.run(self.cfg, snippet, conns)
+        self._update_open_markers()
         if report.errors:
             lines = "\n".join(f"{name + ': ' if name else ''}{msg}" for name, msg in report.errors)
             QMessageBox.warning(self, tr("Snippet"), tr("Nicht alle Terminals konnten gestartet werden:\n\n{lines}", lines=lines))
