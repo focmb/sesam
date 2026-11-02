@@ -256,10 +256,25 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remo
     else:
         kwargs["start_new_session"] = True
     try:
-        subprocess.Popen(
+        proc = subprocess.Popen(
             cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             env=runtime.clean_env(), **kwargs,
         )
     except OSError as exc:
         raise LaunchError(tr("Terminal konnte nicht gestartet werden: {exc}", exc=exc)) from exc
+    if remote_command is None:  # Container-/Gast-Sitzungen zählen nicht als „Host ist offen“
+        _terminals.setdefault(conn.id, []).append(proc)
     return cmd
+
+
+_terminals: dict[str, list[subprocess.Popen]] = {}  # je Verbindung die gestarteten Terminal-Prozesse
+
+
+def is_open(conn_id: str) -> bool:
+    """Läuft von Sesam aus ein Terminal dieser Verbindung noch? (Terminals, die sich sofort vom Start-Prozess lösen, werden nicht erkannt.)"""
+    alive = [p for p in _terminals.get(conn_id, []) if p.poll() is None]
+    if alive:
+        _terminals[conn_id] = alive
+    else:
+        _terminals.pop(conn_id, None)
+    return bool(alive)

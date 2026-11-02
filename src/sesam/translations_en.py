@@ -348,6 +348,8 @@ EN: dict[str, str] = {
     "Verbinden als …": "Connect as …",
     "Container aktualisieren": "Refresh containers",
     "Als root verbinden (sudo -i)": "Connect as root (sudo -i)",
+    "Neue Sitzung": "New session",
+    "„{name}“ ist bereits geöffnet. Eine weitere Sitzung: Rechtsklick → „Neue Sitzung“.": "“{name}” is already open. For another session: right-click → “New session”.",
     "Keine Container": "No containers",
     "Der Container „{name}“ läuft nicht.": "The container “{name}” is not running.",
     "Container „{name}“ stoppen?": "Stop container “{name}”?",

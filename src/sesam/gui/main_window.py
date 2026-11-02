@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QIcon, QKeySequence, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QButtonGroup, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QPushButton,
@@ -42,7 +42,9 @@ from .wireguard_indicator import WireGuardIndicator
 ID_ROLE = int(Qt.ItemDataRole.UserRole)  # Verbindungs-ID
 GROUP_ROLE = ID_ROLE + 1  # Gruppenpfad
 CONTAINER_ROLE = ID_ROLE + 2  # „<ID der Host-Verbindung>\x1f<Containername bzw. Proxmox-VMID>“
-FAV_ROLE = ID_ROLE + 3  # „head“ beim Favoriten-Kopf, „entry“ bei einer Verbindung in diesem Abschnitt (Verweis, nicht die Verbindung selbst)
+OPEN_ROLE = ID_ROLE + 4  # Verbindung ist gerade in einem Terminal offen (grüner Punkt)
+OPEN_COLOR = "#2ecc71"
+FAV_ROLE = ID_ROLE + 3  #„head“ beim Favoriten-Kopf, „entry“ bei einer Verbindung in diesem Abschnitt (Verweis, nicht die Verbindung selbst)
 GOLD = "#e8a317"  # Stern der Favoriten
 
 
@@ -116,6 +118,10 @@ class MainWindow(QMainWindow):
         self._tunnel_timer = QTimer(self)
         self._tunnel_timer.setInterval(1000)
         self._tunnel_timer.timeout.connect(self._poll_tunnels)
+        self._open_timer = QTimer(self)  # grüner Punkt bei Verbindungen, die in einem Terminal offen sind
+        self._open_timer.setInterval(2000)
+        self._open_timer.timeout.connect(self._update_open_markers)
+        self._open_timer.start()
         # Docker-Container je Host (nur zur Laufzeit): ID → Liste, Fehlertext oder None (= wird geladen)
         self._containers: dict[str, list[docker.Container] | str | None] = {}
         self._docker_gen: dict[str, int] = {}  # Zähler, damit veraltete Antworten verworfen werden
@@ -626,12 +632,48 @@ class MainWindow(QMainWindow):
         item.setData(0, ID_ROLE, conn.id)
         if favorite_entry:
             item.setData(0, FAV_ROLE, "entry")
-        item.setIcon(0, style.icon("server", colors.hex_of(conn.color) or c["muted"]))
+        item.setIcon(0, self._server_icon(conn, launcher.is_open(conn.id)))
+        item.setData(0, OPEN_ROLE, launcher.is_open(conn.id))
         for column in (2, 3, 4):
             item.setForeground(column, muted)
         if conn.notes:
             item.setToolTip(0, safe.tip(conn.notes))
         return item
+
+    def _server_icon(self, conn: Connection, is_open: bool) -> QIcon:
+        """Server-Symbol der Verbindung; mit grünem Punkt unten rechts, wenn sie in einem Terminal offen ist."""
+        icon = style.icon("server", colors.hex_of(conn.color) or theme.colors()["muted"])
+        if not is_open:
+            return icon
+        size = self.tree.iconSize()
+        ratio = self.devicePixelRatioF()
+        pixmap = icon.pixmap(size, ratio)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = pixmap.width(), pixmap.height()
+        d = max(6, round(min(w, h) * 0.5))  # Durchmesser des Punkts
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(OPEN_COLOR))
+        painter.drawEllipse(w - d - 1, h - d - 1, d, d)
+        painter.end()
+        return QIcon(pixmap)
+
+    def _update_open_markers(self):
+        """Setzt den grünen Punkt bei allen Verbindungszeilen neu, deren „offen“-Zustand sich geändert hat."""
+        it = QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            item = it.value()
+            it += 1
+            cid = item.data(0, ID_ROLE)
+            if not cid or item.data(0, CONTAINER_ROLE):
+                continue
+            state = launcher.is_open(cid)
+            if bool(item.data(0, OPEN_ROLE)) == state:
+                continue
+            conn = self.cfg.connection_by_id(cid)
+            if conn is not None:
+                item.setIcon(0, self._server_icon(conn, state))
+                item.setData(0, OPEN_ROLE, state)
 
     def _selected(self) -> Connection | None:
         item = self.tree.currentItem()
@@ -725,6 +767,7 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
         elif conn:
             menu.addAction(self.a_connect)
+            menu.addAction(tr("Neue Sitzung")).triggered.connect(lambda: self.connect_selected(new=True))
             menu.addAction(tr("Als root verbinden (sudo -i)")).triggered.connect(lambda: self.connect_selected(sudo=True))
             sub = _submenu(menu, tr("Verbinden mit …"))
             for t in self.cfg.terminals:
@@ -1438,11 +1481,16 @@ class MainWindow(QMainWindow):
                     if conn is not None:
                         item.setText(0, self._display_name(conn, item.data(0, FAV_ROLE) == "entry"))
 
-    def connect_selected(self, terminal: Terminal | None = None, sudo: bool = False):
+    def connect_selected(self, terminal: Terminal | None = None, sudo: bool = False, new: bool = False):
+        """Doppelklick/Enter: ist die Verbindung schon offen, gibt es nur einen Hinweis. ``new``: immer eine weitere Sitzung."""
         conn = self._selected()
         if not conn:
             if self._selected_container():
                 self.connect_container(terminal)
+            return
+        terminal = terminal if isinstance(terminal, Terminal) else None
+        if not (new or sudo or terminal) and launcher.is_open(conn.id):
+            self.toasts.notify(tr("„{name}“ ist bereits geöffnet. Eine weitere Sitzung: Rechtsklick → „Neue Sitzung“.", name=conn.name or conn.host), 6000)
             return
         self._open_connection(conn, terminal, sudo)
 
@@ -1455,6 +1503,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
             return
         self._touch(conn)
+        self._update_open_markers()
         self._detect_os(conn)  # beim ersten Verbinden das Betriebssystem merken
 
     # --- Betriebssystem des Hosts ---
