@@ -1,6 +1,6 @@
 # Maintainer: Christian Leitzke <christian.leitzke@gmail.com>
 pkgname=sesam
-pkgver=2.2.1
+pkgver=3.0.0
 pkgrel=1
 pkgdesc="SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen"
 arch=('any')
@@ -11,9 +11,11 @@ depends=('python' 'pyside6' 'python-keyring' 'python-cryptography'
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
 optdepends=('wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige'
             'gnome-keyring: Passwörter im Schlüsselbund speichern'
-            'kwallet: Passwörter im Schlüsselbund speichern')
+            'kwallet: Passwörter im Schlüsselbund speichern'
+            'remmina: VNC-Viewer'
+            'tigervnc: VNC-Viewer')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('fe0b2edffb420e7b1e9cc59c4d0b5f1d4e3a33857b79fcc86801223e3eb9f25b')
+sha256sums=('bd2583a46f8e5992518b82984bef9caa38e2a94d27ba0e87781e2c529cf8f2d3')
 
 build() {
   cd "$srcdir/$pkgname-$pkgver"
