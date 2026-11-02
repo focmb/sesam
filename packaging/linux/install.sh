@@ -2,7 +2,7 @@
 # Installiert Sesam für den aktuellen Benutzer (ohne root): Starter im Anwendungsmenü/Dash,
 # Icon und der Befehl "sesam". Die Konfiguration (~/.config/sesam) wird nie angefasst.
 #
-#   ./packaging/linux/install.sh              aus dem gebauten Programm (dist/sesam, siehe README)
+#   ./packaging/linux/install.sh              aus dem gebauten Programm (dist/sesam, siehe docs/entwicklung.md)
 #   ./packaging/linux/install.sh --dev        aus diesem Projektordner mit der .venv (immer aktueller Code)
 #   ./packaging/linux/install.sh --uninstall  entfernt alles wieder
 set -euo pipefail
