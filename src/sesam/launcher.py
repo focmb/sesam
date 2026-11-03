@@ -184,6 +184,15 @@ def set_embedded_opener(opener) -> None:
     _embedded_opener = opener
 
 
+def track_embedded(args: list[str], session) -> None:
+    """Merkt eine weitere Sitzung (z. B. eine geteilte Kachel) als „Verbindung offen“, sofern der Befehl eine Verbindung ohne Remote-Befehl öffnet."""
+    if "--remote-command" in args or "--connect" not in args:
+        return
+    index = args.index("--connect") + 1
+    if index < len(args):
+        _terminals.setdefault(args[index], []).append(session)
+
+
 def resolve_terminal(cfg: Config, conn: Connection) -> Terminal:
     term = cfg.terminal_by_id(conn.terminal_id) if conn.terminal_id else None
     term = term or cfg.terminal_by_id(cfg.default_terminal_id)

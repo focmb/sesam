@@ -150,6 +150,11 @@ class TerminalView(QWidget):
     closed = Signal(int)  # Prozess beendet (Exit-Code)
     copied = Signal(str)  # Text wurde ausdrücklich kopiert (Strg+Umschalt+C, Menü)
     history_requested = Signal()  # Strg+Umschalt+H oder Menü: Zwischenablage-Verlauf öffnen
+    split_requested = Signal(int)  # Strg+Umschalt+O (rechts) / E (unten) oder Menü: Wert von ``Qt.Orientation``
+    focus_requested = Signal(str)  # Alt+Pfeil: ``left``/``right``/``up``/``down``
+    zoom_requested = Signal()  # Strg+Umschalt+Enter oder Menü: Kachel vergrößern bzw. zurück
+    close_requested = Signal()  # Strg+Umschalt+W oder Menü: diese Kachel schließen
+    focused = Signal()  # die Kachel hat den Fokus bekommen
 
     def __init__(self, title: str, scale: int = 100, dark: bool = True, parent=None):
         super().__init__(parent)
@@ -162,6 +167,8 @@ class TerminalView(QWidget):
         self._sel: tuple[tuple[int, int], tuple[int, int]] | None = None  # ((Zeile, Spalte), …) in absoluten Zeilen
         self._dragging = False
         self._pending: tuple[list[str], dict[str, str]] | None = None
+        self._command: tuple[list[str], dict[str, str]] | None = None  # Befehl der Sitzung (für „Kachel teilen“)
+        self._tiled = False  # mehrere Kacheln im Reiter: aktive Kachel bekommt einen Rand
         self._pty: pty_session.PtySession | None = None
         self._finished: int | None = None
         self._notice = ""
@@ -184,6 +191,7 @@ class TerminalView(QWidget):
     # --- Start / Ende ---
     def start(self, args: list[str], env: dict[str, str]) -> None:
         self._pending = (args, env)
+        self._command = (list(args), dict(env))
         QTimer.singleShot(0, self._maybe_spawn)
 
     def _maybe_spawn(self):
@@ -208,6 +216,16 @@ class TerminalView(QWidget):
             self._feed(("\x1b[31m" + self._notice + "\x1b[0m\r\n").encode())
             return
         self._pty = session
+
+    @property
+    def command(self) -> tuple[list[str], dict[str, str]] | None:
+        """Argumente und Umgebung, mit denen die Sitzung gestartet wurde (``None`` vor dem Start)."""
+        return self._command
+
+    def set_tiled(self, tiled: bool) -> None:
+        if tiled != self._tiled:
+            self._tiled = tiled
+            self.update()
 
     def poll(self) -> int | None:
         """Für die Verbindungsverwaltung: ``None``, solange die Sitzung läuft."""
@@ -387,6 +405,10 @@ class TerminalView(QWidget):
                     p.setPen(QPen(color, 1))
                     p.drawLine(QPointF(x0, y + ch / 2), QPointF(x0 + (end - start) * cw, y + ch / 2))
         self._paint_cursor(p, first, cells_cache=None)
+        if self._tiled:  # Rand um die aktive Kachel, die übrigen nur dezent umrandet
+            p.setPen(QPen(QColor(scheme["cursor"] if self.hasFocus() else scheme["selection"]), 2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(QRectF(1, 1, self.width() - 2, self.height() - 2))
 
     def _draw_text(self, p: QPainter, cells, start: int, end: int, x0: float, y: float):
         """ASCII-Folgen am Stück, alles andere (Umlaute, Rahmenzeichen, breite Zeichen) einzeln auf das Zellraster."""
@@ -429,12 +451,15 @@ class TerminalView(QWidget):
     def focusInEvent(self, event):
         super().focusInEvent(event)
         self.update()
+        self.focused.emit()
 
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
         self.update()
 
     # --- Tastatur ---
+    FOCUS_KEYS = {Qt.Key.Key_Left: "left", Qt.Key.Key_Right: "right", Qt.Key.Key_Up: "up", Qt.Key.Key_Down: "down"}
+
     def focusNextPrevChild(self, next_):  # Tab gehört dem Terminal
         return False
 
@@ -456,6 +481,21 @@ class TerminalView(QWidget):
             return
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_H:
             self.history_requested.emit()
+            return
+        if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_O:
+            self.split_requested.emit(Qt.Orientation.Horizontal.value)
+            return
+        if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_E:
+            self.split_requested.emit(Qt.Orientation.Vertical.value)
+            return
+        if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_W:
+            self.close_requested.emit()
+            return
+        if (mods & ctrl_shift) == ctrl_shift and key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.zoom_requested.emit()
+            return
+        if mods == Mod.AltModifier and key in self.FOCUS_KEYS:
+            self.focus_requested.emit(self.FOCUS_KEYS[key])
             return
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_V or (mods == Mod.ShiftModifier and key == Qt.Key.Key_Insert):
             self.paste()
@@ -632,4 +672,9 @@ class TerminalView(QWidget):
         menu.addAction(tr("Verlauf …")).triggered.connect(self.history_requested.emit)
         menu.addSeparator()
         menu.addAction(tr("Verlauf löschen")).triggered.connect(self.clear_scrollback)
+        menu.addSeparator()
+        menu.addAction(tr("Rechts teilen")).triggered.connect(lambda: self.split_requested.emit(Qt.Orientation.Horizontal.value))
+        menu.addAction(tr("Unten teilen")).triggered.connect(lambda: self.split_requested.emit(Qt.Orientation.Vertical.value))
+        menu.addAction(tr("Kachel vergrößern / zurück")).triggered.connect(self.zoom_requested.emit)
+        menu.addAction(tr("Kachel schließen")).triggered.connect(self.close_requested.emit)
         menu.exec(ev.globalPos())

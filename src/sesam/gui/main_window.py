@@ -37,6 +37,7 @@ from .sftp_window import SftpWindow
 from .sync_conflict_dialog import SyncConflictDialog
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
+from .terminal_tab import TerminalTab
 from .terminal_view import TerminalView, available as terminal_available
 from .terminals_dialog import TerminalsDialog
 from .toast import ToastHost
@@ -222,6 +223,8 @@ class MainWindow(QMainWindow):
         self.tabs.tabCloseRequested.connect(self._close_terminal_tab)
         self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
+        self._split_target: tuple[TerminalView, Qt.Orientation] | None = None  # nächste Sitzung als Kachel neben/unter dieser öffnen
+        self._recent_terminal_tab: TerminalTab | None = None  # zuletzt benutzter Terminal-Reiter (Ziel für „Neben/Unter dem aktuellen Terminal öffnen“)
         launcher.set_embedded_opener(self._open_embedded)
         self._init_clipboard()
 
@@ -572,45 +575,134 @@ class MainWindow(QMainWindow):
                 pass
 
     # --- Integriertes Terminal ---
+    def _terminal_tabs(self) -> list[TerminalTab]:
+        return [w for i in range(1, self.tabs.count()) if isinstance(w := self.tabs.widget(i), TerminalTab)]
+
     def _terminal_views(self) -> list[TerminalView]:
-        return [w for i in range(1, self.tabs.count()) if isinstance(w := self.tabs.widget(i), TerminalView)]
+        return [v for tab in self._terminal_tabs() for v in tab.views()]
+
+    @staticmethod
+    def _tab_of(view: TerminalView) -> TerminalTab | None:
+        widget = view.parentWidget()
+        while widget is not None and not isinstance(widget, TerminalTab):
+            widget = widget.parentWidget()
+        return widget
+
+    def _refresh_tab(self, tab: TerminalTab):
+        index = self.tabs.indexOf(tab)
+        if index > 0:
+            self.tabs.setTabText(index, tab.title())
+            self.tabs.setTabToolTip(index, tab.title())
 
     def _open_embedded(self, args: list[str], title: str, env: dict[str, str]) -> TerminalView:
-        """Wird vom Launcher gerufen, wenn das gewählte Terminal das integrierte ist: öffnet einen Reiter."""
+        """Wird vom Launcher gerufen, wenn das gewählte Terminal das integrierte ist: öffnet einen Reiter oder eine Kachel."""
         if not terminal_available():
             raise launcher.LaunchError(tr("Das Paket „pyte“ ist nicht installiert (pip install pyte)."))
         view = TerminalView(title, theme.scale(), theme.is_dark())
         view.closed.connect(lambda _code, v=view: self._terminal_closed(v))
         view.copied.connect(lambda text, v=view: self._terminal_copied(text, v.title))
         view.history_requested.connect(lambda v=view: self.show_clipboard_popup(v))
-        index = self.tabs.addTab(view, title)
-        self.tabs.setTabToolTip(index, title)
-        self.tabs.setCurrentIndex(index)
+        view.split_requested.connect(lambda value, v=view: self._split_view(v, Qt.Orientation(value)))
+        view.focus_requested.connect(lambda direction, v=view: self._move_focus(v, direction))
+        view.zoom_requested.connect(lambda v=view: self._zoom_view(v))
+        view.close_requested.connect(lambda v=view: self._close_view(v))
+        target, self._split_target = self._split_target, None
+        tab = self._tab_of(target[0]) if target is not None else None
+        if tab is not None and self.tabs.indexOf(tab) > 0:
+            tab.add_view(view, target[0], target[1])
+            self.tabs.setCurrentWidget(tab)
+        else:
+            tab = TerminalTab(view)
+            tab.changed.connect(lambda t=tab: self._refresh_tab(t))
+            index = self.tabs.addTab(tab, title)
+            self.tabs.setTabToolTip(index, title)
+            self.tabs.setCurrentIndex(index)
+        self._refresh_tab(tab)
         view.start(args, env)
         view.setFocus()
         return view
 
+    def _split_view(self, view: TerminalView, orientation: Qt.Orientation):
+        """Öffnet neben/unter der Kachel eine weitere Sitzung mit demselben Befehl (dieselbe Verbindung)."""
+        if view.command is None:
+            return
+        args, env = view.command
+        self._split_target = (view, orientation)
+        try:
+            new = self._open_embedded(args, view.title, env)
+        except launcher.LaunchError as exc:
+            QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
+            return
+        finally:
+            self._split_target = None
+        launcher.track_embedded(args, new)
+        self._update_open_markers()
+
+    def _open_tiled(self, orientation: Qt.Orientation):
+        """Verbindung neben/unter der zuletzt benutzten Kachel öffnen (ohne Kachel: wie sonst in einem neuen Reiter)."""
+        tab = self._last_terminal_tab()
+        self._split_target = (tab.active(), orientation) if tab is not None and tab.active() is not None else None
+        try:
+            self.connect_selected(new=True)
+        finally:
+            self._split_target = None
+
+    def _last_terminal_tab(self) -> TerminalTab | None:
+        tab = getattr(self, "_recent_terminal_tab", None)
+        return tab if tab is not None and self.tabs.indexOf(tab) > 0 else None
+
+    def _move_focus(self, view: TerminalView, direction: str):
+        tab = self._tab_of(view)
+        if tab is not None:
+            tab.move_focus(view, direction)
+
+    def _zoom_view(self, view: TerminalView):
+        tab = self._tab_of(view)
+        if tab is not None:
+            tab.toggle_zoom(view)
+
     def _terminal_closed(self, view: TerminalView):
-        """Der Prozess ist zu Ende: der Reiter verschwindet wie ein geschlossenes Terminalfenster."""
-        index = self.tabs.indexOf(view)
-        if index > 0:
-            self.tabs.removeTab(index)
+        """Der Prozess ist zu Ende: die Kachel verschwindet, mit der letzten auch der Reiter (wie ein geschlossenes Terminalfenster)."""
+        tab = self._tab_of(view)
+        if tab is not None:
+            tab.remove_view(view)
+            if tab.is_empty():
+                index = self.tabs.indexOf(tab)
+                if index > 0:
+                    self.tabs.removeTab(index)
+                tab.deleteLater()
+            else:
+                self._refresh_tab(tab)
         view.deleteLater()
         self._update_open_markers()
 
-    def _close_terminal_tab(self, index: int):
-        view = self.tabs.widget(index)
-        if index == 0 or not isinstance(view, TerminalView):
-            return
-        if view.poll() is None:
-            answer = QMessageBox.question(
-                self, tr("Sitzung beenden"), tr("Die Sitzung „{name}“ läuft noch. Beenden?", name=view.title),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-            if answer != QMessageBox.StandardButton.Yes:
-                return
-            view.terminate()  # der Reiter schließt, sobald der Prozess endet
+    def _confirm_end(self, running: list[TerminalView]) -> bool:
+        if len(running) == 1:
+            text = tr("Die Sitzung „{name}“ läuft noch. Beenden?", name=running[0].title)
         else:
-            self._terminal_closed(view)
+            text = tr("Im Reiter laufen noch {n} Sitzungen. Beenden?", n=len(running))
+        answer = QMessageBox.question(self, tr("Sitzung beenden"), text,
+                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _end_views(self, views: list[TerminalView]):
+        running = [v for v in views if v.poll() is None]
+        if running and not self._confirm_end(running):
+            return
+        for view in views:
+            if view.poll() is None:
+                view.terminate()  # die Kachel schließt, sobald der Prozess endet
+            else:
+                self._terminal_closed(view)
+
+    def _close_terminal_tab(self, index: int):
+        tab = self.tabs.widget(index)
+        if index == 0 or not isinstance(tab, TerminalTab):
+            return
+        self._end_views(tab.views())
+
+    def _close_view(self, view: TerminalView):
+        self._end_views([view])
 
     # --- Zwischenablage-Verlauf ---
     def _init_clipboard(self):
@@ -681,7 +773,7 @@ class MainWindow(QMainWindow):
 
     def _paste_entry(self, view: TerminalView, entry_id: str, enter: bool):
         entry = self.clipboard.get(entry_id)
-        if entry is None or self.tabs.indexOf(view) < 0:
+        if entry is None or self._tab_of(view) is None:
             return
         view.paste_text(entry.text, enter)
         view.setFocus()
@@ -689,14 +781,18 @@ class MainWindow(QMainWindow):
     def open_clipboard(self):
         current = self.tabs.currentWidget()
         ClipboardDialog(self.clipboard, self._terminal_sessions, self._paste_into,
-                        current if isinstance(current, TerminalView) else None, self).exec()
+                        current.active() if isinstance(current, TerminalTab) else None, self).exec()
 
     def _tab_menu(self, pos):
         menu = QMenu(self)
         index = self.tabs.tabBar().tabAt(pos)
-        view = self.tabs.widget(index) if index > 0 else None
-        if isinstance(view, TerminalView):
-            menu.addAction(tr("Sitzung beenden")).triggered.connect(lambda: self._close_terminal_tab(self.tabs.indexOf(view)))
+        tab = self.tabs.widget(index) if index > 0 else None
+        if isinstance(tab, TerminalTab):
+            view = tab.active()
+            if view is not None:
+                menu.addAction(tr("Rechts teilen")).triggered.connect(lambda: self._split_view(view, Qt.Orientation.Horizontal))
+                menu.addAction(tr("Unten teilen")).triggered.connect(lambda: self._split_view(view, Qt.Orientation.Vertical))
+            menu.addAction(tr("Sitzung beenden")).triggered.connect(lambda: self._close_terminal_tab(self.tabs.indexOf(tab)))
             menu.addSeparator()
         sessions = self._terminal_sessions()
         everywhere = menu.addAction(tr("Zwischenablage in alle Reiter einfügen"))
@@ -713,7 +809,10 @@ class MainWindow(QMainWindow):
 
     def _tab_changed(self, index: int):
         widget = self.tabs.widget(index)
-        if index > 0 and widget is not None:
+        if index > 0 and isinstance(widget, TerminalTab):
+            self._recent_terminal_tab = widget
+            widget.focus_active()
+        elif index > 0 and widget is not None:
             widget.setFocus()
         else:
             self.tree.setFocus()
@@ -988,6 +1087,12 @@ class MainWindow(QMainWindow):
         elif conn:
             menu.addAction(self.a_connect)
             menu.addAction(tr("Neue Sitzung")).triggered.connect(lambda: self.connect_selected(new=True))
+            tile_right = menu.addAction(tr("Neben dem aktuellen Terminal öffnen"))
+            tile_below = menu.addAction(tr("Unter dem aktuellen Terminal öffnen"))
+            tile_right.setEnabled(self._last_terminal_tab() is not None)
+            tile_below.setEnabled(self._last_terminal_tab() is not None)
+            tile_right.triggered.connect(lambda: self._open_tiled(Qt.Orientation.Horizontal))
+            tile_below.triggered.connect(lambda: self._open_tiled(Qt.Orientation.Vertical))
             menu.addAction(tr("Als root verbinden (sudo -i)")).triggered.connect(lambda: self.connect_selected(sudo=True))
             sub = _submenu(menu, tr("Verbinden mit …"))
             for t in self.cfg.terminals:

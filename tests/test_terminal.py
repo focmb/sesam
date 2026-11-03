@@ -211,7 +211,7 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             self.assertEqual(self.w.tabs.count(), 2)
             self.assertEqual(self.w.tabs.tabText(1), "Test")
             self.assertEqual(self.w.tabs.currentIndex(), 1)
-            view = self.w.tabs.widget(1)
+            view = self.w._terminal_views()[0]
             self.assertTrue(self.pump(lambda: "sitzung" in "\n".join(view._screen.display)))
             self.assertTrue(launcher.is_open(self.conn.id))
             view._send(b"\r")  # read x -> Prozess endet
@@ -223,7 +223,7 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             from PySide6.QtWidgets import QMessageBox
 
             self.w._open_connection(self.conn)
-            view = self.w.tabs.widget(1)
+            view = self.w._terminal_views()[0]
             self.assertTrue(self.pump(lambda: view._pty is not None))
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
                 self.w._close_terminal_tab(1)
@@ -238,7 +238,7 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             from PySide6.QtWidgets import QMessageBox
 
             self.w._open_connection(self.conn)
-            view = self.w.tabs.widget(1)
+            view = self.w._terminal_views()[0]
             self.assertTrue(self.pump(lambda: view._pty is not None))
             event = QCloseEvent()
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
@@ -248,3 +248,91 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
                 self.w.closeEvent(event)
             self.assertTrue(self.pump(lambda: view.poll() is not None))
+
+        def _two_tiles(self, orientation=None):
+            from PySide6.QtCore import Qt
+
+            self.w._open_connection(self.conn)
+            first = self.w._terminal_views()[0]
+            self.assertTrue(self.pump(lambda: first._pty is not None))
+            self.w._split_view(first, orientation or Qt.Orientation.Horizontal)
+            views = self.w._terminal_views()
+            self.assertEqual(len(views), 2)
+            second = [v for v in views if v is not first][0]
+            self.assertTrue(self.pump(lambda: second._pty is not None))
+            return first, second
+
+        def test_split_adds_a_tile_in_the_same_tab(self):
+            first, second = self._two_tiles()
+            self.assertEqual(self.w.tabs.count(), 2)  # kein zweiter Reiter
+            self.assertIs(self.w._tab_of(first), self.w._tab_of(second))
+            self.assertEqual(self.w.tabs.tabText(1), "Test (+1)")
+            self.assertTrue(first._tiled and second._tiled)
+            self.assertEqual(second.command, first.command)
+
+        def test_split_orientation(self):
+            from PySide6.QtCore import Qt
+            from PySide6.QtWidgets import QSplitter
+
+            first, second = self._two_tiles(Qt.Orientation.Vertical)
+            self.assertEqual(first.parentWidget().orientation(), Qt.Orientation.Vertical)
+            old_parent = second.parentWidget()
+            self.w._split_view(second, Qt.Orientation.Horizontal)  # andere Richtung: verschachtelter Splitter
+            third = [v for v in self.w._terminal_views() if v not in (first, second)][0]
+            self.assertIsInstance(third.parentWidget(), QSplitter)
+            self.assertEqual(third.parentWidget().orientation(), Qt.Orientation.Horizontal)
+            self.assertIsNot(third.parentWidget(), old_parent)
+            self.assertEqual(len(self.w._terminal_views()), 3)
+
+        def test_ending_one_tile_keeps_the_tab_until_the_last_one(self):
+            first, second = self._two_tiles()
+            second._send(b"\r")  # read x -> Prozess endet
+            self.assertTrue(self.pump(lambda: len(self.w._terminal_views()) == 1))
+            self.assertEqual(self.w.tabs.count(), 2)
+            self.assertEqual(self.w.tabs.tabText(1), "Test")
+            self.assertFalse(first._tiled)
+            first._send(b"\r")
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+
+        def test_closing_a_tab_with_several_tiles_asks_once(self):
+            from unittest import mock
+            from PySide6.QtWidgets import QMessageBox
+
+            first, second = self._two_tiles()
+            self.assertTrue(self.pump(lambda: second._pty is not None))
+            with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes) as ask:
+                self.w._close_terminal_tab(1)
+            self.assertEqual(ask.call_count, 1)
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+
+        def test_focus_neighbor_and_zoom(self):
+            from PySide6.QtCore import Qt
+
+            first, second = self._two_tiles(Qt.Orientation.Horizontal)
+            self.w.resize(1000, 600)
+            self.w.show()
+            self.pump(lambda: False, timeout=0.3)
+            tab = self.w._tab_of(first)
+            self.assertIs(tab.neighbor(first, "right"), second)
+            self.assertIs(tab.neighbor(second, "left"), first)
+            self.assertIsNone(tab.neighbor(first, "up"))
+            tab.toggle_zoom(second)
+            self.assertIs(tab.zoomed(), second)
+            self.assertTrue(first.isHidden())
+            tab.toggle_zoom(second)
+            self.assertIsNone(tab.zoomed())
+            self.assertFalse(first.isHidden())
+
+        def test_tiled_open_goes_next_to_the_last_terminal_tab(self):
+            from PySide6.QtCore import Qt
+
+            self.assertIsNone(self.w._last_terminal_tab())
+            self.w._open_connection(self.conn)
+            first = self.w._terminal_views()[0]
+            self.w.tabs.setCurrentIndex(0)  # zurück zur Verbindungsliste
+            self.assertIsNotNone(self.w._last_terminal_tab())
+            self.w._split_target = (self.w._last_terminal_tab().active(), Qt.Orientation.Vertical)
+            self.w._open_connection(self.conn)
+            self.assertEqual(self.w.tabs.count(), 2)
+            self.assertEqual(len(self.w._terminal_views()), 2)
+            self.assertIs(self.w.tabs.currentWidget(), self.w._tab_of(first))
