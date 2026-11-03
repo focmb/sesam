@@ -1,6 +1,6 @@
 pkgbase = sesam
 	pkgdesc = SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen
-	pkgver = 3.7.2
+	pkgver = 3.8.0
 	pkgrel = 1
 	url = https://github.com/focmb/sesam
 	arch = any
@@ -23,7 +23,7 @@ pkgbase = sesam
 	optdepends = remmina: VNC- und RDP-Viewer
 	optdepends = tigervnc: VNC-Viewer
 	optdepends = freerdp: RDP-Viewer
-	source = sesam-3.7.2.tar.gz::https://github.com/focmb/sesam/archive/v3.7.2.tar.gz
-	sha256sums = f7ba064ccc515f41e72004ca43e739e1342674c80cc952383340f6e6bdf76ebb
+	source = sesam-3.8.0.tar.gz::https://github.com/focmb/sesam/archive/v3.8.0.tar.gz
+	sha256sums = cf4a431bf8faff604ca9819e205fa786bd487fe319d2bfb84d5005e01cd34c39
 
 pkgname = sesam
