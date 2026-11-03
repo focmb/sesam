@@ -612,6 +612,7 @@ class MainWindow(QMainWindow):
         view.grid_requested.connect(self._tile_all)
         view.untile_requested.connect(lambda v=view: self._untile(self._tab_of(v)))
         view.broadcast_requested.connect(lambda v=view: self._toggle_broadcast(self._tab_of(v)))
+        view.tile_dropped.connect(lambda source, zone, v=view: self._drop_tile(source, v, zone))
         target, self._split_target = self._split_target, None
         tab = self._tab_of(target[0]) if target is not None else None
         if tab is not None and self.tabs.indexOf(tab) > 0:
@@ -720,6 +721,26 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentWidget(target)
         self._refresh_tab(target)
         target.focus_active()
+
+    def _drop_tile(self, source: TerminalView, target: TerminalView, zone: str):
+        """Eine gezogene Kachel wurde auf ``target`` abgelegt: im selben Reiter umordnen/tauschen, sonst in dessen Reiter holen."""
+        src_tab, dst_tab = self._tab_of(source), self._tab_of(target)
+        if source is target or src_tab is None or dst_tab is None:
+            return
+        if src_tab is dst_tab:
+            dst_tab.move_view(source, target, zone)
+        else:  # aus einem anderen Reiter: an die Seite setzen (in der Mitte rechts daneben), der alte Reiter verschwindet, wenn er leer wird
+            src_tab.detach(source)
+            if src_tab.is_empty():
+                self._drop_tab(src_tab)
+            else:
+                self._refresh_tab(src_tab)
+            orientation = Qt.Orientation.Vertical if zone in ("up", "down") else Qt.Orientation.Horizontal
+            dst_tab.add_view(source, target, orientation, before=zone in ("left", "up"))
+            self.tabs.setCurrentWidget(dst_tab)
+        self._refresh_tab(dst_tab)
+        source.setFocus()
+        self._update_tile_button()
 
     def _untile(self, tab: TerminalTab | None):
         """Jede Kachel des Reiters bekommt wieder einen eigenen Reiter (die erste bleibt im Reiter)."""

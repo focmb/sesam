@@ -4,9 +4,9 @@ from __future__ import annotations
 import copy
 from collections import defaultdict, deque
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QMimeData, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (
-    QClipboard, QColor, QFont, QFontDatabase, QFontMetricsF, QGuiApplication, QKeyEvent, QPainter, QPen,
+    QClipboard, QColor, QDrag, QFont, QFontDatabase, QFontMetricsF, QGuiApplication, QKeyEvent, QPainter, QPen,
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
@@ -20,6 +20,9 @@ except ImportError:  # wird beim Öffnen gemeldet (siehe ``available``)
 
 SCROLLBACK_LINES = 10000
 PADDING = 6
+GRIP_SIZE = (26, 18)  # Griff oben rechts in einer Kachel, an dem sie verschoben wird
+EDGE_ZONE = 0.28  # Anteil der Kachel an jedem Rand, in dem beim Ablegen die Seite gilt (innen: tauschen)
+TILE_MIME = "application/x-sesam-tile"
 BROADCAST_COLOR = "#d6336c"  # Rand und Hinweis bei „Eingabe an alle Kacheln“
 ALT_SCREEN_MODES = (47, 1047, 1049)
 BRACKETED_PASTE = 2004 << 5  # private Modi sind in pyte um 5 Bit verschoben
@@ -161,6 +164,9 @@ class TerminalView(QWidget):
     grid_requested = Signal()  # Strg+Umschalt+G oder Menü: alle Sitzungen als Raster kacheln
     untile_requested = Signal()  # Menü: die Kacheln dieses Reiters in einzelne Reiter auflösen
     broadcast_requested = Signal()  # Strg+Umschalt+B oder Menü: Eingabe an alle Kacheln umschalten
+    tile_dropped = Signal(object, str)  # eine andere Kachel wurde hier abgelegt: (Kachel, ``left``/``right``/``up``/``down``/``swap``)
+
+    _dragged: "TerminalView | None" = None  # die Kachel, die gerade gezogen wird
 
     def __init__(self, title: str, scale: int = 100, dark: bool = True, parent=None):
         super().__init__(parent)
@@ -172,6 +178,8 @@ class TerminalView(QWidget):
         self._offset = 0  # Zeilen, um die zurückgescrollt wurde
         self._sel: tuple[tuple[int, int], tuple[int, int]] | None = None  # ((Zeile, Spalte), …) in absoluten Zeilen
         self._dragging = False
+        self._grip_press: QPointF | None = None  # Druckpunkt auf dem Griff (Ziehen beginnt erst nach ein paar Pixeln)
+        self._drop_zone: str | None = None  # Seite, die beim Ablegen gerade markiert ist
         self._pending: tuple[list[str], dict[str, str]] | None = None
         self._command: tuple[list[str], dict[str, str]] | None = None  # Befehl der Sitzung (für „Kachel teilen“)
         self._tiled = False  # mehrere Kacheln im Reiter: aktive Kachel bekommt einen Rand
@@ -187,6 +195,7 @@ class TerminalView(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
         self.setCursor(Qt.CursorShape.IBeamCursor)
         self.setMouseTracking(False)
+        self.setAcceptDrops(True)
         self.setMinimumSize(200, 100)
         self._screen = _Screen(self._cols, self._rows, self._reply)
         self._stream = pyte.ByteStream(self._screen)
@@ -232,6 +241,9 @@ class TerminalView(QWidget):
     def set_tiled(self, tiled: bool) -> None:
         if tiled != self._tiled:
             self._tiled = tiled
+            self.setMouseTracking(tiled)  # für den Mauszeiger über dem Griff
+            if not tiled:
+                self.setCursor(Qt.CursorShape.IBeamCursor)
             self.update()
 
     def set_broadcast(self, enabled: bool) -> None:
@@ -439,6 +451,111 @@ class TerminalView(QWidget):
             p.setPen(QPen(QColor(scheme["cursor"] if self.hasFocus() else scheme["selection"]), 2))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawRect(QRectF(1, 1, self.width() - 2, self.height() - 2))
+        if self._tiled:
+            self._paint_grip(p)
+        if self._drop_zone is not None:
+            self._paint_drop_zone(p)
+
+    # --- Kachel verschieben (Ziehen und Ablegen) ---
+    def _grip_rect(self) -> QRectF:
+        w, h = GRIP_SIZE
+        return QRectF(self.width() - w - 6, 4, w, h)
+
+    def _paint_grip(self, p: QPainter) -> None:
+        if self._broadcast:  # an dieser Stelle steht der Hinweis „Eingabe an alle“
+            box = self._grip_rect().translated(-p.fontMetrics().horizontalAdvance(tr("Eingabe an alle")) - 24, 0)
+        else:
+            box = self._grip_rect()
+        color = QColor(self._scheme["fg"])
+        fill = QColor(color)
+        fill.setAlpha(45)
+        p.fillRect(box, fill)
+        color.setAlpha(170)
+        pen = QPen(color, 2.5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for row in range(3):  # sechs Punkte als Griff
+            for col in range(2):
+                p.drawPoint(QPointF(box.center().x() - 3.5 + col * 7, box.center().y() - 5 + row * 5))
+
+    def _on_grip(self, pos) -> bool:
+        if not self._tiled:
+            return False
+        rect = self._grip_rect()
+        if self._broadcast:
+            rect = rect.translated(-self.fontMetrics().horizontalAdvance(tr("Eingabe an alle")) - 24, 0)
+        return rect.contains(pos)
+
+    def zone_at(self, pos) -> str:
+        """Welche Seite beim Ablegen an ``pos`` gilt: der nächstgelegene Rand (innerhalb von ``EDGE_ZONE``), sonst ``swap``."""
+        w, h = max(1, self.width()), max(1, self.height())
+        x, y = pos.x() / w, pos.y() / h
+        near = {"left": x, "right": 1 - x, "up": y, "down": 1 - y}
+        side = min(near, key=near.get)
+        return side if near[side] < EDGE_ZONE else "swap"
+
+    def _paint_drop_zone(self, p: QPainter) -> None:
+        w, h = self.width(), self.height()
+        rect = {
+            "left": QRectF(0, 0, w / 2, h), "right": QRectF(w / 2, 0, w / 2, h),
+            "up": QRectF(0, 0, w, h / 2), "down": QRectF(0, h / 2, w, h / 2),
+            "swap": QRectF(0, 0, w, h),
+        }[self._drop_zone]
+        color = QColor(self._scheme["cursor"])
+        fill = QColor(color)
+        fill.setAlpha(70)
+        p.fillRect(rect, fill)
+        p.setPen(QPen(color, 3))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(rect.adjusted(1.5, 1.5, -1.5, -1.5))
+        if self._drop_zone == "swap":
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, tr("Tauschen"))
+
+    def _start_drag(self) -> None:
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setData(TILE_MIME, self.title.encode("utf-8"))
+        drag.setMimeData(mime)
+        pixmap = self.grab().scaledToWidth(max(80, min(240, self.width() // 3)), Qt.TransformationMode.SmoothTransformation)
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(pixmap.rect().center())
+        TerminalView._dragged = self
+        try:
+            drag.exec(Qt.DropAction.MoveAction)
+        finally:
+            TerminalView._dragged = None
+
+    def _drag_accepts(self, ev) -> bool:
+        source = TerminalView._dragged
+        return source is not None and source is not self and ev.mimeData().hasFormat(TILE_MIME)
+
+    def dragEnterEvent(self, ev):
+        if self._drag_accepts(ev):
+            ev.acceptProposedAction()
+
+    def dragMoveEvent(self, ev):
+        if not self._drag_accepts(ev):
+            ev.ignore()
+            return
+        zone = self.zone_at(ev.position())
+        if zone != self._drop_zone:
+            self._drop_zone = zone
+            self.update()
+        ev.acceptProposedAction()
+
+    def dragLeaveEvent(self, ev):
+        self._drop_zone = None
+        self.update()
+
+    def dropEvent(self, ev):
+        source, zone = TerminalView._dragged, self.zone_at(ev.position())
+        self._drop_zone = None
+        self.update()
+        if source is None or source is self:
+            return
+        ev.acceptProposedAction()
+        self.tile_dropped.emit(source, zone)
 
     def _draw_text(self, p: QPainter, cells, start: int, end: int, x0: float, y: float):
         """ASCII-Folgen am Stück, alles andere (Umlaute, Rahmenzeichen, breite Zeichen) einzeln auf das Zellraster."""
@@ -597,7 +714,9 @@ class TerminalView(QWidget):
 
     def mousePressEvent(self, ev):
         self.setFocus()
-        if ev.button() == Qt.MouseButton.LeftButton:
+        if ev.button() == Qt.MouseButton.LeftButton and self._on_grip(ev.position()):
+            self._grip_press = ev.position()
+        elif ev.button() == Qt.MouseButton.LeftButton:
             cell = self._cell_at(ev.position())
             self._sel = (cell, cell)
             self._dragging = True
@@ -609,6 +728,13 @@ class TerminalView(QWidget):
                 self.pasted.emit(text)
 
     def mouseMoveEvent(self, ev):
+        if self._grip_press is not None:
+            if (ev.position() - self._grip_press).manhattanLength() >= QGuiApplication.styleHints().startDragDistance():
+                self._grip_press = None
+                self._start_drag()
+            return
+        if self._tiled and not self._dragging:
+            self.setCursor(Qt.CursorShape.OpenHandCursor if self._on_grip(ev.position()) else Qt.CursorShape.IBeamCursor)
         if self._dragging and self._sel:
             pos = ev.position()
             if pos.y() < 0:
@@ -619,6 +745,7 @@ class TerminalView(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, ev):
+        self._grip_press = None
         if ev.button() != Qt.MouseButton.LeftButton or not self._dragging:
             return
         self._dragging = False

@@ -35,7 +35,7 @@ Häufige Verbindungen als Favoriten oben im Baum (werden mit synchronisiert); St
 Jede Verbindung öffnet sich im Terminal deiner Wahl (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, eigene Programme) über frei konfigurierbare Befehlsvorlagen, auch pro Verbindung verschieden.
 
 ### Integriertes Terminal
-Verbindungen öffnen sich auf Wunsch direkt in einem Reiter von Sesam, ohne externes Terminal (Auswahl, Kopieren, Verlauf, Schriftgröße). Mehrere Sitzungen lassen sich als **Kacheln** nebeneinander oder untereinander zeigen, auf Knopfdruck **alle Sitzungen als Raster**; optional geht die Eingabe an **alle Kacheln gleichzeitig** (ausdrücklich zuschaltbar, deutlich gekennzeichnet).
+Verbindungen öffnen sich auf Wunsch direkt in einem Reiter von Sesam, ohne externes Terminal (Auswahl, Kopieren, Verlauf, Schriftgröße). Mehrere Sitzungen lassen sich als **Kacheln** nebeneinander oder untereinander zeigen (per Drag & Drop umsortierbar), auf Knopfdruck **alle Sitzungen als Raster**; optional geht die Eingabe an **alle Kacheln gleichzeitig** (ausdrücklich zuschaltbar, deutlich gekennzeichnet).
 
 ### Zwischenablage-Verlauf
 Im Terminal Kopiertes bleibt abrufbar und lässt sich in einem oder mehreren Terminals einfügen; der Verlauf wird verschlüsselt gespeichert und nie synchronisiert.

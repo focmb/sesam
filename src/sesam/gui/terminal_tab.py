@@ -106,8 +106,10 @@ class TerminalTab(QWidget):
         self.changed.emit()
 
     # --- Kacheln ändern ---
-    def add_view(self, new: TerminalView, anchor: TerminalView | None, orientation: Qt.Orientation) -> None:
-        """Fügt ``new`` rechts (``Horizontal``) oder unter (``Vertical``) ``anchor`` ein; ohne Anker an die aktive Kachel."""
+    def add_view(self, new: TerminalView, anchor: TerminalView | None, orientation: Qt.Orientation, before: bool = False) -> None:
+        """Fügt ``new`` rechts (``Horizontal``) oder unter (``Vertical``) ``anchor`` ein, mit ``before`` links bzw. darüber.
+
+        Ohne Anker an die aktive Kachel."""
         self.unzoom()
         anchor = anchor if anchor in self.views() else self.active()
         self._register(new)
@@ -116,18 +118,18 @@ class TerminalTab(QWidget):
             self._root.addWidget(new)
         elif parent.count() == 1:  # ein Splitter mit nur einer Kachel nimmt die gewünschte Richtung an
             parent.setOrientation(orientation)
-            parent.addWidget(new)
+            parent.insertWidget(0 if before else 1, new)
             self._equalize(parent)
         elif parent.orientation() == orientation:
-            parent.insertWidget(parent.indexOf(anchor) + 1, new)
+            parent.insertWidget(parent.indexOf(anchor) + (0 if before else 1), new)
             self._equalize(parent)
         else:
             sizes = parent.sizes()
             index = parent.indexOf(anchor)
             inner = self._splitter(orientation)
             parent.insertWidget(index, inner)
-            inner.addWidget(anchor)  # setzt die Kachel um
-            inner.addWidget(new)
+            for widget in ((new, anchor) if before else (anchor, new)):  # setzt auch die Kachel um
+                inner.addWidget(widget)
             parent.setSizes(sizes)
             self._equalize(inner)
         new.show()
@@ -154,6 +156,41 @@ class TerminalTab(QWidget):
             self._active = remaining[-1] if remaining else None
             if self._active is not None:
                 self._active.setFocus()
+        self._update_tiled()
+
+    ZONES = ("left", "right", "up", "down", "swap")
+
+    def move_view(self, view: TerminalView, anchor: TerminalView, zone: str) -> None:
+        """Setzt eine Kachel dieses Reiters an eine Seite einer anderen (``left``/``right``/``up``/``down``) oder tauscht beide (``swap``)."""
+        views = self.views()
+        if view is anchor or view not in views or anchor not in views or zone not in self.ZONES:
+            return
+        if zone == "swap":
+            self._swap(view, anchor)
+            return
+        broadcast = self._broadcast
+        self.detach(view)
+        orientation = Qt.Orientation.Horizontal if zone in ("left", "right") else Qt.Orientation.Vertical
+        self.add_view(view, anchor, orientation, before=zone in ("left", "up"))
+        self.set_broadcast(broadcast)
+        view.setFocus()
+
+    def _swap(self, a: TerminalView, b: TerminalView) -> None:
+        self.unzoom()
+        pa, pb = a.parentWidget(), b.parentWidget()
+        if not isinstance(pa, QSplitter) or not isinstance(pb, QSplitter):
+            return
+        ia, ib = pa.indexOf(a), pb.indexOf(b)
+        placeholder = QWidget()
+        pa.replaceWidget(ia, placeholder)
+        pb.replaceWidget(ib, a)
+        pa.replaceWidget(pa.indexOf(placeholder), b)
+        placeholder.setParent(None)
+        placeholder.deleteLater()
+        a.show()
+        b.show()
+        self._active = a
+        a.setFocus()
         self._update_tiled()
 
     def remove_view(self, view: TerminalView) -> None:

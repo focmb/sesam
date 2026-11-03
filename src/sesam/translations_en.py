@@ -362,6 +362,7 @@ EN: dict[str, str] = {
     "In einzelne Reiter auflösen": "Split into separate tabs",
     "Eingabe an alle Kacheln senden": "Send input to all tiles",
     "Eingabe an alle": "Input to all",
+    "Tauschen": "Swap",
     "Zum Kacheln braucht es mindestens zwei Sitzungen.": "Tiling needs at least two sessions.",
     "„Eingabe an alle“ braucht mindestens zwei Kacheln im Reiter.": "“Input to all” needs at least two tiles in the tab.",
     "Eingabe geht jetzt an alle Kacheln dieses Reiters (rot umrandet).": "Input now goes to all tiles in this tab (red border).",

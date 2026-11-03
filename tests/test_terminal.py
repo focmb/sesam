@@ -441,3 +441,111 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             with mock.patch.object(main_window.MainWindow, "_popup", lambda self, menu, pos: shown.extend(a.text() for a in menu.actions())):
                 self.w._context_menu(self.w.tree.visualItemRect(item).center())
             self.assertIn("Neben dem aktuellen Terminal öffnen", shown)
+
+        # --- Kacheln per Ziehen und Ablegen verschieben ---
+        def _order(self, tab):
+            return [v.title for v in tab.views()]
+
+        def _three_tiles(self):
+            from PySide6.QtCore import Qt
+
+            first, second = self._two_tiles()
+            self.w._split_view(second, Qt.Orientation.Horizontal)
+            views = self.w._terminal_views()
+            third = [v for v in views if v not in (first, second)][0]
+            self.assertTrue(self.pump(lambda: third._pty is not None))
+            for i, v in enumerate((first, second, third)):
+                v.title = f"K{i + 1}"
+            return first, second, third
+
+        def test_zone_depends_on_the_edge_next_to_the_drop_point(self):
+            from PySide6.QtCore import QPointF
+
+            first, _second = self._two_tiles()
+            w, h = first.width(), first.height()
+            self.assertEqual(first.zone_at(QPointF(5, h / 2)), "left")
+            self.assertEqual(first.zone_at(QPointF(w - 5, h / 2)), "right")
+            self.assertEqual(first.zone_at(QPointF(w / 2, 5)), "up")
+            self.assertEqual(first.zone_at(QPointF(w / 2, h - 5)), "down")
+            self.assertEqual(first.zone_at(QPointF(w / 2, h / 2)), "swap")
+
+        def test_dropping_on_the_left_moves_the_tile_in_front(self):
+            first, second, third = self._three_tiles()
+            tab = self.w._tab_of(first)
+            self.w._drop_tile(third, first, "left")
+            self.assertEqual(self._order(tab), ["K3", "K1", "K2"])
+            self.assertEqual(len(self.w._terminal_views()), 3)
+            self.assertTrue(all(v._tiled for v in tab.views()))
+
+        def test_dropping_below_nests_in_the_other_direction(self):
+            from PySide6.QtCore import Qt
+            from PySide6.QtWidgets import QSplitter
+
+            first, second, third = self._three_tiles()
+            tab = self.w._tab_of(first)
+            self.w._drop_tile(first, third, "down")
+            self.assertEqual(self._order(tab), ["K2", "K3", "K1"])
+            self.assertIsInstance(first.parentWidget(), QSplitter)
+            self.assertEqual(first.parentWidget().orientation(), Qt.Orientation.Vertical)
+            self.assertIs(first.parentWidget(), third.parentWidget())
+
+        def test_dropping_in_the_middle_swaps_two_tiles(self):
+            first, second, third = self._three_tiles()
+            tab = self.w._tab_of(first)
+            self.w._drop_tile(first, third, "swap")
+            self.assertEqual(self._order(tab), ["K3", "K2", "K1"])
+            self.assertTrue(all(v.isVisible() for v in tab.views()))
+            self.assertIs(tab.active(), first)
+
+        def test_moving_keeps_sessions_running_and_input_to_all(self):
+            first, second, third = self._three_tiles()
+            tab = self.w._tab_of(first)
+            tab.set_broadcast(True)
+            self.w._drop_tile(second, first, "up")
+            self.assertTrue(tab.broadcast())
+            self.assertTrue(all(v.is_broadcasting() for v in tab.views()))
+            self.assertTrue(all(v.poll() is None for v in tab.views()))
+
+        def test_dropping_a_tile_from_another_tab_moves_it_over(self):
+            self._open_sessions(2)
+            tabs = self.w._terminal_tabs()
+            self.assertEqual(len(tabs), 2)
+            a, b = tabs[0].views()[0], tabs[1].views()[0]
+            self.w._drop_tile(b, a, "right")
+            self.assertEqual(self.w.tabs.count(), 2)  # der leere Reiter ist weg
+            self.assertEqual(self.w._tab_of(a).views(), [a, b])
+            self.assertIs(self.w.tabs.currentWidget(), self.w._tab_of(a))
+            self.assertTrue(a._tiled and b._tiled)
+
+        def test_dropping_on_itself_changes_nothing(self):
+            first, second = self._two_tiles()
+            tab = self.w._tab_of(first)
+            before = tab.views()
+            self.w._drop_tile(first, first, "left")
+            self.assertEqual(tab.views(), before)
+
+        def test_grip_drag_hands_the_tile_to_the_target(self):
+            from PySide6.QtCore import QMimeData, QPointF, Qt
+            from PySide6.QtGui import QDragMoveEvent, QDropEvent
+            from sesam.gui.terminal_view import TILE_MIME, TerminalView
+
+            first, second = self._two_tiles()
+            self.assertTrue(first._on_grip(first._grip_rect().center()))
+            self.assertFalse(first._on_grip(QPointF(10, 10)))
+            mime = QMimeData()
+            mime.setData(TILE_MIME, b"x")
+            pos = QPointF(5, first.height() / 2)
+            received = []
+            first.tile_dropped.connect(lambda src, zone: received.append((src, zone)))
+            TerminalView._dragged = second
+            try:
+                move = QDragMoveEvent(pos.toPoint(), Qt.DropAction.MoveAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+                first.dragMoveEvent(move)
+                self.assertEqual(first._drop_zone, "left")
+                drop = QDropEvent(pos, Qt.DropAction.MoveAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+                first.dropEvent(drop)
+            finally:
+                TerminalView._dragged = None
+            self.assertEqual(received, [(second, "left")])
+            self.assertIsNone(first._drop_zone)
+            self.assertEqual(self.w._tab_of(first).views(), [second, first])  # per Signal im Hauptfenster umgesetzt
