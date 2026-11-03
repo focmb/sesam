@@ -128,8 +128,18 @@ class SshTests(unittest.TestCase):
 
     def test_list_guests(self):
         found = proxmox.list_guests(self.cfg, self.conn, **self.kw)
-        self.assertEqual([g.vmid for g in found], [100, 101, 102])
+        self.assertEqual([g.vmid for g in found], [100, 101])  # nur der Knoten „pve“, nicht der Rest des Clusters (102 liegt auf „pve2“)
+        self.assertTrue(all(g.node == "pve" and g.local for g in found))
         self.assertEqual(self.server.commands, [proxmox.LIST_COMMAND])
+
+    def test_list_guests_of_another_node_of_the_cluster(self):
+        self.pve.reply = (listing(*GUESTS, node="pve2"), b"", 0)  # wir sind auf pve2 angemeldet
+        found = proxmox.list_guests(self.cfg, self.conn, **self.kw)
+        self.assertEqual([(g.vmid, g.node) for g in found], [(102, "pve2")])
+
+    def test_node_without_guests_lists_nothing(self):
+        self.pve.reply = (listing(*GUESTS, node="pve3"), b"", 0)
+        self.assertEqual(proxmox.list_guests(self.cfg, self.conn, **self.kw), [])
 
     def test_not_a_proxmox_host(self):
         self.pve.reply = (b"", b"bash: pvesh: command not found\n", 127)
@@ -171,6 +181,9 @@ class TreeTests(GuiTestCase):
         base = Path(self.tmp.name)
         (base / "remote").mkdir()
         self.pve = FakePve()
+        # Cluster aus „pve“ (dieser Knoten, hier angemeldet) und „pve2“: im Baum erscheinen nur die Gäste von „pve“
+        self.pve.reply = (listing(("lxc", 101, "web", "running", "pve", False), ("qemu", 100, "win", "stopped", "pve", False),
+                                  ("qemu", 103, "app", "running", "pve", False), ("qemu", 102, "db", "running", "pve2", False)), b"", 0)
         self.server = SftpTestServer(str(base / "remote"), host_key=self.host_key, exec_handler=self.pve)
         self.addCleanup(self.server.close)
         self.conn = Connection(name="PVE", host="127.0.0.1", port=self.server.port, user="tester", use_password=True,
@@ -198,7 +211,7 @@ class TreeTests(GuiTestCase):
 
     def expand(self):
         self.host().setExpanded(True)
-        self.wait(lambda: self.texts() == ["win (100)", "web (101)", "db (102)"])
+        self.wait(lambda: self.texts() == ["win (100)", "web (101)", "app (103)"])
 
     def select(self, row):
         self.w.tree.setCurrentItem(self.host().child(row))

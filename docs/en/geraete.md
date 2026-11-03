@@ -22,7 +22,7 @@ If Docker runs on a host, you can connect straight into a container. In the conn
 
 If a host is a Proxmox VE server, Sesam shows its guests in the tree. In the connection (*Edit*, tab *Tree extensions*) tick
 **Show this host’s Proxmox guests (VMs and LXC) in the connection tree** (replaces the Docker view); optionally enter the user for VMs (default `root`).
-- **In the tree:** on expanding, Sesam asks the host over SSH as `root` with `pvesh` for all VMs and LXC containers (including other cluster nodes). Running guests are coloured, stopped ones grey; templates are hidden.
+- **In the tree:** on expanding, Sesam asks the host over SSH as `root` with `pvesh` for the VMs and LXC containers of **this node**. In a cluster you add each node as its own connection; each shows only its own guests, not those of the whole cluster. Running guests are coloured, stopped ones grey; templates are hidden.
 - **LXC containers:** double-click opens `pct enter <ID>` in the terminal through the host (for guests on other nodes via SSH through that node).
 - **VMs:** Sesam asks for the IP address through the QEMU guest agent and connects over SSH from the Proxmox host into the VM. The agent must be running in the VM.
 - **Power:** right-click → *Start*, *Shut down*, *Stop (forced)*, *Restart*. Stop and restart ask for confirmation first; afterwards Sesam reloads the status.

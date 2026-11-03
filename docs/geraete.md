@@ -22,7 +22,7 @@ Läuft auf einem Host Docker, kannst du direkt in einen Container verbinden. In 
 
 Ist ein Host ein Proxmox-VE-Server, zeigt Sesam seine Gäste im Baum. In der Verbindung (*Bearbeiten*, Reiter *Baum-Erweiterungen*) den Haken
 **Proxmox-Gäste (VMs und LXC) dieses Hosts im Verbindungsbaum anzeigen** setzen (ersetzt die Docker-Anzeige); optional den Benutzer für VMs eintragen (Standard `root`).
-- **Im Baum:** Beim Aufklappen fragt Sesam den Host per SSH als `root` mit `pvesh` nach allen VMs und LXC-Containern (auch anderer Cluster-Knoten). Laufende Gäste sind farbig, gestoppte grau; Vorlagen werden ausgeblendet.
+- **Im Baum:** Beim Aufklappen fragt Sesam den Host per SSH als `root` mit `pvesh` nach den VMs und LXC-Containern **dieses Knotens**. In einem Cluster legst du jeden Knoten als eigene Verbindung an; jede zeigt nur ihre eigenen Gäste, nicht die des ganzen Clusters. Laufende Gäste sind farbig, gestoppte grau; Vorlagen werden ausgeblendet.
 - **LXC-Container:** Doppelklick öffnet im Terminal `pct enter <ID>` über den Host (bei Gästen anderer Knoten per SSH über diesen Knoten).
 - **VMs:** Sesam erfragt die IP-Adresse über den QEMU-Gast-Agent und verbindet vom Proxmox-Host aus per SSH in die VM. Dafür muss der Agent in der VM laufen.
 - **Ein-/Ausschalten:** Rechtsklick → *Starten*, *Herunterfahren*, *Stoppen (hart)*, *Neustarten*. Stoppen und Neustarten fragen vorher nach; danach lädt Sesam den Status neu.

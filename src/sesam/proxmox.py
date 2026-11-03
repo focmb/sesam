@@ -12,7 +12,8 @@ from . import sftp
 from .models import Config, Connection
 from .i18n import tr
 
-# Erste Zeile: Name des Knotens, auf dem wir angemeldet sind; danach die Gäste des ganzen Clusters als JSON.
+# Erste Zeile: Name des Knotens, auf dem wir angemeldet sind; danach die Gäste des ganzen Clusters als JSON
+# (``parse_resources`` liefert alle, ``list_guests`` behält nur die des angemeldeten Knotens).
 LIST_COMMAND = "hostname -s; pvesh get /cluster/resources --type vm --output-format json"
 EXEC_TIMEOUT = 30  # Sekunden für die Abfrage selbst (der Verbindungsaufbau hat einen eigenen Timeout)
 ACTIONS = ("start", "shutdown", "stop", "reboot")  # Strom-Aktionen (Reihenfolge wie im Menü)
@@ -107,10 +108,13 @@ def list_guests(cfg: Config, conn: Connection, password: str | None = None, know
                 timeout: float = 10.0) -> list[Guest]:
     """Fragt den Proxmox-Host nach seinen Gästen. Blockiert, gehört in einen Hintergrund-Thread.
 
+    Im Cluster liefert Proxmox die Gäste aller Knoten; hier bleiben nur die des Knotens, mit dem die Verbindung besteht
+    (so zeigt jede Verbindung zu einem Knoten ihre eigenen Gäste und nicht alles dreifach).
+
     Wirft ``sftp.SftpAuthError`` bei abgelehnter Anmeldung, sonst ``sftp.SftpError`` oder ``ProxmoxError``.
     """
     out = _run(cfg, conn, LIST_COMMAND, password, known_hosts, timeout, tr("die Proxmox-Anzeige"))
-    return parse_resources(out)
+    return [guest for guest in parse_resources(out) if guest.local]
 
 
 def _api_path(guest: Guest, tail: str) -> str:
