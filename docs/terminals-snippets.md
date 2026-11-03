@@ -30,7 +30,7 @@ Er steht neben den anderen Terminals zur Wahl (als Standard oder pro Verbindung,
 - **Reiter:** Vorn bleibt die Verbindungsliste, jede Sitzung bekommt einen eigenen Reiter. Sobald `ssh` endet, schließt sich der Reiter; das Schließen einer laufenden Sitzung fragt nach.
 - **Bedienung:** Auswahl mit der Maus kopiert in die Auswahl-Zwischenablage (Mittelklick fügt ein), Strg+Umschalt+C / Strg+Umschalt+V bzw. Strg+Einfg / Umschalt+Einfg kopieren und einfügen, Umschalt+Bild↑/↓ und das Mausrad blättern im Verlauf (10 000 Zeilen), Strg+Mausrad ändert die Schriftgröße des Reiters. Rechtsklick zeigt ein Menü. Programme wie vim, less oder htop laufen im Alternativbildschirm.
 - **Gleiche Technik wie extern:** Es läuft derselbe Wrapper mit `ssh`, also gelten `~/.ssh/config`, Jump-Hosts, gespeicherte Passwörter, sudo und die Rückfrage bei geänderten Host-Schlüsseln unverändert.
-- **Voraussetzungen:** Das Python-Paket `pyte` (unter Windows zusätzlich `pywinpty` für ConPTY). Die fertigen Pakete bringen beides mit; bei Arch ist `python-pyte` eine optionale Abhängigkeit.
+- **Voraussetzungen:** Das Python-Paket `pyte` (unter Windows zusätzlich `pywinpty` für ConPTY). Die fertigen Pakete bringen beides mit; das Arch-Paket zieht `python-pyte` automatisch mit.
 - **Grenzen:** Mausunterstützung innerhalb von Programmen (Mausmodi) und Sixel-Grafiken werden nicht ausgewertet.
 
 ## Zwischenablage-Verlauf

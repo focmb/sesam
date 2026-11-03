@@ -30,7 +30,7 @@ It is available alongside the other terminals (as the default or per connection,
 - **Tabs:** The connection list stays in front, each session gets its own tab. The tab closes as soon as `ssh` ends; closing a running session asks first.
 - **Usage:** Selecting with the mouse copies to the selection clipboard (middle click pastes), Ctrl+Shift+C / Ctrl+Shift+V or Ctrl+Ins / Shift+Ins copy and paste, Shift+Page Up/Down and the mouse wheel scroll through the history (10,000 lines), Ctrl+wheel changes the tab's font size. A right click shows a menu. Programs such as vim, less or htop run on the alternate screen.
 - **Same machinery as external:** The same wrapper runs `ssh`, so `~/.ssh/config`, jump hosts, saved passwords, sudo and the prompt for changed host keys work unchanged.
-- **Requirements:** The Python package `pyte` (on Windows also `pywinpty` for ConPTY). The ready-made packages include both; on Arch `python-pyte` is an optional dependency.
+- **Requirements:** The Python package `pyte` (on Windows also `pywinpty` for ConPTY). The ready-made packages include both; the Arch package pulls in `python-pyte` automatically.
 - **Limits:** Mouse support inside programs (mouse modes) and Sixel graphics are not interpreted.
 
 ## Clipboard history
