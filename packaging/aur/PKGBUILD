@@ -1,7 +1,7 @@
 # Maintainer: Christian Leitzke <christian.leitzke@gmail.com>
 pkgname=sesam
-pkgver=3.5.0
-pkgrel=2
+pkgver=3.6.0
+pkgrel=1
 pkgdesc="SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen"
 arch=('any')
 url="https://github.com/focmb/sesam"
@@ -16,7 +16,7 @@ optdepends=('wireguard-tools: Endpunkt und Handshake in der WireGuard-Anzeige'
             'tigervnc: VNC-Viewer'
             'freerdp: RDP-Viewer')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('19edece367fa626723c4c3d540be4965ebabcf214a04ea2c3ca9e1e8e1d20fed')
+sha256sums=('1b61a3fff882730fdafc4ca7c60ca53ec1a8b28996e32d323a46a767e803e64b')
 
 build() {
   cd "$srcdir/$pkgname-$pkgver"
