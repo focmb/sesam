@@ -9,7 +9,7 @@ from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QGuiApplication, QIcon, QKeySequence, QPainter
 from PySide6.QtWidgets import (
     QTabBar, QTabWidget, QAbstractItemView, QApplication, QButtonGroup, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
-    QMessageBox, QPushButton,
+    QMessageBox, QPushButton, QToolButton,
     QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
 )
 
@@ -222,6 +222,7 @@ class MainWindow(QMainWindow):
             self.tabs.tabBar().setTabButton(0, side, None)  # der erste Reiter lässt sich nicht schließen
         self.tabs.tabCloseRequested.connect(self._close_terminal_tab)
         self.tabs.currentChanged.connect(self._tab_changed)
+        self._build_tile_button()
         self.setCentralWidget(self.tabs)
         self._split_target: tuple[TerminalView, Qt.Orientation] | None = None  # nächste Sitzung als Kachel neben/unter dieser öffnen
         self._recent_terminal_tab: TerminalTab | None = None  # zuletzt benutzter Terminal-Reiter (Ziel für „Neben/Unter dem aktuellen Terminal öffnen“)
@@ -606,21 +607,40 @@ class MainWindow(QMainWindow):
         view.focus_requested.connect(lambda direction, v=view: self._move_focus(v, direction))
         view.zoom_requested.connect(lambda v=view: self._zoom_view(v))
         view.close_requested.connect(lambda v=view: self._close_view(v))
+        view.typed.connect(lambda data, v=view: self._broadcast_typed(v, data))
+        view.pasted.connect(lambda text, v=view: self._broadcast_pasted(v, text))
+        view.grid_requested.connect(self._tile_all)
+        view.untile_requested.connect(lambda v=view: self._untile(self._tab_of(v)))
+        view.broadcast_requested.connect(lambda v=view: self._toggle_broadcast(self._tab_of(v)))
         target, self._split_target = self._split_target, None
         tab = self._tab_of(target[0]) if target is not None else None
         if tab is not None and self.tabs.indexOf(tab) > 0:
             tab.add_view(view, target[0], target[1])
             self.tabs.setCurrentWidget(tab)
         else:
-            tab = TerminalTab(view)
-            tab.changed.connect(lambda t=tab: self._refresh_tab(t))
-            index = self.tabs.addTab(tab, title)
-            self.tabs.setTabToolTip(index, title)
-            self.tabs.setCurrentIndex(index)
+            tab = self._add_tab(view)
+            self.tabs.setCurrentWidget(tab)
         self._refresh_tab(tab)
         view.start(args, env)
         view.setFocus()
         return view
+
+    def _add_tab(self, view: TerminalView) -> TerminalTab:
+        """Neuer Terminal-Reiter für eine Sitzung (wird nicht in den Vordergrund geholt)."""
+        tab = TerminalTab(view)
+        tab.changed.connect(lambda t=tab: self._refresh_tab(t))
+        index = self.tabs.addTab(tab, view.title)
+        self.tabs.setTabToolTip(index, view.title)
+        view.show()
+        self._update_tile_button()
+        return tab
+
+    def _drop_tab(self, tab: TerminalTab):
+        index = self.tabs.indexOf(tab)
+        if index > 0:
+            self.tabs.removeTab(index)
+        tab.deleteLater()
+        self._update_tile_button()
 
     def _split_view(self, view: TerminalView, orientation: Qt.Orientation):
         """Öffnet neben/unter der Kachel eine weitere Sitzung mit demselben Befehl (dieselbe Verbindung)."""
@@ -667,14 +687,113 @@ class MainWindow(QMainWindow):
         if tab is not None:
             tab.remove_view(view)
             if tab.is_empty():
-                index = self.tabs.indexOf(tab)
-                if index > 0:
-                    self.tabs.removeTab(index)
-                tab.deleteLater()
+                self._drop_tab(tab)
             else:
                 self._refresh_tab(tab)
         view.deleteLater()
         self._update_open_markers()
+
+    # --- Kacheln: Raster, Auflösen, Eingabe an alle ---
+    def _tile_all(self):
+        """Alle Sitzungen aller Terminal-Reiter als Raster in einem Reiter zeigen (der aktuelle, sonst der erste)."""
+        tabs = self._terminal_tabs()
+        views = [v for t in tabs for v in t.views()]
+        if len(views) < 2:
+            self.toasts.notify(tr("Zum Kacheln braucht es mindestens zwei Sitzungen."), 4000)
+            return
+        current = self.tabs.currentWidget()
+        target = current if isinstance(current, TerminalTab) else tabs[0]
+        for tab in tabs:
+            if tab is not target:
+                for view in tab.views():
+                    tab.detach(view)
+                self._drop_tab(tab)
+        target.arrange_grid(views)
+        self.tabs.setCurrentWidget(target)
+        self._refresh_tab(target)
+        target.focus_active()
+
+    def _untile(self, tab: TerminalTab | None):
+        """Jede Kachel des Reiters bekommt wieder einen eigenen Reiter (die erste bleibt im Reiter)."""
+        if tab is None or len(tab.views()) < 2:
+            return
+        for view in tab.views()[1:]:
+            tab.detach(view)
+            self._refresh_tab(self._add_tab(view))
+        self._refresh_tab(tab)
+        tab.focus_active()
+
+    def _toggle_broadcast(self, tab: TerminalTab | None):
+        """Schaltet „Eingabe an alle Kacheln“ für den Reiter um (nur mit mindestens zwei Kacheln)."""
+        if tab is None:
+            return
+        if len(tab.views()) < 2:
+            self.toasts.notify(tr("„Eingabe an alle“ braucht mindestens zwei Kacheln im Reiter."), 4000)
+            return
+        tab.set_broadcast(not tab.broadcast())
+        if tab.broadcast():
+            self.toasts.notify(tr("Eingabe geht jetzt an alle Kacheln dieses Reiters (rot umrandet)."), 6000)
+        tab.focus_active()
+
+    def _broadcast_peers(self, view: TerminalView) -> list[TerminalView]:
+        tab = self._tab_of(view)
+        if tab is None or not tab.broadcast():
+            return []
+        return [v for v in tab.views() if v is not view and v.poll() is None]
+
+    def _broadcast_typed(self, view: TerminalView, data: bytes):
+        for peer in self._broadcast_peers(view):
+            peer.send_input(data)
+
+    def _broadcast_pasted(self, view: TerminalView, text: str):
+        peers = self._broadcast_peers(view)
+        if peers and confirm_paste(self, text, len(peers)):
+            for peer in peers:
+                peer.paste_text(text)
+
+    def _add_tile_actions(self, menu: QMenu, tab: TerminalTab | None):
+        grid = menu.addAction(tr("Alle Sitzungen kacheln"))
+        grid.setEnabled(len(self._terminal_views()) >= 2)
+        grid.triggered.connect(lambda: self._tile_all())
+        count = len(tab.views()) if tab is not None else 0
+        untile = menu.addAction(tr("In einzelne Reiter auflösen"))
+        untile.setEnabled(count >= 2)
+        untile.triggered.connect(lambda: self._untile(tab))
+        broadcast = menu.addAction(tr("Eingabe an alle Kacheln senden"))
+        broadcast.setCheckable(True)
+        broadcast.setChecked(bool(tab is not None and tab.broadcast()))
+        broadcast.setEnabled(count >= 2)
+        broadcast.triggered.connect(lambda: self._toggle_broadcast(tab))
+
+    def _build_tile_button(self):
+        """Schaltfläche „Kacheln“ rechts neben den Reitern (nur sichtbar, solange es Terminal-Reiter gibt)."""
+        button = QToolButton()
+        button.setText(tr("Kacheln"))
+        button.setToolTip(tr("Sitzungen kacheln, Eingabe an alle senden"))
+        button.setAutoRaise(True)
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(button)
+        menu.aboutToShow.connect(lambda: self._fill_tile_menu(menu))
+        button.setMenu(menu)
+        button.setVisible(False)
+        self.tabs.setCornerWidget(button, Qt.Corner.TopRightCorner)
+        self.tile_button = button
+
+    def _fill_tile_menu(self, menu: QMenu):
+        menu.clear()
+        current = self.tabs.currentWidget()
+        tab = current if isinstance(current, TerminalTab) else None
+        view = tab.active() if tab is not None else None
+        if view is not None:
+            menu.addAction(tr("Rechts teilen")).triggered.connect(lambda: self._split_view(view, Qt.Orientation.Horizontal))
+            menu.addAction(tr("Unten teilen")).triggered.connect(lambda: self._split_view(view, Qt.Orientation.Vertical))
+            menu.addSeparator()
+        self._add_tile_actions(menu, tab)
+
+    def _update_tile_button(self):
+        button = getattr(self, "tile_button", None)
+        if button is not None:
+            button.setVisible(bool(self._terminal_tabs()))
 
     def _confirm_end(self, running: list[TerminalView]) -> bool:
         if len(running) == 1:
@@ -794,6 +913,8 @@ class MainWindow(QMainWindow):
                 menu.addAction(tr("Unten teilen")).triggered.connect(lambda: self._split_view(view, Qt.Orientation.Vertical))
             menu.addAction(tr("Sitzung beenden")).triggered.connect(lambda: self._close_terminal_tab(self.tabs.indexOf(tab)))
             menu.addSeparator()
+        self._add_tile_actions(menu, tab if isinstance(tab, TerminalTab) else None)
+        menu.addSeparator()
         sessions = self._terminal_sessions()
         everywhere = menu.addAction(tr("Zwischenablage in alle Reiter einfügen"))
         everywhere.setEnabled(bool(sessions) and bool(QGuiApplication.clipboard().text()))

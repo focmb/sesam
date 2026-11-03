@@ -20,6 +20,7 @@ except ImportError:  # wird beim Öffnen gemeldet (siehe ``available``)
 
 SCROLLBACK_LINES = 10000
 PADDING = 6
+BROADCAST_COLOR = "#d6336c"  # Rand und Hinweis bei „Eingabe an alle Kacheln“
 ALT_SCREEN_MODES = (47, 1047, 1049)
 BRACKETED_PASTE = 2004 << 5  # private Modi sind in pyte um 5 Bit verschoben
 APP_CURSOR_KEYS = 1 << 5  # DECCKM
@@ -155,6 +156,11 @@ class TerminalView(QWidget):
     zoom_requested = Signal()  # Strg+Umschalt+Enter oder Menü: Kachel vergrößern bzw. zurück
     close_requested = Signal()  # Strg+Umschalt+W oder Menü: diese Kachel schließen
     focused = Signal()  # die Kachel hat den Fokus bekommen
+    typed = Signal(bytes)  # Tastatureingabe des Benutzers (für „Eingabe an alle Kacheln“)
+    pasted = Signal(str)  # Text, den der Benutzer eingefügt hat (Strg+Umschalt+V, Mittelklick, Menü)
+    grid_requested = Signal()  # Strg+Umschalt+G oder Menü: alle Sitzungen als Raster kacheln
+    untile_requested = Signal()  # Menü: die Kacheln dieses Reiters in einzelne Reiter auflösen
+    broadcast_requested = Signal()  # Strg+Umschalt+B oder Menü: Eingabe an alle Kacheln umschalten
 
     def __init__(self, title: str, scale: int = 100, dark: bool = True, parent=None):
         super().__init__(parent)
@@ -169,6 +175,7 @@ class TerminalView(QWidget):
         self._pending: tuple[list[str], dict[str, str]] | None = None
         self._command: tuple[list[str], dict[str, str]] | None = None  # Befehl der Sitzung (für „Kachel teilen“)
         self._tiled = False  # mehrere Kacheln im Reiter: aktive Kachel bekommt einen Rand
+        self._broadcast = False  # Eingabe geht an alle Kacheln des Reiters: roter Rand und Hinweis
         self._pty: pty_session.PtySession | None = None
         self._finished: int | None = None
         self._notice = ""
@@ -226,6 +233,19 @@ class TerminalView(QWidget):
         if tiled != self._tiled:
             self._tiled = tiled
             self.update()
+
+    def set_broadcast(self, enabled: bool) -> None:
+        if enabled != self._broadcast:
+            self._broadcast = enabled
+            self.update()
+
+    def is_broadcasting(self) -> bool:
+        return self._broadcast
+
+    def send_input(self, data: bytes) -> None:
+        """Eingabe von außen (aus einer anderen Kachel bei „Eingabe an alle“) wie getippt an den Prozess senden."""
+        self._scroll_to_end()
+        self._send(data)
 
     def poll(self) -> int | None:
         """Für die Verbindungsverwaltung: ``None``, solange die Sitzung läuft."""
@@ -405,7 +425,17 @@ class TerminalView(QWidget):
                     p.setPen(QPen(color, 1))
                     p.drawLine(QPointF(x0, y + ch / 2), QPointF(x0 + (end - start) * cw, y + ch / 2))
         self._paint_cursor(p, first, cells_cache=None)
-        if self._tiled:  # Rand um die aktive Kachel, die übrigen nur dezent umrandet
+        if self._broadcast:  # deutlich: roter Rand an allen Kacheln und ein Hinweis oben rechts
+            p.setPen(QPen(QColor(BROADCAST_COLOR), 3))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(QRectF(1.5, 1.5, self.width() - 3, self.height() - 3))
+            label = tr("Eingabe an alle")
+            metrics = p.fontMetrics()
+            box = QRectF(self.width() - metrics.horizontalAdvance(label) - 22, 3, metrics.horizontalAdvance(label) + 16, metrics.height() + 4)
+            p.fillRect(box, QColor(BROADCAST_COLOR))
+            p.setPen(QColor("#ffffff"))
+            p.drawText(box, Qt.AlignmentFlag.AlignCenter, label)
+        elif self._tiled:  # Rand um die aktive Kachel, die übrigen nur dezent umrandet
             p.setPen(QPen(QColor(scheme["cursor"] if self.hasFocus() else scheme["selection"]), 2))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawRect(QRectF(1, 1, self.width() - 2, self.height() - 2))
@@ -488,6 +518,12 @@ class TerminalView(QWidget):
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_E:
             self.split_requested.emit(Qt.Orientation.Vertical.value)
             return
+        if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_G:
+            self.grid_requested.emit()
+            return
+        if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_B:
+            self.broadcast_requested.emit()
+            return
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_W:
             self.close_requested.emit()
             return
@@ -511,12 +547,15 @@ class TerminalView(QWidget):
             return
         self._scroll_to_end()
         self._send(data)
+        self.typed.emit(data)
 
     def inputMethodEvent(self, ev):  # Tote Tasten, Compose, Eingabemethoden
         text = ev.commitString()
         if text:
             self._scroll_to_end()
-            self._send(text.encode("utf-8"))
+            data = text.encode("utf-8")
+            self._send(data)
+            self.typed.emit(data)
         ev.accept()
 
     # --- Scrollen ---
@@ -567,6 +606,7 @@ class TerminalView(QWidget):
             text = QGuiApplication.clipboard().text(QClipboard.Mode.Selection)
             if text:
                 self._paste_text(text)
+                self.pasted.emit(text)
 
     def mouseMoveEvent(self, ev):
         if self._dragging and self._sel:
@@ -639,7 +679,10 @@ class TerminalView(QWidget):
             self.copied.emit(text)
 
     def paste(self):
-        self._paste_text(QGuiApplication.clipboard().text())
+        text = QGuiApplication.clipboard().text()
+        self._paste_text(text)
+        if text:
+            self.pasted.emit(text)
 
     def paste_text(self, text: str, enter: bool = False):
         """Fügt Text ein (bei mehrzeiligem Text im eingeklammerten Einfügemodus); ``enter`` sendet danach Enter."""
@@ -677,4 +720,11 @@ class TerminalView(QWidget):
         menu.addAction(tr("Unten teilen")).triggered.connect(lambda: self.split_requested.emit(Qt.Orientation.Vertical.value))
         menu.addAction(tr("Kachel vergrößern / zurück")).triggered.connect(self.zoom_requested.emit)
         menu.addAction(tr("Kachel schließen")).triggered.connect(self.close_requested.emit)
+        menu.addSeparator()
+        menu.addAction(tr("Alle Sitzungen kacheln")).triggered.connect(self.grid_requested.emit)
+        menu.addAction(tr("In einzelne Reiter auflösen")).triggered.connect(self.untile_requested.emit)
+        broadcast = menu.addAction(tr("Eingabe an alle Kacheln senden"))
+        broadcast.setCheckable(True)
+        broadcast.setChecked(self._broadcast)
+        broadcast.triggered.connect(self.broadcast_requested.emit)
         menu.exec(ev.globalPos())

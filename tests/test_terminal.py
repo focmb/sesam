@@ -336,3 +336,85 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             self.assertEqual(self.w.tabs.count(), 2)
             self.assertEqual(len(self.w._terminal_views()), 2)
             self.assertIs(self.w.tabs.currentWidget(), self.w._tab_of(first))
+
+        def _open_sessions(self, n):
+            for _ in range(n):
+                self.w._open_connection(self.conn)
+            views = self.w._terminal_views()
+            self.assertEqual(len(views), n)
+            self.assertTrue(self.pump(lambda: all(v._pty is not None for v in views)))
+            return views
+
+        def test_grid_shape(self):
+            from sesam.gui.terminal_tab import TerminalTab
+
+            self.assertEqual([TerminalTab.grid_shape(n) for n in (1, 2, 3, 4, 5, 6)],
+                             [(1, 1), (2, 1), (2, 2), (2, 2), (3, 2), (3, 2)])
+
+        def test_tile_all_collects_every_session_into_one_tab(self):
+            from PySide6.QtCore import Qt
+
+            self._open_sessions(3)
+            self.assertEqual(self.w.tabs.count(), 4)
+            self.w._tile_all()
+            self.assertEqual(self.w.tabs.count(), 2)
+            tab = self.w.tabs.widget(1)
+            self.assertEqual(len(tab.views()), 3)
+            self.assertEqual(len(self.w._terminal_views()), 3)
+            self.assertTrue(all(v._tiled for v in tab.views()))
+            self.assertIs(self.w.tabs.currentWidget(), tab)
+            self.assertEqual(tab._root.orientation(), Qt.Orientation.Vertical)  # 2 × 2: zwei Zeilen
+            self.assertEqual(self.w.tabs.tabText(1), "Test (+2)")
+
+        def test_untile_gives_every_tile_its_own_tab_again(self):
+            self._open_sessions(3)
+            self.w._tile_all()
+            self.w._untile(self.w.tabs.widget(1))
+            self.assertEqual(self.w.tabs.count(), 4)
+            self.assertTrue(all(len(t.views()) == 1 for t in self.w._terminal_tabs()))
+            self.assertFalse(any(v._tiled for v in self.w._terminal_views()))
+
+        def test_tile_all_with_one_session_does_nothing(self):
+            self._open_sessions(1)
+            self.w._tile_all()
+            self.assertEqual(self.w.tabs.count(), 2)
+
+        def test_broadcast_is_off_by_default_and_needs_two_tiles(self):
+            first, second = self._two_tiles()
+            tab = self.w._tab_of(first)
+            self.assertFalse(tab.broadcast())
+            first.typed.emit(b"\r")  # ohne Broadcast bleibt die zweite Sitzung unberührt
+            self.pump(lambda: False, timeout=0.5)
+            self.assertEqual(len(self.w._terminal_views()), 2)
+            self.assertIsNone(second.poll())
+            second.terminate(force=True)
+            self.assertTrue(self.pump(lambda: len(self.w._terminal_views()) == 1))
+            self.w._toggle_broadcast(tab)  # allein: nichts zu verteilen
+            self.assertFalse(tab.broadcast())
+
+        def test_broadcast_sends_typing_to_the_other_tiles(self):
+            first, second = self._two_tiles()
+            tab = self.w._tab_of(first)
+            self.w._toggle_broadcast(tab)
+            self.assertTrue(tab.broadcast())
+            self.assertTrue(first.is_broadcasting() and second.is_broadcasting())
+            self.assertTrue(self.w.tabs.tabText(1).startswith("⚠"))
+            first.typed.emit(b"\r")  # Enter in der ersten Kachel erreicht auch die zweite: ihr „read“ endet
+            self.assertTrue(self.pump(lambda: len(self.w._terminal_views()) == 1))
+            self.assertIsNone(first.poll())
+            self.assertFalse(tab.broadcast())  # mit einer Kachel schaltet sich Broadcast ab
+            self.assertFalse(first.is_broadcasting())
+
+        def test_broadcast_paste_asks_before_multiline_text(self):
+            from unittest import mock
+            from sesam.gui import main_window
+
+            first, second = self._two_tiles()
+            self.w._toggle_broadcast(self.w._tab_of(first))
+            with mock.patch.object(second, "paste_text") as paste, mock.patch.object(main_window, "confirm_paste", return_value=False) as ask:
+                first.pasted.emit("a\nb\n")
+            ask.assert_called_once()
+            paste.assert_not_called()
+            with mock.patch.object(second, "paste_text") as paste, mock.patch.object(main_window, "confirm_paste", return_value=True):
+                first.pasted.emit("ls")
+            paste.assert_called_once_with("ls")
