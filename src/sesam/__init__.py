@@ -1,3 +1,3 @@
 """Sesam: SSH-Verbindungen verwalten und in konfigurierbaren Terminals öffnen."""
 
-__version__ = "3.7.2"
+__version__ = "3.8.0"
