@@ -34,6 +34,12 @@ Frequent connections as favorites at the top of the tree (synced too); Ctrl+K op
 ### Your own terminal
 Every connection opens in the terminal of your choice (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, custom programs) through freely configurable command templates, also different per connection.
 
+### Integrated terminal
+Connections can open right in a tab of Sesam, without an external terminal (selection, copy, history, font size). Several sessions can be shown as **tiles** side by side or one below the other, and with one click **all sessions as a grid**; optionally your input goes to **all tiles at once** (switched on explicitly and clearly marked).
+
+### Clipboard history
+Text copied in the terminal stays available and can be pasted into one or several terminals; the history is stored encrypted and never synced.
+
 ### Credentials
 Passwords live in the operating system’s keychain, not in the configuration file. Identities bundle user, key and password for many connections.
 
@@ -59,7 +65,7 @@ Open a device's screen in the **built-in VNC viewer** or in the viewer of your c
 Show a host’s containers in the connection tree; start, stop, restart and delete them, and open a shell in a container with a double-click.
 
 ### Proxmox
-VMs and LXC containers in the tree, shell in LXC and VMs, start, shut down, stop and restart.
+VMs and LXC containers of the respective node in the tree (in a cluster one connection per node), shell in LXC and VMs, start, shut down, stop and restart.
 
 ### Cisco switches
 Ports in the tree with state, VLAN and speed; switch them on and off, change descriptions, save the configuration.
@@ -71,7 +77,7 @@ The status bar shows whether the computer is connected to a WireGuard tunnel (tu
 Sync connections, groups, identities, keys and snippets between several devices; passwords and private keys are stored encrypted only (AES-256-GCM).
 
 ### Windows and Linux
-The same experience on both systems, light and dark theme, adjustable font size, interface in German and English.
+The same experience on both systems, light and dark theme, adjustable font size, interface in German and English. You manage terminals, viewers and synchronization in the **Settings**.
 
 ## Getting started
 
@@ -157,6 +163,14 @@ The screenshots show the German interface; the English interface looks the same 
 | --- | --- |
 | ![Snippets (light)](docs/screenshots/snippets-hell.png) | ![Snippets (dark)](docs/screenshots/snippets-dunkel.png) |
 
+| Integrated terminal with tiles (light) | Integrated terminal with tiles (dark) |
+| --- | --- |
+| ![Tiles (light)](docs/screenshots/terminal-kacheln-hell.png) | ![Tiles (dark)](docs/screenshots/terminal-kacheln-dunkel.png) |
+
+| “Send input to all tiles” (red border) | Settings |
+| --- | --- |
+| ![Input to all tiles](docs/screenshots/terminal-eingabe-an-alle.png) | ![Settings](docs/screenshots/einstellungen.png) |
+
 The images show sample data (made-up hosts) and were created with the Qt platform plugin “offscreen”; real windows may differ in frame and font depending on the desktop.
 
 ## Documentation
@@ -167,7 +181,7 @@ The detailed guide is in the [`docs/en/`](docs/en/) folder:
 |---|---|
 | [Managing connections](docs/en/verbindungen.md) | Appearance, groups, favorites and quick launcher, colors and tags, open connections |
 | [Credentials and sudo](docs/en/zugangsdaten.md) | Identities, SSH keys, sudo, passwords |
-| [Terminals and snippets](docs/en/terminals-snippets.md) | Configuring terminals, connection errors and host keys, snippets |
+| [Terminals and snippets](docs/en/terminals-snippets.md) | Configuring terminals, integrated terminal with tiles, clipboard history, connection errors and host keys, snippets |
 | [Files and tunnels](docs/en/dateien-tunnel.md) | SFTP file browser, port forwarding |
 | [Remote access (VNC and RDP)](docs/en/fernzugriff.md) | Built-in VNC viewer, external viewers, tunnel and direct connection, password |
 | [Docker, Proxmox, Cisco and WireGuard](docs/en/geraete.md) | Containers, guests, switch ports, WireGuard indicator |

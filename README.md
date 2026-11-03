@@ -34,6 +34,12 @@ Häufige Verbindungen als Favoriten oben im Baum (werden mit synchronisiert); St
 ### Eigenes Terminal
 Jede Verbindung öffnet sich im Terminal deiner Wahl (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, eigene Programme) über frei konfigurierbare Befehlsvorlagen, auch pro Verbindung verschieden.
 
+### Integriertes Terminal
+Verbindungen öffnen sich auf Wunsch direkt in einem Reiter von Sesam, ohne externes Terminal (Auswahl, Kopieren, Verlauf, Schriftgröße). Mehrere Sitzungen lassen sich als **Kacheln** nebeneinander oder untereinander zeigen, auf Knopfdruck **alle Sitzungen als Raster**; optional geht die Eingabe an **alle Kacheln gleichzeitig** (ausdrücklich zuschaltbar, deutlich gekennzeichnet).
+
+### Zwischenablage-Verlauf
+Im Terminal Kopiertes bleibt abrufbar und lässt sich in einem oder mehreren Terminals einfügen; der Verlauf wird verschlüsselt gespeichert und nie synchronisiert.
+
 ### Zugangsdaten
 Passwörter im Schlüsselbund des Betriebssystems, nicht in der Konfigurationsdatei. Identitäten bündeln Benutzer, Schlüssel und Passwort für viele Verbindungen.
 
@@ -59,7 +65,7 @@ Den Bildschirm eines Geräts öffnen, im **eingebauten VNC-Viewer** oder im View
 Container eines Hosts im Verbindungsbaum anzeigen, starten, stoppen, neu starten, löschen und per Doppelklick eine Shell im Container öffnen.
 
 ### Proxmox
-VMs und LXC-Container im Baum, Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
+VMs und LXC-Container des jeweiligen Knotens im Baum (in einem Cluster je Knoten eine Verbindung), Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
 
 ### Cisco-Switches
 Ports im Baum mit Zustand, VLAN und Geschwindigkeit; ein- und ausschalten, Beschreibung ändern, Konfiguration speichern.
@@ -71,7 +77,7 @@ Die Statuszeile zeigt, ob der Rechner mit einem WireGuard-Tunnel verbunden ist (
 Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets zwischen mehreren Geräten abgleichen; Passwörter und private Schlüssel nur verschlüsselt (AES-256-GCM).
 
 ### Windows und Linux
-Gleiche Bedienung auf beiden Systemen, helles und dunkles Design, einstellbare Schriftgröße, Oberfläche auf Deutsch und Englisch.
+Gleiche Bedienung auf beiden Systemen, helles und dunkles Design, einstellbare Schriftgröße, Oberfläche auf Deutsch und Englisch. Terminals, Viewer und Synchronisation verwaltest du in den **Einstellungen**.
 
 ## Start
 
@@ -158,6 +164,14 @@ Der Befehl `sesam` liegt in `~/.local/bin` (bei manchen Distributionen muss der 
 | ------------------------------------------------------ | ---------------------------------------------------------- |
 | ![Snippets (hell)](docs/screenshots/snippets-hell.png) | ![Snippets (dunkel)](docs/screenshots/snippets-dunkel.png) |
 
+| Integriertes Terminal mit Kacheln (hell) | Integriertes Terminal mit Kacheln (dunkel) |
+| ---------------------------------------- | ------------------------------------------ |
+| ![Kacheln (hell)](docs/screenshots/terminal-kacheln-hell.png) | ![Kacheln (dunkel)](docs/screenshots/terminal-kacheln-dunkel.png) |
+
+| „Eingabe an alle Kacheln senden“ (roter Rand) | Einstellungen |
+| --------------------------------------------- | ------------- |
+| ![Eingabe an alle Kacheln](docs/screenshots/terminal-eingabe-an-alle.png) | ![Einstellungen](docs/screenshots/einstellungen.png) |
+
 Die Bilder zeigen Beispieldaten (erfundene Hosts) und wurden mit dem Qt-Plattform-Plugin „offscreen“ erzeugt; echte Fenster können je nach Desktop in Rahmen und Schrift abweichen.
 
 ## Dokumentation
@@ -169,7 +183,7 @@ Die ausführliche Anleitung steht im Ordner [`docs/`](docs/):
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | [Verbindungen verwalten](docs/verbindungen.md)              | Darstellung, Gruppen, Favoriten und Schnellstarter, Farben und Tags, offene Verbindungen |
 | [Zugangsdaten und sudo](docs/zugangsdaten.md)               | Identitäten, SSH-Schlüssel, sudo, Passwörter                                          |
-| [Terminals und Snippets](docs/terminals-snippets.md)        | Terminals konfigurieren, Verbindungsfehler und Host-Schlüssel, Snippets                 |
+| [Terminals und Snippets](docs/terminals-snippets.md)        | Terminals konfigurieren, integriertes Terminal mit Kacheln, Zwischenablage-Verlauf, Verbindungsfehler und Host-Schlüssel, Snippets |
 | [Dateien und Tunnel](docs/dateien-tunnel.md)                | SFTP-Dateibrowser, Port-Weiterleitungen                                                  |
 | [Fernzugriff (VNC und RDP)](docs/fernzugriff.md)            | Eingebauter VNC-Viewer, externe Viewer, Tunnel und Direktverbindung, Passwort            |
 | [Docker, Proxmox, Cisco und WireGuard](docs/geraete.md)     | Container, Gäste, Switch-Ports, WireGuard-Anzeige                                       |

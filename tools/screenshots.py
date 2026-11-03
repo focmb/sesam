@@ -33,7 +33,7 @@ from sesam.gui import style, theme  # noqa: E402
 from sesam.models import Config, Connection, Snippet, Terminal  # noqa: E402
 
 MODES = (("light", "hell"), ("dark", "dunkel"))
-PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets", "synckonflikt")
+PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets", "synckonflikt", "kacheln", "einstellungen")
 
 
 def demo_config() -> tuple[Config, dict[str, Connection]]:
@@ -92,7 +92,7 @@ def main_window(cfg, conns, tmp: Path, out: Path, label: str) -> None:
     from sesam.gui.main_window import MainWindow
 
     w = MainWindow(cfg, tmp / "config.json")
-    w.resize(1180, 680)
+    w.resize(1180, 760)
     w.show()
     QApplication.processEvents()
     boxes = [
@@ -113,9 +113,79 @@ def main_window(cfg, conns, tmp: Path, out: Path, label: str) -> None:
     item = w._find_item(conns["web1"].id)
     if item is not None:
         w.tree.setCurrentItem(item)
-    w.resize(1180, 680)
+    w.resize(1180, 760)
     grab(w, out / f"hauptfenster-{label}.png")
     w.close()
+
+
+DEMO_SESSIONS = (  # (Reitername, Prompt-Host, [(Befehl, Ausgabezeilen), …]) für das integrierte Terminal
+    ("web-01", "admin@web-01", [("uptime", [" 10:42:07 up 41 days,  3:12,  1 user,  load average: 0.08, 0.11, 0.09"]),
+                                ("systemctl is-active nginx", ["active"])]),
+    ("web-02", "admin@web-02", [("uptime", [" 10:42:09 up 41 days,  3:10,  1 user,  load average: 0.15, 0.12, 0.10"]),
+                                ("systemctl is-active nginx", ["active"])]),
+    ("db-01", "admin@db-01", [("df -h /var/lib/postgresql", ["Filesystem      Size  Used Avail Use% Mounted on",
+                                                             "/dev/sdb1       200G  128G   62G  68% /var/lib/postgresql"])]),
+    ("docker-host", "admin@docker", [("docker ps --format '{{.Names}}'", ["nginx", "postgres", "redis"])]),
+)
+
+
+def _terminal_window(cfg, tmp: Path):
+    """Hauptfenster mit vier Sitzungen des integrierten Terminals als Kacheln (ohne echte Prozesse, der Bildschirm wird mit Beispieltext gefüllt)."""
+    from sesam.gui.main_window import MainWindow
+    from sesam.gui.terminal_view import TerminalView
+
+    w = MainWindow(cfg, tmp / "config.json")
+    w.resize(1180, 680)
+    w.show()
+    QApplication.processEvents()
+    with mock.patch.object(TerminalView, "start", lambda self, args, env: None):
+        views = [w._open_embedded(["true"], name, {}) for name, _host, _commands in DEMO_SESSIONS]
+    w._tile_all()
+    w.resize(1180, 680)
+    for _ in range(5):
+        QApplication.processEvents()
+    for view, (_name, host, commands) in zip(views, DEMO_SESSIONS):
+        prompt = f"\x1b[1;32m{host}\x1b[0m:\x1b[1;34m~\x1b[0m$ "
+        text = "".join(prompt + command + "\r\n" + "".join(line + "\r\n" for line in output) for command, output in commands)
+        view._feed((text + prompt).encode())
+    views[0].setFocus()
+    for _ in range(5):
+        QApplication.processEvents()
+    return w, views
+
+
+def _close_terminal_window(w) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    # Die Sitzungen sind Attrappen, gelten aber als laufend: die Rückfrage beim Beenden gleich bejahen
+    with mock.patch("sesam.gui.main_window.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+        w.close()
+
+
+def terminal_tiles(cfg, conns, tmp: Path, out: Path, label: str) -> None:
+    w, _views = _terminal_window(cfg, tmp)
+    grab(w, out / f"terminal-kacheln-{label}.png")
+    _close_terminal_window(w)
+
+
+def terminal_broadcast(cfg, conns, tmp: Path, out: Path) -> None:
+    w, _views = _terminal_window(cfg, tmp)
+    w._toggle_broadcast(w._terminal_tabs()[0])
+    for _ in range(5):
+        QApplication.processEvents()
+    grab(w, out / "terminal-eingabe-an-alle.png")
+    _close_terminal_window(w)
+
+
+def settings_dialog(cfg, conns, out: Path) -> None:
+    from sesam.gui.settings_dialog import SettingsDialog
+
+    nothing = lambda *_: None  # noqa: E731
+    d = SettingsDialog(100, "de", nothing, nothing, wireguard=True, set_wireguard=nothing, toasts=True, set_toasts=nothing,
+                       favorites=True, set_favorites=nothing, open_terminals=nothing, open_viewers=nothing, open_sync=nothing)
+    d.adjustSize()
+    grab(d, out / "einstellungen.png")
+    d.close()
 
 
 def connection_dialog(cfg, conns, out: Path) -> None:
@@ -222,6 +292,12 @@ def main() -> int:
                 main_window(cfg, conns, tmp, out, label)
             if "verbindung" in parts and mode == "light":
                 connection_dialog(cfg, conns, out)
+            if "einstellungen" in parts and mode == "light":
+                settings_dialog(cfg, conns, out)
+            if "kacheln" in parts:
+                terminal_tiles(cfg, conns, tmp, out, label)
+                if mode == "light":
+                    terminal_broadcast(cfg, conns, tmp, out)
             if "snippets" in parts:
                 snippets_dialog(cfg, conns, out, label)
             if "synckonflikt" in parts:
