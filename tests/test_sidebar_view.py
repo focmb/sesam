@@ -44,7 +44,7 @@ class SidebarViewTests(GuiTestCase):
         w = self.w
         self.assertEqual(list(w.side_menu_buttons), ["settings"])  # „Darstellung“ und „Schriftgröße“ gibt es hier nicht mehr
         self.assertEqual(w.side_menu_buttons["settings"].text(), "Einstellungen")
-        ys = [w.side_buttons["a_terms"].y(), w.theme_row.y(), w.side_menu_buttons["settings"].y()]
+        ys = [w.side_buttons["a_clipboard"].y(), w.theme_row.y(), w.side_menu_buttons["settings"].y()]
         self.assertTrue(ys[0] < ys[1] < ys[2])  # Umschalter für das Farbschema, darunter die Einstellungen
         separators = [f for f in w.sidebar.findChildren(QFrame) if f.objectName() == "sideSep"]
         self.assertEqual(len(separators), 2)
