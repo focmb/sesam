@@ -293,6 +293,7 @@ EN: dict[str, str] = {
     "Snippets …": "Snippets …",
     "Jetzt synchronisieren": "Sync now",
     "Synchronisation …": "Synchronization …",
+    "Verwalten": "Manage",
     "Aus ~/.ssh/config importieren": "Import from ~/.ssh/config",
     "Beenden": "Quit",
     "Größer": "Larger",
@@ -545,8 +546,8 @@ EN: dict[str, str] = {
     "Server-Version übernehmen (ersetzt die lokale)": "Use server version (replaces the local one)",
     "Alle lokal": "All local",
     "Alle vom Server": "All from server",
-    "Das Sync-Passwort fehlt (Seitenleiste → Synchronisation …).":
-        "The sync password is missing (sidebar → Synchronization …).",
+    "Das Sync-Passwort fehlt (Einstellungen → Synchronisation …).":
+        "The sync password is missing (Settings → Synchronization …).",
     "meta.json im Repository ist beschädigt.": "meta.json in the repository is damaged.",
     "Der Server wurde zwischenzeitlich geändert.": "The server was changed in the meantime.",
     # terminals_dialog

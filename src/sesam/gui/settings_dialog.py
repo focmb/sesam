@@ -12,7 +12,8 @@ class SettingsDialog(QDialog):
 
     def __init__(self, font_scale: int, language: str, set_font_scale, set_language, parent=None, *,
                  wireguard: bool = False, set_wireguard=None, toasts: bool = False, set_toasts=None,
-                 favorites: bool = True, set_favorites=None):
+                 favorites: bool = True, set_favorites=None,
+                 open_terminals=None, open_viewers=None, open_sync=None):
         super().__init__(parent)
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(420)
@@ -71,6 +72,20 @@ class SettingsDialog(QDialog):
         else:
             self.favorites_box.setEnabled(False)
 
+        # Verwaltungsdialoge (früher in der Seitenleiste): jeder öffnet seinen Dialog mit diesem Fenster als Elternfenster
+        manage_row = QHBoxLayout()
+        self.manage_buttons: dict[str, QPushButton] = {}
+        for key, text, opener in (("terminals", tr("Terminals …"), open_terminals), ("viewers", tr("Viewer …"), open_viewers),
+                                  ("sync", tr("Synchronisation …"), open_sync)):
+            button = QPushButton(text)
+            button.setAutoDefault(False)
+            if opener is not None:
+                button.clicked.connect(lambda _=False, f=opener: f(self))
+            else:
+                button.setEnabled(False)
+            manage_row.addWidget(button)
+            self.manage_buttons[key] = button
+
         form = QFormLayout()
         form.setVerticalSpacing(10)
         form.addRow(tr("Schriftgröße"), size_row)
@@ -78,6 +93,7 @@ class SettingsDialog(QDialog):
         form.addRow(tr("WireGuard"), self.wireguard_box)
         form.addRow(tr("Meldungen"), self.toasts_box)
         form.addRow(tr("Favoriten"), self.favorites_box)
+        form.addRow(tr("Verwalten"), manage_row)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close = buttons.button(QDialogButtonBox.StandardButton.Close)

@@ -4,7 +4,7 @@
 
 ## Synchronisation über Git
 
-*Synchronisation …* in der Seitenleiste gleicht Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets über ein Git-Repository ab (Terminals und
+*Einstellungen › Synchronisation …* gleicht Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets über ein Git-Repository ab (Terminals und
 Fensterbreiten bleiben pro Gerät). Das Tool nutzt das installierte `git`. Die Anmeldung läuft im Hintergrund ohne Rückfragen:
 - **SSH-Schlüssel** (`git@server:…`): wie sonst auch mit `git`.
 - **Benutzername und Passwort bzw. Token** (`https://…`): im Dialog unter *Benutzername* und *Passwort / Token* eintragen. Das Passwort liegt im Schlüsselbund

@@ -512,7 +512,7 @@ class SyncEngine:
         enforce = self._integrity_expected()
         if self.s.passwords:
             if not self.passphrase:
-                raise SyncError(tr("Das Sync-Passwort fehlt (Seitenleiste → Synchronisation …)."))
+                raise SyncError(tr("Das Sync-Passwort fehlt (Einstellungen → Synchronisation …)."))
             if meta and meta.get("kdf"):
                 key = derive_key(self.passphrase, meta["kdf"])
                 decrypt(key, meta.get("check"), "check")  # prüft das Sync-Passwort

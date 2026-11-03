@@ -4,7 +4,7 @@
 
 ## Configuring terminals
 
-Under *Terminals …* in the sidebar you create terminals as command templates and choose a default terminal.
+Under *Settings › Terminals …* you create terminals as command templates and choose a default terminal.
 A connection can use a different terminal; the context menu has “Connect with …”.
 
 | Placeholder | Meaning |

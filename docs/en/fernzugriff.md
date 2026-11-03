@@ -81,7 +81,7 @@ it is enough for administering servers and devices.
 
 ## Managing viewers
 
-Sidebar **Viewers …**. At the top you choose the protocol (VNC or RDP); each has its own list and its own default viewer. As with terminals, a viewer is a
+*Settings* › **Viewers …**. At the top you choose the protocol (VNC or RDP); each has its own list and its own default viewer. As with terminals, a viewer is a
 **command template**; Sesam starts the program directly (not through a shell). **New ▾** offers templates for the usual viewers of the platform; fresh installations and
 configurations from older versions already contain the viewers that were found.
 

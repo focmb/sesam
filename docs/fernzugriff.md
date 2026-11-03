@@ -83,7 +83,7 @@ langsamer als TigerVNC oder Remmina; für die Verwaltung von Servern und Geräte
 
 ## Viewer verwalten
 
-Seitenleiste **Viewer …**. Oben wählst du das Protokoll (VNC oder RDP); jedes hat seine eigene Liste und seinen eigenen Standard-Viewer. Wie bei den Terminals ist ein
+*Einstellungen* › **Viewer …**. Oben wählst du das Protokoll (VNC oder RDP); jedes hat seine eigene Liste und seinen eigenen Standard-Viewer. Wie bei den Terminals ist ein
 Viewer eine **Befehlsvorlage**; Sesam startet das Programm direkt (nicht über eine Shell). Unter **Neu ▾** gibt es Vorlagen für die gängigen Viewer der Plattform,
 neu eingerichtete Installationen und Konfigurationen aus älteren Versionen enthalten die gefundenen Viewer bereits.
 

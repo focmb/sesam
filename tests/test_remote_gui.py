@@ -311,8 +311,14 @@ class WindowTests(GuiTestCase):
         self.assertEqual(self.w.remote.sessions, {})
         self.assertIsNone(proc.poll())  # wie ein Terminal: das Fenster des Viewers bleibt offen
 
-    def test_viewer_action_is_in_the_sidebar(self):
-        self.assertIn("a_viewers", [n for g in self.w.SIDEBAR_GROUPS for n in g])
+    def test_viewer_action_is_in_the_settings_not_the_sidebar(self):
+        from sesam.gui.settings_dialog import SettingsDialog
+
+        self.assertNotIn("a_viewers", [n for g in self.w.SIDEBAR_GROUPS for n in g])
+        opened = []
+        dlg = SettingsDialog(100, "de", lambda *_: None, lambda *_: None, open_viewers=opened.append)
+        dlg.manage_buttons["viewers"].click()
+        self.assertEqual(opened, [dlg])
 
 
 if __name__ == "__main__":

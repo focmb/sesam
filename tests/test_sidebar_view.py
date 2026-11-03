@@ -133,7 +133,9 @@ class SidebarViewTests(GuiTestCase):
 
     def test_everything_formerly_in_menus_is_still_reachable(self):
         w = self.w
-        self.assertIn("a_sync_settings", [a for g in w.SIDEBAR_GROUPS for a in g])
+        in_sidebar = [a for g in w.SIDEBAR_GROUPS for a in g]
+        for attr in ("a_sync_settings", "a_terms", "a_viewers"):
+            self.assertNotIn(attr, in_sidebar)  # liegen jetzt in den Einstellungen
         self.assertEqual(w.a_sync_settings.text(), "Synchronisation …")
         from sesam.gui import main_window
 

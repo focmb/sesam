@@ -4,7 +4,7 @@
 
 ## Terminals konfigurieren
 
-Unter *Terminals …* in der Seitenleiste legst du Terminals als Befehlsvorlage an und wählst ein Standardterminal.
+Unter *Einstellungen › Terminals …* legst du Terminals als Befehlsvorlage an und wählst ein Standardterminal.
 Pro Verbindung kann ein abweichendes Terminal gewählt werden; im Kontextmenü gibt es „Verbinden mit …“.
 
 | Platzhalter | Bedeutung |

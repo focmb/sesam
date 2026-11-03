@@ -304,7 +304,7 @@ class MainWindow(QMainWindow):
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
         ("a_connect", "a_quick", "a_files", "a_new", "a_new_group", "a_fav", "a_edit", "a_dup", "a_del"),
-        ("a_sync", "a_sync_settings", "a_identities", "a_keys", "a_snippets", "a_clipboard", "a_terms", "a_viewers"),
+        ("a_sync", "a_identities", "a_keys", "a_snippets", "a_clipboard"),
     )
 
     def _build_sidebar(self):
@@ -2106,8 +2106,8 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     # --- Sonstiges ---
-    def edit_terminals(self):
-        dlg = TerminalsDialog(self.cfg, self)
+    def edit_terminals(self, parent=None):
+        dlg = TerminalsDialog(self.cfg, parent or self)
         if dlg.exec():
             self.cfg.terminals, self.cfg.default_terminal_id = dlg.result_values()
             valid = {t.id for t in self.cfg.terminals}
@@ -2117,8 +2117,8 @@ class MainWindow(QMainWindow):
             self._save()
             self.refresh()
 
-    def edit_viewers(self):
-        dlg = ViewersDialog(self.cfg, self)
+    def edit_viewers(self, parent=None):
+        dlg = ViewersDialog(self.cfg, parent or self)
         if dlg.exec():
             self.cfg.viewers, self.cfg.default_viewer_id, self.cfg.default_rdp_viewer_id = dlg.result_values()
             valid = {v.id for v in self.cfg.viewers}
@@ -2149,8 +2149,8 @@ class MainWindow(QMainWindow):
         dlg = SyncConflictDialog(conflicts, self)
         return dlg.choices() if dlg.exec() else None
 
-    def edit_sync(self):
-        dlg = SyncDialog(self.cfg, self)
+    def edit_sync(self, parent=None):
+        dlg = SyncDialog(self.cfg, parent or self)
         if dlg.exec():
             self._save_no_sync()
             if self.sync.enabled():
@@ -2236,7 +2236,8 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.cfg.font_scale, self.cfg.language, self.set_font_scale, self.set_language, self,
                              wireguard=self.cfg.wireguard, set_wireguard=self.set_wireguard,
                              toasts=self.cfg.toasts, set_toasts=self.set_toasts,
-                             favorites=self.cfg.favorites, set_favorites=self.set_favorites)
+                             favorites=self.cfg.favorites, set_favorites=self.set_favorites,
+                             open_terminals=self.edit_terminals, open_viewers=self.edit_viewers, open_sync=self.edit_sync)
         dlg.exec()
 
     def set_theme(self, mode: str):

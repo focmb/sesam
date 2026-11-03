@@ -4,7 +4,7 @@
 
 ## Synchronization via Git
 
-*Synchronization …* in the sidebar syncs connections, groups, identities, keys and snippets through a Git repository (terminals and
+*Settings › Synchronization …* syncs connections, groups, identities, keys and snippets through a Git repository (terminals and
 window widths stay per device). The tool uses the installed `git`. Login runs in the background without prompts:
 - **SSH key** (`git@server:…`): as usual with `git`.
 - **Username and password or token** (`https://…`): enter them in the dialog under *Username* and *Password / token*. The password lives in the system keyring
