@@ -1,6 +1,6 @@
 # Maintainer: Christian Leitzke <christian.leitzke@gmail.com>
 pkgname=sesam
-pkgver=3.4.0
+pkgver=3.5.0
 pkgrel=1
 pkgdesc="SSH-Verbindungen verwalten und in frei konfigurierbaren Terminals öffnen"
 arch=('any')
@@ -17,7 +17,7 @@ optdepends=('python-pyte: integriertes Terminal (Reiter in Sesam)'
             'tigervnc: VNC-Viewer'
             'freerdp: RDP-Viewer')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('e951f102a1bffe5720d7210b58595b8f791c49ba7433a0217d8f176f7e438619')
+sha256sums=('19edece367fa626723c4c3d540be4965ebabcf214a04ea2c3ca9e1e8e1d20fed')
 
 build() {
   cd "$srcdir/$pkgname-$pkgver"
