@@ -418,3 +418,26 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             with mock.patch.object(second, "paste_text") as paste, mock.patch.object(main_window, "confirm_paste", return_value=True):
                 first.pasted.emit("ls")
             paste.assert_called_once_with("ls")
+
+        def test_context_menu_of_a_connection_still_works_after_a_terminal_tab_was_closed(self):
+            from unittest import mock
+            from PySide6.QtCore import QEvent
+            from PySide6.QtWidgets import QApplication
+
+            self.w._open_connection(self.conn)
+            view = self.w._terminal_views()[0]
+            self.assertTrue(self.pump(lambda: view._pty is not None))
+            self.assertIsNotNone(self.w._last_terminal_tab())
+            self.w.tabs.setCurrentIndex(0)
+            view._send(b"\r")  # Sitzung endet, der Reiter wird gelöscht
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+            QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            self.assertIsNone(self.w._last_terminal_tab())  # kein Zugriff auf das gelöschte Objekt
+            shown = []
+            from sesam.gui import main_window
+
+            self.w.tree.setCurrentItem(self.w._find_item(self.conn.id))
+            item = self.w.tree.currentItem()
+            with mock.patch.object(main_window.MainWindow, "_popup", lambda self, menu, pos: shown.extend(a.text() for a in menu.actions())):
+                self.w._context_menu(self.w.tree.visualItemRect(item).center())
+            self.assertIn("Neben dem aktuellen Terminal öffnen", shown)

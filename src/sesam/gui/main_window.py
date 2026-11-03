@@ -639,6 +639,8 @@ class MainWindow(QMainWindow):
         index = self.tabs.indexOf(tab)
         if index > 0:
             self.tabs.removeTab(index)
+        if self._recent_terminal_tab is tab:
+            self._recent_terminal_tab = None
         tab.deleteLater()
         self._update_tile_button()
 
@@ -669,7 +671,13 @@ class MainWindow(QMainWindow):
 
     def _last_terminal_tab(self) -> TerminalTab | None:
         tab = getattr(self, "_recent_terminal_tab", None)
-        return tab if tab is not None and self.tabs.indexOf(tab) > 0 else None
+        if tab is None:
+            return None
+        try:
+            return tab if self.tabs.indexOf(tab) > 0 else None
+        except RuntimeError:  # Reiter wurde inzwischen gelöscht
+            self._recent_terminal_tab = None
+            return None
 
     def _move_focus(self, view: TerminalView, direction: str):
         tab = self._tab_of(view)
