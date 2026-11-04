@@ -2,6 +2,9 @@
 
 EN: dict[str, str] = {
     # Konstanten
+    "Lokales Terminal": "Local terminal",
+    "Lokal": "Local",
+    "Terminal konnte nicht geöffnet werden": "Terminal could not be opened",
     "Hell": "Light",
     "Dunkel": "Dark",
     "Wie das System": "Same as system",

@@ -19,7 +19,7 @@ from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme, type_badges
 from ..clipboard_history import History as ClipboardHistory
-from .. import colors, docker, duplicates, cisco, launcher, osinfo, passwords, proxmox, sftp, snippets, remote, storage, tunnels, wireguard
+from .. import colors, docker, duplicates, cisco, launcher, localshell, osinfo, passwords, proxmox, runtime, sftp, snippets, remote, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -269,6 +269,7 @@ class MainWindow(QMainWindow):
         self.a_connect = act(tr("Verbinden"), self.connect_selected, "Return")
         self.a_quick = act(tr("Schnellstarter"), self.open_quick, "Ctrl+K")
         self.a_files = act(tr("Dateien (SFTP)"), self.open_files, "F4")
+        self.a_local = act(tr("Lokales Terminal"), self.open_local_terminal, "Ctrl+Shift+T")
         self.a_new = act(tr("Neue Verbindung"), self.new_connection, "Ctrl+N")
         self.a_new_group = act(tr("Neue Gruppe …"), self.new_group, "Ctrl+Shift+N")
         self.a_fav = act(tr("Favorit"), self.toggle_favorite_selected, "Ctrl+B")
@@ -307,7 +308,7 @@ class MainWindow(QMainWindow):
     THEME_ICONS = {"light": "sun", "dark": "moon", "system": "monitor"}
     SIDEBAR_MIN_WIDTH = 190
     SIDEBAR_GROUPS = (
-        ("a_connect", "a_quick", "a_files", "a_new", "a_new_group", "a_fav", "a_edit", "a_dup", "a_del"),
+        ("a_connect", "a_quick", "a_files", "a_local", "a_new", "a_new_group", "a_fav", "a_edit", "a_dup", "a_del"),
         ("a_sync", "a_identities", "a_keys", "a_snippets", "a_clipboard"),
     )
 
@@ -405,7 +406,7 @@ class MainWindow(QMainWindow):
 
     # --- Icons ---
     ACTION_ICONS = (
-        ("a_connect", "connect"), ("a_quick", "search"), ("a_fav", "star"), ("a_files", "transfer"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
+        ("a_connect", "connect"), ("a_quick", "search"), ("a_fav", "star"), ("a_files", "transfer"), ("a_local", "terminal"), ("a_new", "add"), ("a_new_group", "folder_add"), ("a_edit", "edit"),
         ("a_dup", "copy"), ("a_del", "trash"), ("a_sync", "sync"), ("a_sync_settings", "gear"), ("a_identities", "user"), ("a_keys", "key"), ("a_snippets", "snippet"), ("a_clipboard", "clipboard"), ("a_terms", "sliders"), ("a_viewers", "monitor"),
     )
 
@@ -610,6 +611,7 @@ class MainWindow(QMainWindow):
         view.typed.connect(lambda data, v=view: self._broadcast_typed(v, data))
         view.pasted.connect(lambda text, v=view: self._broadcast_pasted(v, text))
         view.grid_requested.connect(self._tile_all)
+        view.local_requested.connect(lambda v=view: self._local_beside(v))
         view.untile_requested.connect(lambda v=view: self._untile(self._tab_of(v)))
         view.broadcast_requested.connect(lambda v=view: self._toggle_broadcast(self._tab_of(v)))
         view.tile_dropped.connect(lambda source, zone, v=view: self._drop_tile(source, v, zone))
@@ -625,6 +627,25 @@ class MainWindow(QMainWindow):
         view.start(args, env)
         view.setFocus()
         return view
+
+    def open_local_terminal(self):
+        """Öffnet eine Shell auf diesem Rechner im integrierten Terminal (neuer Reiter)."""
+        try:
+            self._open_embedded(localshell.command(), tr("Lokal"), runtime.clean_env())
+        except launcher.LaunchError as exc:
+            QMessageBox.critical(self, tr("Terminal konnte nicht geöffnet werden"), str(exc))
+
+    def _local_beside(self, view: TerminalView):
+        """Strg+Umschalt+T im Terminal: lokale Shell als Kachel rechts neben dieser Sitzung."""
+        self._recent_terminal_tab = self._tab_of(view) or self._recent_terminal_tab
+        tab = self._tab_of(view)
+        self._split_target = (view, Qt.Orientation.Horizontal) if tab is not None else None
+        try:
+            self._open_embedded(localshell.command(), tr("Lokal"), runtime.clean_env())
+        except launcher.LaunchError as exc:
+            QMessageBox.critical(self, tr("Terminal konnte nicht geöffnet werden"), str(exc))
+        finally:
+            self._split_target = None
 
     def _add_tab(self, view: TerminalView) -> TerminalTab:
         """Neuer Terminal-Reiter für eine Sitzung (wird nicht in den Vordergrund geholt)."""

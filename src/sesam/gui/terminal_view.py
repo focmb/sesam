@@ -161,6 +161,7 @@ class TerminalView(QWidget):
     focused = Signal()  # die Kachel hat den Fokus bekommen
     typed = Signal(bytes)  # Tastatureingabe des Benutzers (für „Eingabe an alle Kacheln“)
     pasted = Signal(str)  # Text, den der Benutzer eingefügt hat (Strg+Umschalt+V, Mittelklick, Menü)
+    local_requested = Signal()  # Strg+Umschalt+T: lokales Terminal neben dieser Kachel öffnen
     grid_requested = Signal()  # Strg+Umschalt+G oder Menü: alle Sitzungen als Raster kacheln
     untile_requested = Signal()  # Menü: die Kacheln dieses Reiters in einzelne Reiter auflösen
     broadcast_requested = Signal()  # Strg+Umschalt+B oder Menü: Eingabe an alle Kacheln umschalten
@@ -637,6 +638,9 @@ class TerminalView(QWidget):
             return
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_G:
             self.grid_requested.emit()
+            return
+        if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_T:
+            self.local_requested.emit()
             return
         if (mods & ctrl_shift) == ctrl_shift and key == Qt.Key.Key_B:
             self.broadcast_requested.emit()

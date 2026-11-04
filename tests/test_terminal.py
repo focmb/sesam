@@ -262,6 +262,34 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             self.assertTrue(self.pump(lambda: second._pty is not None))
             return first, second
 
+        def test_local_terminal_opens_a_shell_as_tab(self):
+            from unittest import mock
+            from sesam import localshell
+
+            with mock.patch.object(localshell, "command", lambda: ["bash", "-c", "echo lokal-ok; read x"]):
+                self.w.a_local.trigger()
+            self.assertEqual(self.w.tabs.count(), 2)
+            self.assertEqual(self.w.tabs.tabText(1), "Lokal")
+            view = self.w._terminal_views()[0]
+            self.assertTrue(self.pump(lambda: "lokal-ok" in "\n".join(view._screen.display)))
+            self.assertIn("a_local", self.w.side_buttons)
+            self.assertEqual(self.w.a_local.shortcut().toString(), "Ctrl+Shift+T")
+            view._send(b"\r")
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+
+        def test_local_terminal_shortcut_inside_a_terminal_opens_a_tile(self):
+            from unittest import mock
+            from sesam import localshell
+
+            self.w._open_connection(self.conn)
+            first = self.w._terminal_views()[0]
+            with mock.patch.object(localshell, "command", lambda: ["bash", "-c", "read x"]):
+                first.local_requested.emit()
+            views = self.w._terminal_views()
+            self.assertEqual(len(views), 2)
+            self.assertEqual(self.w.tabs.count(), 2)  # Kachel im selben Reiter
+            self.assertIs(self.w._tab_of(views[0]), self.w._tab_of(views[1]))
+
         def test_split_adds_a_tile_in_the_same_tab(self):
             first, second = self._two_tiles()
             self.assertEqual(self.w.tabs.count(), 2)  # kein zweiter Reiter
