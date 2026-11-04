@@ -36,7 +36,7 @@ class IntegrityTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.base = Path(tmp.name)
 
-    def engine(self, name="A", phrase="geheim123", passwords=True):
+    def engine(self, name="A", phrase="geheim-test-123", passwords=True):
         eng = SyncEngine(SyncSettings(url=URL, passwords=passwords), self.base / name, phrase, _Store(), device=name)
         eng.repo.mkdir(parents=True, exist_ok=True)
         eng.git.run("init", "-q")
@@ -243,7 +243,7 @@ class AtomicApplyTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             store = Store()
-            eng = SyncEngine(SyncSettings(url=URL, passwords=True), Path(tmp), "geheim123", store, device="A")
+            eng = SyncEngine(SyncSettings(url=URL, passwords=True), Path(tmp), "geheim-test-123", store, device="A")
             cfg = Config(connections=[Connection("a", "a.example", use_password=True), Connection("b", "b.example", use_password=True)])
             for c in cfg.connections:
                 store.d[c.id] = "alt-" + c.name
