@@ -402,7 +402,7 @@ class GuiTests(unittest.TestCase):
             dlg.url.setText("git@host:r.git")
             dlg._accept()                                 # Sync-Passwort fehlt
             dlg.phrase.setText("kurz")
-            dlg._accept()                                 # zu kurz
+            dlg._accept()                                 # Wiederholung fehlt (Länge wird erst beim Anlegen eines neuen Repositories geprüft)
             dlg.phrase.setText("langgenug12345")
             dlg.phrase2.setText("anders123456")
             dlg._accept()                                 # Wiederholung weicht ab

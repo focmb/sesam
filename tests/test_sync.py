@@ -64,7 +64,7 @@ class EngineTests(unittest.TestCase):
         git("init", "-q", "--bare", "-b", "main", str(self.remote))
         self.devices = {}
 
-    def device(self, name, passwords_on=True, passphrase="geheim"):
+    def device(self, name, passwords_on=True, passphrase="geheim-geheim-12"):
         root = Path(self.tmp.name) / name
         settings = SyncSettings(enabled=True, url=str(self.remote), branch="main", passwords=passwords_on)
         store = DictStore()
@@ -72,6 +72,26 @@ class EngineTests(unittest.TestCase):
         cfg = Config()
         self.devices[name] = (cfg, engine, store)
         return cfg, engine, store
+
+    def test_new_repository_requires_minimum_passphrase_length(self):
+        cfg, engine, _ = self.device("A", passphrase="kurz-10-xx")
+        with self.assertRaises(SyncError):
+            engine.run(cfg)
+
+    def test_existing_repository_accepts_short_legacy_passphrase(self):
+        # Repository wurde mit einer älteren Version und 10-stelligem Passwort angelegt
+        with mock.patch.object(syncing, "MIN_PASSPHRASE_LEN", 0):
+            cfgA, A, storeA = self.device("A", passphrase="kurz-10-xx")
+            self.add_conn(cfgA, storeA, "web", pw="conn-pw")
+            A.run(cfgA)
+        # Neuinstallation (aktuelle Version) schließt sich dem bestehenden Repository an
+        cfgB, B, storeB = self.device("B", passphrase="kurz-10-xx")
+        B.run(cfgB)
+        self.assertEqual([c.name for c in cfgB.connections], ["web"])
+        # falsches kurzes Passwort bleibt abgelehnt
+        cfgC, C, _ = self.device("C", passphrase="falsch-kurz")
+        with self.assertRaises(Exception):
+            C.run(cfgC)
 
     def add_conn(self, cfg, store, name, pw=None, **kw):
         c = Connection(name, kw.pop("host", name + ".example"), **kw)

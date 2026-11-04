@@ -36,6 +36,7 @@ from . import duplicates, keystore, passwords, runtime, storage
 from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings
 from .i18n import tr
 
+MIN_PASSPHRASE_LEN = 12  # gilt nur beim Anlegen eines neuen verschlüsselten Repositories
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
 GIT_PASSWORD_KEY = "sync:git-password"  # Schlüssel im Schlüsselbund für das Repository-Passwort bzw. den Token
 FORMAT = 1
@@ -528,6 +529,8 @@ class SyncEngine:
                 else:
                     raise SyncError(tr("meta.json im Repository wurde verändert (Integritätsprüfung fehlgeschlagen)."))
             else:
+                if len(self.passphrase) < MIN_PASSPHRASE_LEN:  # nur für neue Repositories; bestehende behalten ihr (ggf. kürzeres) Passwort
+                    raise SyncError(tr("Für ein neues Repository braucht das Sync-Passwort mindestens 12 Zeichen."))
                 meta = {"format": FORMAT, "kdf": new_kdf()}
                 key = derive_key(self.passphrase, meta["kdf"])
                 meta["check"] = encrypt(key, "ssh-verwaltung", "check")  # Prüftext, bewusst unverändert (Kompatibilität)
