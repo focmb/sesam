@@ -6,6 +6,7 @@ from sesam import localshell, runtime
 
 
 class LocalShellTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX-Pfade")
     def test_uses_shell_variable_on_linux(self):
         with mock.patch.object(runtime, "IS_WINDOWS", False), mock.patch.dict(os.environ, {"SHELL": "/bin/sh"}):
             self.assertEqual(localshell.shell(), ["/bin/sh"])
@@ -14,6 +15,7 @@ class LocalShellTests(unittest.TestCase):
         self.assertIn('cd "$HOME"', args[2])
         self.assertEqual(args[-1], "/bin/sh")  # $0 des Wrappers: die Shell wird mit exec gestartet
 
+    @unittest.skipIf(os.name == "nt", "POSIX-Pfade")
     def test_falls_back_when_shell_variable_is_missing_or_invalid(self):
         with mock.patch.object(runtime, "IS_WINDOWS", False), mock.patch.dict(os.environ, {"SHELL": "nicht/absolut"}):
             self.assertTrue(os.path.isabs(localshell.shell()[0]))
