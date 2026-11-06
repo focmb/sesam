@@ -5,6 +5,7 @@ Windows: ConPTY über das Paket ``pywinpty``.
 """
 from __future__ import annotations
 
+import collections
 import os
 import signal
 import sys
@@ -207,14 +208,18 @@ class _PosixPty(PtySession):
 
 
 class _WinPty(PtySession):
-    _chunk = Signal(bytes)  # aus dem Lese-Thread
-    _eof = Signal()
+    """ConPTY über pywinpty. Der Lese-Thread löst keine Qt-Signale aus (Absturz „stack overflow“ in pyside6.abi3.dll
+    beim Sitzungsende im gebauten Programm), sondern legt Bytes in eine Warteschlange, die ein Zeitgeber im Hauptthread leert."""
+
+    _END = None  # Marke in der Warteschlange: der Prozess hat keine Ausgabe mehr
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._proc = None
-        self._chunk.connect(self.output)
-        self._eof.connect(self._end)
+        self._queue: collections.deque = collections.deque()  # append/popleft sind thread-sicher
+        self._drain = QTimer(self)
+        self._drain.setInterval(10)
+        self._drain.timeout.connect(self._drain_queue)
 
     def start(self, args, env, cols, rows):
         try:
@@ -225,24 +230,39 @@ class _WinPty(PtySession):
             self._proc = PtyProcess.spawn(args, env=env, dimensions=(max(rows, 1), max(cols, 1)))
         except Exception as exc:  # noqa: BLE001 – pywinpty wirft je nach Fehler verschiedene Typen
             raise PtyError(str(exc)) from exc
-        threading.Thread(target=self._pump, daemon=True).start()
+        threading.Thread(target=self._pump, args=(self._proc,), daemon=True).start()
+        self._drain.start()
 
-    def _pump(self):
-        proc = self._proc
-        while True:
+    def _pump(self, proc):
+        """Läuft im eigenen Thread: nur lesen und einreihen, nichts von Qt anfassen."""
+        try:
+            while True:
+                try:
+                    data = proc.read(65536)
+                except Exception:  # noqa: BLE001 – EOFError am Ende, sonst ebenfalls Schluss
+                    break
+                if data:
+                    self._queue.append(data.encode("utf-8", "replace") if isinstance(data, str) else bytes(data))
+        finally:
+            self._queue.append(self._END)
+
+    def _drain_queue(self):
+        for _ in range(64):  # nicht zu viel auf einmal, damit die Oberfläche bedienbar bleibt
             try:
-                data = proc.read(65536)
-            except Exception:  # noqa: BLE001 – EOFError am Ende, sonst ebenfalls Schluss
-                break
-            if data:
-                self._chunk.emit(data.encode("utf-8", "replace") if isinstance(data, str) else bytes(data))
-        self._eof.emit()
+                item = self._queue.popleft()
+            except IndexError:
+                return
+            if item is self._END:
+                self._drain.stop()
+                self._end()
+                return
+            self.output.emit(item)
 
     def _end(self):
         code = 0
         try:
             code = int(getattr(self._proc, "exitstatus", 0) or 0)
-        except (TypeError, ValueError):
+        except Exception:  # noqa: BLE001 – pywinpty kann hier verschiedene Fehler werfen
             pass
         self._finish(code)
 
