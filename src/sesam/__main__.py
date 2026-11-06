@@ -34,6 +34,29 @@ def _load_config(path):
     return storage.load(path)
 
 
+_crash_log = None  # offen halten: faulthandler schreibt beim Absturz direkt in diese Datei
+
+
+def _enable_crash_log(directory) -> None:
+    """Schreibt bei einem harten Absturz (z. B. Stack-Überlauf in Qt) die Python-Stacks nach ``crash.log`` im Konfigurationsordner.
+
+    Das Fensterprogramm unter Windows hat keine Konsole, ohne diese Datei bliebe der Absturz spurlos."""
+    global _crash_log
+    import datetime
+    import faulthandler
+
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        log = directory / "crash.log"
+        if log.exists() and log.stat().st_size > 256 * 1024:  # nicht unbegrenzt wachsen lassen
+            log.replace(directory / "crash.log.old")
+        _crash_log = open(log, "a", encoding="utf-8", buffering=1)
+        _crash_log.write(f"\n--- Start {datetime.datetime.now().isoformat(timespec='seconds')} ---\n")
+        faulthandler.enable(_crash_log, all_threads=True)
+    except OSError:
+        pass  # Diagnose darf den Start nie verhindern
+
+
 def main() -> int:
     from . import i18n
 
@@ -62,6 +85,7 @@ def main() -> int:
     app.setWindowIcon(style.app_icon())
     theme.apply(app, "system")  # damit auch Meldungen vor dem Laden der Konfiguration passend aussehen
     path = storage.config_path()
+    _enable_crash_log(path.parent)
     cfg = _load_config(path)
     if cfg is None:
         return 1
