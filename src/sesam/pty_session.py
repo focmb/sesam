@@ -13,6 +13,7 @@ import threading
 
 from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
 
+from . import crashlog
 from .i18n import tr
 
 IS_WINDOWS = sys.platform.startswith("win")
@@ -51,8 +52,15 @@ class PtySession(QObject):
 
     def _finish(self, code: int) -> None:
         if self._exit_code is None:
+            raw = code
+            # Windows-Exit-Codes sind 32 Bit ohne Vorzeichen (z. B. 0xC000013A); ``Signal(int)`` kennt nur 32 Bit mit Vorzeichen
+            code &= 0xFFFFFFFF
+            if code >= 0x80000000:
+                code -= 0x100000000
             self._exit_code = code
+            crashlog.note(f"pty finished: raw={raw} code={code}")
             self.finished.emit(code)
+            crashlog.note("pty finished: emit done")
 
 
 def create(parent=None) -> PtySession:

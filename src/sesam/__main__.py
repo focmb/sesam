@@ -53,6 +53,9 @@ def _enable_crash_log(directory) -> None:
         _crash_log = open(log, "a", encoding="utf-8", buffering=1)
         _crash_log.write(f"\n--- Start {datetime.datetime.now().isoformat(timespec='seconds')} ---\n")
         faulthandler.enable(_crash_log, all_threads=True)
+        from . import crashlog
+
+        crashlog.set_file(_crash_log)
     except OSError:
         pass  # Diagnose darf den Start nie verhindern
 

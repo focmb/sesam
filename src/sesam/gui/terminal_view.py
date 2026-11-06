@@ -10,7 +10,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
-from .. import pty_session
+from .. import crashlog, pty_session
 from ..i18n import tr
 
 try:
@@ -276,8 +276,10 @@ class TerminalView(QWidget):
             self.closed.emit(0)
 
     def _on_finished(self, code: int):
+        crashlog.note("view: _on_finished")
         self._finished = code
         self.closed.emit(code)
+        crashlog.note("view: closed emitted")
 
     def showEvent(self, event):
         super().showEvent(event)

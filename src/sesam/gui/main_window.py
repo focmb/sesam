@@ -19,7 +19,7 @@ from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme, type_badges
 from ..clipboard_history import History as ClipboardHistory
-from .. import colors, docker, duplicates, cisco, launcher, localshell, osinfo, passwords, proxmox, runtime, sftp, snippets, remote, storage, tunnels, wireguard
+from .. import colors, crashlog, docker, duplicates, cisco, launcher, localshell, osinfo, passwords, proxmox, runtime, sftp, snippets, remote, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -713,15 +713,19 @@ class MainWindow(QMainWindow):
 
     def _terminal_closed(self, view: TerminalView):
         """Der Prozess ist zu Ende: die Kachel verschwindet, mit der letzten auch der Reiter (wie ein geschlossenes Terminalfenster)."""
+        crashlog.note("main: _terminal_closed start")
         tab = self._tab_of(view)
         if tab is not None:
             tab.remove_view(view)
+            crashlog.note("main: view removed")
             if tab.is_empty():
                 self._drop_tab(tab)
+                crashlog.note("main: tab dropped")
             else:
                 self._refresh_tab(tab)
         view.deleteLater()
         self._update_open_markers()
+        crashlog.note("main: _terminal_closed end")
 
     # --- Kacheln: Raster, Auflösen, Eingabe an alle ---
     def _tile_all(self):
