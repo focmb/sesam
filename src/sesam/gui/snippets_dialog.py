@@ -8,7 +8,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
+    QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
+    QWidget,
 )
 
 from .. import groups as grp
@@ -120,7 +121,13 @@ class SnippetsDialog(QDialog):
         self.info = QLabel()
         self.info.setWordWrap(True)
         self.targets = QListWidget()
+        self.targets.setMinimumHeight(130)  # nach oben frei: der Splitter darf den Bereich vergrößern
         self.targets.itemChanged.connect(lambda *_: self._update_buttons())
+        self.filter = QLineEdit()
+        self.filter.setClearButtonEnabled(True)
+        self.filter.setPlaceholderText(tr("Filtern nach Gruppe oder Name …"))
+        self.filter.textChanged.connect(self._apply_filter)
+        self.hidden_hint = QLabel()
         for conn in sorted(cfg.connections, key=lambda c: (c.group.lower(), c.name.lower())):
             label = f"{conn.group + ' / ' if conn.group else ''}{conn.name}"
             item = QListWidgetItem(label)
@@ -157,10 +164,25 @@ class SnippetsDialog(QDialog):
         body.addLayout(right, 3)
         run_head = QHBoxLayout()
         run_head.addWidget(QLabel(tr("Ausführen auf:")))
-        run_head.addStretch(1)
+        run_head.addWidget(self.filter, 1)
         run_head.addWidget(self.btn_all)
         run_head.addWidget(self.btn_none)
-        self.targets.setMaximumHeight(130)
+        upper = QWidget()
+        body.setContentsMargins(0, 0, 0, 0)
+        upper.setLayout(body)
+        lower = QWidget()
+        lower_layout = QVBoxLayout(lower)
+        lower_layout.setContentsMargins(0, 0, 0, 0)
+        lower_layout.setSpacing(10)
+        lower_layout.addLayout(run_head)
+        lower_layout.addWidget(self.targets, 1)
+        lower_layout.addWidget(self.hidden_hint)
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.addWidget(upper)
+        self.splitter.addWidget(lower)
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 1)
         run_row = QHBoxLayout()
         run_row.addStretch(1)
         run_row.addWidget(self.btn_run)
@@ -171,9 +193,7 @@ class SnippetsDialog(QDialog):
         layout.setContentsMargins(20, 18, 20, 18)
         layout.setSpacing(10)
         layout.addLayout(top)
-        layout.addLayout(body, 1)
-        layout.addLayout(run_head)
-        layout.addWidget(self.targets)
+        layout.addWidget(self.splitter, 1)
         layout.addLayout(run_row)
         layout.addWidget(close)
         self._reload()
@@ -261,10 +281,34 @@ class SnippetsDialog(QDialog):
         n = len(self._checked())
         self.btn_run.setEnabled(self._current() is not None and n > 0)
         self.btn_run.setText(tr("Ausführen") if n <= 1 else tr("Auf {n} Verbindungen ausführen", n=n))
+        self._update_hint()
+
+    def _update_hint(self):
+        """Markierte, aber durch den Filter ausgeblendete Hosts laufen mit, das muss sichtbar bleiben."""
+        total = hidden = 0
+        for i in range(self.targets.count()):
+            item = self.targets.item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                total += 1
+                hidden += item.isHidden()
+        self.hidden_hint.setText(tr("{n} markiert, davon {m} ausgeblendet", n=total, m=hidden) if hidden else "")
+        self.hidden_hint.setVisible(bool(hidden))
+
+    def _apply_filter(self):
+        """Blendet Ziele aus, auf die nicht alle Suchwörter (Gruppe oder Name, ohne Groß-/Kleinschreibung) passen."""
+        terms = self.filter.text().lower().split()
+        for i in range(self.targets.count()):
+            item = self.targets.item(i)
+            text = item.text().lower()
+            item.setHidden(not all(t in text for t in terms))
+        self._update_hint()
 
     def _check_all(self, on: bool):
+        """Wirkt nur auf die sichtbaren (gefilterten) Ziele; ausgeblendete behalten ihren Haken."""
         for i in range(self.targets.count()):
-            self.targets.item(i).setCheckState(Qt.CheckState.Checked if on else Qt.CheckState.Unchecked)
+            item = self.targets.item(i)
+            if not item.isHidden():
+                item.setCheckState(Qt.CheckState.Checked if on else Qt.CheckState.Unchecked)
 
     # --- Aktionen ---
     def _changed(self, select: str | None = None):

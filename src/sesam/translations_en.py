@@ -500,6 +500,8 @@ EN: dict[str, str] = {
     "Name und Befehl sind Pflichtfelder.": "Name and command are required fields.",
     "Ausführen auf:": "Run on:",
     "Auf {n} Verbindungen ausführen": "Run on {n} connections",
+    "Filtern nach Gruppe oder Name …": "Filter by group or name …",
+    "{n} markiert, davon {m} ausgeblendet": "{n} selected, {m} of them hidden",
     "Snippet „{name}“ wirklich löschen?": "Really delete snippet “{name}”?",
     "Noch keine Snippets. Mit „Neu …“ einen Befehl anlegen.": "No snippets yet. Create a command with “New …”.",
     "Snippet auswählen.": "Select a snippet.",

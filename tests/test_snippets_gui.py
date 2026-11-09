@@ -75,6 +75,50 @@ class SnippetsDialogTests(DialogBase):
         d.btn_none.click()
         self.assertFalse(d.btn_run.isEnabled())
 
+    def test_filter_hides_targets_by_group_or_name_with_all_words(self):
+        d = self.dialog()
+        shown = lambda: [d.targets.item(i).text() for i in range(d.targets.count()) if not d.targets.item(i).isHidden()]
+        self.assertEqual(len(shown()), 3)
+        d.filter.setText("PROD")
+        self.assertEqual(shown(), ["Prod / web"])
+        d.filter.setText("prod we")
+        self.assertEqual(shown(), ["Prod / web"])
+        d.filter.setText("prod nas")
+        self.assertEqual(shown(), [])
+        d.filter.setText("")
+        self.assertEqual(len(shown()), 3)
+
+    def test_all_and_none_only_affect_visible_targets_and_hidden_checks_still_run(self):
+        from PySide6.QtCore import Qt
+
+        d = self.dialog()
+        self.select(d, "Uptime")
+        d.filter.setText("prod")
+        d.btn_all.click()
+        self.assertEqual([c.name for c in d._checked()], ["web"])
+        d.filter.setText("nas")
+        self.assertTrue(d.hidden_hint.isHidden() is False)
+        self.assertIn("1", d.hidden_hint.text())
+        d.btn_all.click()
+        self.assertEqual(sorted(c.name for c in d._checked()), ["nas", "web"])
+        self.assertEqual(d.btn_run.text(), "Auf 2 Verbindungen ausführen")
+        d.filter.setText("db")
+        d.btn_none.click()  # nur db sichtbar: web und nas behalten ihren Haken
+        self.assertEqual(sorted(c.name for c in d._checked()), ["nas", "web"])
+        d.btn_run.click()
+        self.assertEqual(sorted(self.runs[0][1]), ["nas", "web"])
+        d.filter.setText("")
+        self.assertTrue(d.hidden_hint.isHidden())
+        self.assertEqual(d.targets.item(0).checkState(), Qt.CheckState.Unchecked)
+
+    def test_target_list_is_resizable_via_splitter(self):
+        from PySide6.QtWidgets import QSplitter
+
+        d = self.dialog()
+        self.assertIsInstance(d.splitter, QSplitter)
+        self.assertIs(d.splitter.widget(1).isAncestorOf(d.targets), True)
+        self.assertGreaterEqual(d.targets.maximumHeight(), 16777215)
+
     def test_preselected_connections_are_checked_and_run(self):
         ids = [c.id for c in self.cfg.connections if c.name in ("db", "nas")]
         d = self.dialog(preselect=ids)

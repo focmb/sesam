@@ -60,6 +60,7 @@ Every connection starts in the terminal through a small wrapper (even without a 
 *Snippets …* (Ctrl+Shift+S, sidebar) stores commands that run in the terminal on one or more hosts.
 - **Create:** name, command (also multi-line, e.g. `df -h && free -m`), optionally a **category** (subfolders with “/”, e.g. `Docker/Logs`) and a note. The command applies to all connections.
 - **Run:** right-click a connection → *Run snippet* (categories appear as submenus), or tick the targets at the bottom of the snippets window. With multiple selection (Ctrl/Shift click) the snippet runs on all selected connections; one terminal opens per connection, and Sesam asks first. An error on one target (e.g. a missing key) does not stop the others.
+- **Many targets:** The field next to *Run on:* filters the list by group or name (all words must match, e.g. “customer prod”). *All* and *None* only affect the visible entries, so you can tick hosts group by group. Hidden but ticked hosts still run; a note below the list counts them. Drag the handle between the snippet area and the list to enlarge the target list.
 - **With sudo:** only the command runs via `sudo -i` (the connection’s target user, otherwise root). The saved password is used as with the connection’s *With sudo*. A shell left open afterwards belongs to the normal user again.
 - **Afterwards:** *Keep shell open* (default), *Wait for a key* or *Close terminal immediately*.
 - The command runs in `sh -c` on the target system. The connection’s “Remote command” and “With sudo” are replaced for the snippet.
