@@ -12,6 +12,7 @@ from .. import launcher
 from ..i18n import tr
 from ..models import Config, Viewer
 from ..viewers import is_builtin, template_viewers
+from .filedialog import pick_file
 
 HELP = (
     "<b>Platzhalter:</b><br>"
@@ -172,7 +173,7 @@ class ViewersDialog(QDialog):
     def _pick_program(self):
         if not self._current:
             return
-        path, _ = QFileDialog.getOpenFileName(self, tr("Viewer-Programm wählen"))
+        path = pick_file(self, tr("Viewer-Programm wählen"))
         if not path:
             return
         quoted = f'"{path}"' if " " in path else path

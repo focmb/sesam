@@ -15,6 +15,7 @@ from .forwards_dialog import ForwardsPage
 from .identities_dialog import IdentityEditDialog, save_identity
 from .keys_dialog import fill_key_combo
 from ..i18n import tr
+from .filedialog import pick_file, ssh_dir
 
 
 def swatch(color: str, size: int = 14) -> QIcon:
@@ -368,7 +369,7 @@ class ConnectionDialog(QDialog):
             self._identity_changed()
 
     def _browse_key(self):
-        path, _ = QFileDialog.getOpenFileName(self, tr("Schlüsseldatei wählen"))
+        path = pick_file(self, tr("Schlüsseldatei wählen"), ssh_dir())
         if path:
             self.identity.setText(path)
 

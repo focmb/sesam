@@ -17,6 +17,7 @@ from .. import keys, keystore, launcher, passwords, sftp
 from ..models import Config, SshKey
 from .jobs import Job
 from ..i18n import tr
+from .filedialog import pick_file, ssh_dir
 
 
 def fill_key_combo(combo: QComboBox, cfg: Config, select: str = "", none_text: str | None = None) -> None:
@@ -271,7 +272,7 @@ class KeysDialog(QDialog):
             self._changed(entry.id)
 
     def _import(self):
-        path, _ = QFileDialog.getOpenFileName(self, tr("Privaten Schlüssel wählen"))
+        path = pick_file(self, tr("Privaten Schlüssel wählen"), ssh_dir())
         if not path:
             return
         passphrase = None

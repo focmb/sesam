@@ -12,6 +12,7 @@ from .. import launcher
 from ..terminals import template_terminals
 from ..models import Config, Connection, Terminal
 from ..i18n import tr
+from .filedialog import pick_file
 
 HELP = (
     "<b>Platzhalter:</b><br>"
@@ -156,7 +157,7 @@ class TerminalsDialog(QDialog):
     def _pick_program(self):
         if not self._current:
             return
-        path, _ = QFileDialog.getOpenFileName(self, tr("Terminal-Programm wählen"))
+        path = pick_file(self, tr("Terminal-Programm wählen"))
         if not path:
             return
         quoted = f'"{path}"' if " " in path else path

@@ -11,6 +11,7 @@ from .. import passwords
 from ..models import Config, Identity
 from .keys_dialog import fill_key_combo
 from ..i18n import tr
+from .filedialog import pick_file, ssh_dir
 
 
 class IdentityEditDialog(QDialog):
@@ -75,7 +76,7 @@ class IdentityEditDialog(QDialog):
         self._browse_btn.setEnabled(own)
 
     def _browse(self):
-        path, _ = QFileDialog.getOpenFileName(self, tr("Schlüsseldatei wählen"))
+        path = pick_file(self, tr("Schlüsseldatei wählen"), ssh_dir())
         if path:
             self.key.setText(path)
 
