@@ -113,7 +113,7 @@ class KeysDialogTests(KeyGuiBase):
         src = Path(self.tmp.name) / "id_work"
         src.write_text(m.private)
         d = self.dialog()
-        with mock.patch.object(QFileDialog, "getOpenFileName", lambda *a, **k: (str(src), "")), \
+        with mock.patch("sesam.gui.keys_dialog.pick_file", lambda *a, **k: str(src)), \
                 mock.patch.object(QInputDialog, "getText", lambda *a, **k: ("Importiert", True)):
             d._import()
         (entry,) = self.cfg.ssh_keys
@@ -129,7 +129,7 @@ class KeysDialogTests(KeyGuiBase):
         src.write_text(m.private)
         answers = iter([("pw", True), ("Geschützt", True)])
         d = self.dialog()
-        with mock.patch.object(QFileDialog, "getOpenFileName", lambda *a, **k: (str(src), "")), \
+        with mock.patch("sesam.gui.keys_dialog.pick_file", lambda *a, **k: str(src)), \
                 mock.patch.object(QInputDialog, "getText", lambda *a, **k: next(answers)):
             d._import()
         (entry,) = self.cfg.ssh_keys
@@ -143,7 +143,7 @@ class KeysDialogTests(KeyGuiBase):
         src.write_text("das ist kein Schlüssel")
         shown = []
         d = self.dialog()
-        with mock.patch.object(QFileDialog, "getOpenFileName", lambda *a, **k: (str(src), "")), \
+        with mock.patch("sesam.gui.keys_dialog.pick_file", lambda *a, **k: str(src)), \
                 mock.patch.object(QMessageBox, "critical", lambda *a: shown.append(a[2])):
             d._import()
         self.assertEqual((self.cfg.ssh_keys, self.saved, len(shown)), ([], 0, 1))
