@@ -206,16 +206,16 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             return False
 
         def test_session_opens_as_tab_and_closes_with_the_process(self):
-            self.assertEqual(self.w.tabs.count(), 1)
+            self.assertEqual(self.w.tabs.count(), 0)
             self.w._open_connection(self.conn)
-            self.assertEqual(self.w.tabs.count(), 2)
-            self.assertEqual(self.w.tabs.tabText(1), "Test")
-            self.assertEqual(self.w.tabs.currentIndex(), 1)
+            self.assertEqual(self.w.tabs.count(), 1)
+            self.assertEqual(self.w.tabs.tabText(0), "Test")
+            self.assertEqual(self.w.tabs.currentIndex(), 0)
             view = self.w._terminal_views()[0]
             self.assertTrue(self.pump(lambda: "sitzung" in "\n".join(view._screen.display)))
             self.assertTrue(launcher.is_open(self.conn.id))
             view._send(b"\r")  # read x -> Prozess endet
-            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
             self.assertFalse(launcher.is_open(self.conn.id))
 
         def test_closing_a_running_tab_asks_first(self):
@@ -227,10 +227,10 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             self.assertTrue(self.pump(lambda: view._pty is not None))
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
                 self.w._close_terminal_tab(1)
-            self.assertEqual(self.w.tabs.count(), 2)
+            self.assertEqual(self.w.tabs.count(), 1)
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
                 self.w._close_terminal_tab(1)
-            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
 
         def test_quitting_with_a_running_session_can_be_cancelled(self):
             from unittest import mock
@@ -268,14 +268,14 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
 
             with mock.patch.object(localshell, "command", lambda: ["bash", "-c", "echo lokal-ok; read x"]):
                 self.w.a_local.trigger()
-            self.assertEqual(self.w.tabs.count(), 2)
-            self.assertEqual(self.w.tabs.tabText(1), "Lokal")
+            self.assertEqual(self.w.tabs.count(), 1)
+            self.assertEqual(self.w.tabs.tabText(0), "Lokal")
             view = self.w._terminal_views()[0]
             self.assertTrue(self.pump(lambda: "lokal-ok" in "\n".join(view._screen.display)))
-            self.assertIn("a_local", self.w.side_buttons)
+            self.assertIn("a_local", [a for g in self.w.MORE_GROUPS for a in g] + list(self.w.TOOLBAR_ACTIONS))
             self.assertEqual(self.w.a_local.shortcut().toString(), "Ctrl+Shift+T")
             view._send(b"\r")
-            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
 
         def test_local_terminal_shortcut_inside_a_terminal_opens_a_tile(self):
             from unittest import mock
@@ -287,14 +287,14 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
                 first.local_requested.emit()
             views = self.w._terminal_views()
             self.assertEqual(len(views), 2)
-            self.assertEqual(self.w.tabs.count(), 2)  # Kachel im selben Reiter
+            self.assertEqual(self.w.tabs.count(), 1)  # Kachel im selben Reiter
             self.assertIs(self.w._tab_of(views[0]), self.w._tab_of(views[1]))
 
         def test_split_adds_a_tile_in_the_same_tab(self):
             first, second = self._two_tiles()
-            self.assertEqual(self.w.tabs.count(), 2)  # kein zweiter Reiter
+            self.assertEqual(self.w.tabs.count(), 1)  # kein zweiter Reiter
             self.assertIs(self.w._tab_of(first), self.w._tab_of(second))
-            self.assertEqual(self.w.tabs.tabText(1), "Test (+1)")
+            self.assertEqual(self.w.tabs.tabText(0), "Test (+1)")
             self.assertTrue(first._tiled and second._tiled)
             self.assertEqual(second.command, first.command)
 
@@ -316,11 +316,11 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             first, second = self._two_tiles()
             second._send(b"\r")  # read x -> Prozess endet
             self.assertTrue(self.pump(lambda: len(self.w._terminal_views()) == 1))
-            self.assertEqual(self.w.tabs.count(), 2)
-            self.assertEqual(self.w.tabs.tabText(1), "Test")
+            self.assertEqual(self.w.tabs.count(), 1)
+            self.assertEqual(self.w.tabs.tabText(0), "Test")
             self.assertFalse(first._tiled)
             first._send(b"\r")
-            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
 
         def test_closing_a_tab_with_several_tiles_asks_once(self):
             from unittest import mock
@@ -331,7 +331,7 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes) as ask:
                 self.w._close_terminal_tab(1)
             self.assertEqual(ask.call_count, 1)
-            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
 
         def test_focus_neighbor_and_zoom(self):
             from PySide6.QtCore import Qt
@@ -357,11 +357,11 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             self.assertIsNone(self.w._last_terminal_tab())
             self.w._open_connection(self.conn)
             first = self.w._terminal_views()[0]
-            self.w.tabs.setCurrentIndex(0)  # zurück zur Verbindungsliste
+            self.w.tree.setFocus()  # zurück zur Verbindungsliste (bleibt neben den Sitzungen sichtbar)
             self.assertIsNotNone(self.w._last_terminal_tab())
             self.w._split_target = (self.w._last_terminal_tab().active(), Qt.Orientation.Vertical)
             self.w._open_connection(self.conn)
-            self.assertEqual(self.w.tabs.count(), 2)
+            self.assertEqual(self.w.tabs.count(), 1)
             self.assertEqual(len(self.w._terminal_views()), 2)
             self.assertIs(self.w.tabs.currentWidget(), self.w._tab_of(first))
 
@@ -383,29 +383,29 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             from PySide6.QtCore import Qt
 
             self._open_sessions(3)
-            self.assertEqual(self.w.tabs.count(), 4)
+            self.assertEqual(self.w.tabs.count(), 3)
             self.w._tile_all()
-            self.assertEqual(self.w.tabs.count(), 2)
-            tab = self.w.tabs.widget(1)
+            self.assertEqual(self.w.tabs.count(), 1)
+            tab = self.w.tabs.widget(0)
             self.assertEqual(len(tab.views()), 3)
             self.assertEqual(len(self.w._terminal_views()), 3)
             self.assertTrue(all(v._tiled for v in tab.views()))
             self.assertIs(self.w.tabs.currentWidget(), tab)
             self.assertEqual(tab._root.orientation(), Qt.Orientation.Vertical)  # 2 × 2: zwei Zeilen
-            self.assertEqual(self.w.tabs.tabText(1), "Test (+2)")
+            self.assertEqual(self.w.tabs.tabText(0), "Test (+2)")
 
         def test_untile_gives_every_tile_its_own_tab_again(self):
             self._open_sessions(3)
             self.w._tile_all()
-            self.w._untile(self.w.tabs.widget(1))
-            self.assertEqual(self.w.tabs.count(), 4)
+            self.w._untile(self.w.tabs.widget(0))
+            self.assertEqual(self.w.tabs.count(), 3)
             self.assertTrue(all(len(t.views()) == 1 for t in self.w._terminal_tabs()))
             self.assertFalse(any(v._tiled for v in self.w._terminal_views()))
 
         def test_tile_all_with_one_session_does_nothing(self):
             self._open_sessions(1)
             self.w._tile_all()
-            self.assertEqual(self.w.tabs.count(), 2)
+            self.assertEqual(self.w.tabs.count(), 1)
 
         def test_broadcast_is_off_by_default_and_needs_two_tiles(self):
             first, second = self._two_tiles()
@@ -426,7 +426,7 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             self.w._toggle_broadcast(tab)
             self.assertTrue(tab.broadcast())
             self.assertTrue(first.is_broadcasting() and second.is_broadcasting())
-            self.assertTrue(self.w.tabs.tabText(1).startswith("⚠"))
+            self.assertTrue(self.w.tabs.tabText(0).startswith("⚠"))
             first.typed.emit(b"\r")  # Enter in der ersten Kachel erreicht auch die zweite: ihr „read“ endet
             self.assertTrue(self.pump(lambda: len(self.w._terminal_views()) == 1))
             self.assertIsNone(first.poll())
@@ -456,9 +456,9 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             view = self.w._terminal_views()[0]
             self.assertTrue(self.pump(lambda: view._pty is not None))
             self.assertIsNotNone(self.w._last_terminal_tab())
-            self.w.tabs.setCurrentIndex(0)
+            self.w.tree.setFocus()
             view._send(b"\r")  # Sitzung endet, der Reiter wird gelöscht
-            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 1))
+            self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
             QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
             self.assertIsNone(self.w._last_terminal_tab())  # kein Zugriff auf das gelöschte Objekt
             shown = []
@@ -540,7 +540,7 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             self.assertEqual(len(tabs), 2)
             a, b = tabs[0].views()[0], tabs[1].views()[0]
             self.w._drop_tile(b, a, "right")
-            self.assertEqual(self.w.tabs.count(), 2)  # der leere Reiter ist weg
+            self.assertEqual(self.w.tabs.count(), 1)  # der leere Reiter ist weg
             self.assertEqual(self.w._tab_of(a).views(), [a, b])
             self.assertIs(self.w.tabs.currentWidget(), self.w._tab_of(a))
             self.assertTrue(a._tiled and b._tiled)

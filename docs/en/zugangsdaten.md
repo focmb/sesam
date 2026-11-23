@@ -5,14 +5,14 @@
 ## Identities
 
 An identity bundles **user, key file and password** and can be used by any number of connections.
-- Manage them under *Identities …* in the sidebar or directly when creating a connection via *Identity → New …*.
+- Manage them under *Identities …* in the ⋯ menu or directly when creating a connection via *Identity → New …*.
 - If you choose an identity in a connection, it replaces the connection’s user, key file and password (the fields are then locked; your own values are kept and apply again with “None”).
 - The password lives in the keyring, once per identity. If a password changes, it is updated in one place only. This also applies to sudo.
 - Deleting an identity also removes it from all connections that use it (they then need their own credentials again).
 
 ## SSH keys
 
-*Keys …* in the sidebar manages keys directly in Sesam – the same on Windows and Linux.
+*Keys …* in the ⋯ menu manages keys directly in Sesam – the same on Windows and Linux.
 - **Generate:** Ed25519 (recommended) or RSA 4096, optionally with a passphrase. The format is standard OpenSSH, understood by `ssh-keygen` and terminals.
 - **Import:** read an existing private key file (OpenSSH or classic PEM). If a `.pub` file sits next to it, it is used for protected keys; otherwise Sesam asks for the passphrase once.
 - **View:** type, fingerprint (SHA256 as with `ssh-keygen -l`), comment, creation date, public key and who uses the key. *Copy public key* puts the line for `authorized_keys` on the clipboard.

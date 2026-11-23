@@ -243,7 +243,7 @@ class MainWindowSnippetTests(GuiTestCase):
 
     def test_sidebar_has_snippets_button_with_icon_and_shortcut(self):
         self.assertEqual(self.w.a_snippets.text(), "Snippets …")
-        self.assertIn("a_snippets", self.w.side_buttons)
+        self.assertIn("a_snippets", [a for g in self.w.MORE_GROUPS for a in g] + list(self.w.TOOLBAR_ACTIONS))
         self.assertFalse(self.w.a_snippets.icon().isNull())
         self.assertEqual(self.w.a_snippets.shortcut().toString(), "Ctrl+Shift+S")
 

@@ -8,8 +8,8 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QGuiApplication, QIcon, QKeySequence, QPainter
 from PySide6.QtWidgets import (
-    QTabBar, QTabWidget, QAbstractItemView, QApplication, QButtonGroup, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
-    QMessageBox, QPushButton, QToolButton,
+    QListWidget, QListWidgetItem, QSplitter, QStackedWidget, QTabWidget, QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
+    QMessageBox, QToolButton,
     QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QVBoxLayout, QWidget,
 )
 
@@ -19,7 +19,7 @@ from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme, type_badges
 from ..clipboard_history import History as ClipboardHistory
-from .. import colors, crashlog, docker, duplicates, cisco, launcher, localshell, osinfo, passwords, proxmox, runtime, sftp, snippets, remote, storage, tunnels, wireguard
+from .. import colors, crashlog, quick, docker, duplicates, cisco, launcher, localshell, osinfo, passwords, proxmox, runtime, sftp, snippets, remote, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
 from ..ssh_config import parse_ssh_config
@@ -202,28 +202,40 @@ class MainWindow(QMainWindow):
         self.tree.moved.connect(lambda k, key, tgt: QTimer.singleShot(0, lambda: self._move(k, key, tgt)))
 
         central = QWidget()
-        outer = QHBoxLayout(central)
-        outer.setContentsMargins(14, 10, 14, 10)
-        outer.setSpacing(14)
-        layout = QVBoxLayout()
-        layout.setSpacing(10)
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(14, 10, 8, 10)
+        layout.setSpacing(8)
         layout.addWidget(self.search)
-        layout.addWidget(self.tree)
-        outer.addLayout(layout, 1)
-        self._outer_layout = outer  # die Seitenleiste kommt rechts dazu, sobald die Aktionen existieren
-        # Reiter: vorn die Verbindungsliste, dahinter die Sitzungen des integrierten Terminals (ohne Sitzung blendet Qt die Leiste aus)
+        self._list_layout = layout  # die Werkzeugzeile kommt unter die Suche, sobald die Aktionen existieren
+        layout.addWidget(self.tree, 1)
+        # Links bleibt die Verbindungsliste immer sichtbar; rechts stehen die Sitzungen des integrierten Terminals als Reiter
+        # (ohne Sitzung zeigt die rechte Seite stattdessen die zuletzt verwendeten Verbindungen)
         self.tabs = QTabWidget()
         self.tabs.setObjectName("mainTabs")
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
-        self.tabs.setTabBarAutoHide(True)
-        self.tabs.addTab(central, tr("Verbindungen"))
-        for side in (QTabBar.ButtonPosition.LeftSide, QTabBar.ButtonPosition.RightSide):
-            self.tabs.tabBar().setTabButton(0, side, None)  # der erste Reiter lässt sich nicht schließen
         self.tabs.tabCloseRequested.connect(self._close_terminal_tab)
         self.tabs.currentChanged.connect(self._tab_changed)
         self._build_tile_button()
-        self.setCentralWidget(self.tabs)
+        self.start_page = self._build_start_page()
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.start_page)
+        self.stack.addWidget(self.tabs)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setObjectName("mainSplitter")
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.addWidget(central)
+        self.splitter.addWidget(self.stack)
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.splitterMoved.connect(lambda *_: self._list_width_timer.start())
+        self._list_width_timer = QTimer(self)  # Breite kurz nach dem Ziehen speichern
+        self._list_width_timer.setSingleShot(True)
+        self._list_width_timer.setInterval(600)
+        self._list_width_timer.timeout.connect(self._flush_list_width)
+        self.setCentralWidget(self.splitter)
+        self._apply_list_width()
+        self._update_stack()
         self._split_target: tuple[TerminalView, Qt.Orientation] | None = None  # nächste Sitzung als Kachel neben/unter dieser öffnen
         self._recent_terminal_tab: TerminalTab | None = None  # zuletzt benutzter Terminal-Reiter (Ziel für „Neben/Unter dem aktuellen Terminal öffnen“)
         launcher.set_embedded_opener(self._open_embedded)
@@ -303,101 +315,91 @@ class MainWindow(QMainWindow):
         theme.notifier().changed.connect(self._theme_changed)
         self._refresh_icons()
 
-    # --- Seitenleiste ---
+    # --- Werkzeugzeile über der Liste ---
     THEME_TIPS = {"light": "Hell", "dark": "Dunkel", "system": "Wie das System"}
     THEME_ICONS = {"light": "sun", "dark": "moon", "system": "monitor"}
-    SIDEBAR_MIN_WIDTH = 190
-    SIDEBAR_GROUPS = (
-        ("a_connect", "a_quick", "a_files", "a_local", "a_new", "a_new_group", "a_fav", "a_edit", "a_dup", "a_del"),
+    TOOLBAR_ACTIONS = ("a_connect", "a_files", "a_local", "a_new", "a_edit", "a_dup", "a_del", "a_fav")  # nur Symbole; Tooltip mit Tastenkürzel
+    MORE_GROUPS = (  # Menü „Weitere Aktionen“
+        ("a_quick", "a_new_group"),
         ("a_sync", "a_identities", "a_keys", "a_snippets", "a_clipboard"),
     )
 
     def _build_sidebar(self):
-        """Alle Hauptaktionen untereinander in einer Leiste am rechten Rand."""
-        side = QWidget()
-        side.setObjectName("sidebar")
-        side.setFixedWidth(self.SIDEBAR_MIN_WIDTH)
-        lay = QVBoxLayout(side)
+        """Hauptaktionen als Symbolzeile unter dem Suchfeld; Seltener im Menü „Weitere Aktionen“, ganz rechts die Einstellungen."""
+        bar = QWidget()
+        bar.setObjectName("toolbar")
+        lay = QHBoxLayout(bar)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(2)  # eng gesetzt: mit jedem Knopf wächst die Mindesthöhe des Fensters (Laptop-Bildschirme mit 768 Pixeln)
-        self.side_buttons: dict[str, QPushButton] = {}
-        for index, group in enumerate(self.SIDEBAR_GROUPS):
-            if index:
-                line = QFrame()
-                line.setObjectName("sideSep")
-                line.setFixedHeight(1)
-                lay.addSpacing(6)
-                lay.addWidget(line)
-                lay.addSpacing(6)
-            for attr in group:
-                action: QAction = getattr(self, attr)
-                button = QPushButton()
-                button.setObjectName("side")
-                button.setProperty("primary", attr == "a_connect")  # hebt „Verbinden“ als Hauptaktion hervor
-                button.setIconSize(QSize(18, 18))
-                button.setFocusPolicy(Qt.FocusPolicy.TabFocus)  # ein Klick nimmt dem Baum den Fokus nicht
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
-                button.clicked.connect(lambda _=False, a=action: a.trigger())
-                action.changed.connect(lambda b=button, a=action: (self._sync_button(b, a), self._fit_to_font()))  # Text kann sich ändern (z. B. Sync)
-                self._sync_button(button, action)
-                lay.addWidget(button)
-                self.side_buttons[attr] = button
-        line = QFrame()
-        line.setObjectName("sideSep")
-        line.setFixedHeight(1)
-        lay.addSpacing(6)
-        lay.addWidget(line)
-        lay.addSpacing(6)
-        # Farbschema: drei Umschalter nebeneinander (nur Symbole, damit sie schmal bleiben)
-        seg = QWidget()
-        seg_lay = QHBoxLayout(seg)
-        seg_lay.setContentsMargins(0, 2, 0, 0)
-        seg_lay.setSpacing(0)
-        self.theme_buttons: dict[str, QPushButton] = {}
-        self._theme_group = QButtonGroup(self)
-        self._theme_group.setExclusive(True)
-        modes = ("light", "dark", "system")
-        for i, mode in enumerate(modes):
-            b = QPushButton()
-            b.setObjectName("seg")
-            b.setProperty("pos", "first" if i == 0 else "last" if i == len(modes) - 1 else "middle")
-            b.setCheckable(True)
-            b.setChecked(self.cfg.theme == mode)
-            b.setIconSize(QSize(18, 18))
-            b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setToolTip(tr(self.THEME_TIPS[mode]))
-            b.setAccessibleName(tr(self.THEME_TIPS[mode]))
-            b.clicked.connect(lambda _=False, m=mode: self.set_theme(m))
-            b.toggled.connect(lambda *_: self._refresh_theme_icons())
-            self._theme_group.addButton(b)
-            seg_lay.addWidget(b, 1)
-            self.theme_buttons[mode] = b
-        lay.addWidget(seg)
-        self.theme_row = seg
-        self.side_menu_buttons: dict[str, QPushButton] = {}
-        settings_button = QPushButton()  # unter den Umschaltern für das Farbschema
-        settings_button.setObjectName("side")
-        settings_button.setIconSize(QSize(18, 18))
-        settings_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        settings_button.clicked.connect(lambda _=False: self.a_settings.trigger())
-        self.a_settings.changed.connect(lambda: self._sync_button(settings_button, self.a_settings))
-        self._sync_button(settings_button, self.a_settings)
-        lay.addSpacing(2)
-        lay.addWidget(settings_button)
-        self.side_menu_buttons["settings"] = settings_button
+        lay.setSpacing(2)
+        self.tool_buttons: dict[str, QToolButton] = {}
+
+        def make_button(action: QAction, primary: bool = False) -> QToolButton:
+            button = QToolButton()
+            button.setObjectName("tool")
+            button.setProperty("primary", primary)  # hebt „Verbinden“ als Hauptaktion hervor
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            button.setAutoRaise(False)
+            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)  # ein Klick nimmt dem Baum den Fokus nicht
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda _=False, a=action: a.trigger())
+            action.changed.connect(lambda b=button, a=action: self._sync_button(b, a))  # Text, Symbol und Zustand folgen der Aktion
+            self._sync_button(button, action)
+            return button
+
+        for attr in self.TOOLBAR_ACTIONS:
+            button = make_button(getattr(self, attr), attr == "a_connect")
+            lay.addWidget(button)
+            self.tool_buttons[attr] = button
         lay.addStretch(1)
-        self._outer_layout.addWidget(side)
-        self.sidebar = side
+
+        # Menü „Weitere Aktionen“ (⋯)
+        more = QToolButton()
+        more.setObjectName("tool")
+        more.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        more.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        more.setCursor(Qt.CursorShape.PointingHandCursor)
+        more.setToolTip(tr("Weitere Aktionen"))
+        more.setAccessibleName(tr("Weitere Aktionen"))
+        menu = QMenu(more)
+        for index, group in enumerate(self.MORE_GROUPS):
+            if index:
+                menu.addSeparator()
+            for attr in group:
+                menu.addAction(getattr(self, attr))
+        menu.addSeparator()
+        look = menu.addMenu(tr("Darstellung"))  # Hell, Dunkel, wie das System
+        self.theme_actions: dict[str, QAction] = {}
+        self._theme_group = QActionGroup(self)
+        self._theme_group.setExclusive(True)
+        for mode in ("light", "dark", "system"):
+            action = QAction(tr(self.THEME_TIPS[mode]), self)
+            action.setCheckable(True)
+            action.setChecked(self.cfg.theme == mode)
+            action.triggered.connect(lambda _=False, m=mode: self.set_theme(m))
+            self._theme_group.addAction(action)
+            look.addAction(action)
+            self.theme_actions[mode] = action
+        more.setMenu(menu)
+        lay.addWidget(more)
+        self.more_button = more
+        self.more_menu = menu
+
+        settings_button = make_button(self.a_settings)
+        lay.addWidget(settings_button)
+        self.settings_button = settings_button
+
+        self._list_layout.insertWidget(1, bar)  # direkt unter dem Suchfeld
+        self.toolbar = bar
         self._fit_to_font()
         # Die Tastenkürzel hingen früher an der Werkzeugleiste: jetzt direkt am Fenster registrieren.
-        self.addActions([getattr(self, attr) for group in self.SIDEBAR_GROUPS for attr in group])
+        self.addActions([getattr(self, attr) for attr in (*self.TOOLBAR_ACTIONS, *(a for g in self.MORE_GROUPS for a in g))])
 
     @staticmethod
-    def _sync_button(button: QPushButton, action: QAction):
+    def _sync_button(button, action: QAction):
         """Übernimmt Text, Icon und Zustand der Aktion (Icons werden bei Themenwechsel neu gesetzt)."""
         button.setText(action.text())
+        button.setAccessibleName(action.text().replace("&", ""))
         button.setIcon(action.icon())
         button.setEnabled(action.isEnabled())
         label = action.text().replace("&", "")
@@ -422,8 +424,9 @@ class MainWindow(QMainWindow):
             else:
                 action.setIcon(style.icon(name, c["text"], c["muted"]))
             action.setIconVisibleInMenu(False)
-        self._refresh_theme_icons()
+        self._sync_theme_checks()
         self.a_settings.setIcon(style.icon("settings", c["text"], c["muted"]))
+        self.more_button.setIcon(style.icon("more", c["text"], c["muted"]))
         if getattr(self, "_search_action", None) is not None:
             self.search.removeAction(self._search_action)
         self._search_action = self.search.addAction(
@@ -437,11 +440,10 @@ class MainWindow(QMainWindow):
         self._clear_action.triggered.connect(self.search.clear)
         self._clear_action.setVisible(bool(self.search.text()))
 
-    def _refresh_theme_icons(self):
-        """Das Symbol des aktiven Umschalters steht auf der Akzentfläche und braucht die passende Farbe."""
-        c = theme.colors()
-        for mode, b in self.theme_buttons.items():
-            b.setIcon(style.icon(self.THEME_ICONS[mode], c["accent_text"] if b.isChecked() else c["text"], c["muted"]))
+    def _sync_theme_checks(self):
+        """Das Häkchen im Menü „Darstellung“ folgt der Einstellung (auch wenn sie in den Einstellungen geändert wurde)."""
+        for mode, action in self.theme_actions.items():
+            action.setChecked(self.cfg.theme == mode)
 
     def _search_text_changed(self, text: str):
         action = getattr(self, "_clear_action", None)
@@ -457,17 +459,11 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _fit_to_font(self):
-        """Icons und Seitenleiste wachsen mit der Schrift mit, damit nichts abgeschnitten wird."""
+        """Symbole der Werkzeugzeile und der Liste wachsen mit der Schrift mit."""
         size = max(14, round(18 * theme.scale() / 100))
         self.tree.setIconSize(QSize(size, size))
-        buttons = [*self.side_buttons.values(), *self.side_menu_buttons.values()]
-        for b in self.theme_buttons.values():
-            b.setIconSize(QSize(size, size))
-        for button in buttons:
+        for button in (*self.tool_buttons.values(), self.more_button, self.settings_button):
             button.setIconSize(QSize(size, size))
-            button.ensurePolished()
-        widest = max(b.sizeHint().width() for b in buttons)
-        self.sidebar.setFixedWidth(max(self.SIDEBAR_MIN_WIDTH, widest))
 
     # --- Anzeige ---
     def _terminal_name(self, conn: Connection) -> str:
@@ -551,6 +547,78 @@ class MainWindow(QMainWindow):
         """Der Zustand folgt einer umbenannten oder verschobenen Gruppe samt Untergruppen."""
         self.collapsed = {new + c[len(old):] if c == old or c.startswith(old + "/") else c for c in self.collapsed}
 
+    # --- Verbindungsliste links, Startseite rechts ---
+    LIST_WIDTH_DEFAULT = 440  # Liste mit Werkzeugzeile; die Spalten lassen sich über das Kopfzeilenmenü ausblenden
+    START_RECENT = 10  # so viele zuletzt verwendete Verbindungen zeigt die Startseite
+
+    def _apply_list_width(self):
+        width = self.cfg.list_width or self.LIST_WIDTH_DEFAULT
+        total = max(self.width(), width + 200)
+        self.splitter.setSizes([width, total - width])
+
+    def _flush_list_width(self):
+        """Merkt sich die Breite der Liste. Reiner Anzeigezustand: kein Abgleich, kein Fehlerdialog."""
+        if self._list_width_timer.isActive():
+            self._list_width_timer.stop()
+        width = self.splitter.sizes()[0]
+        if width >= 200 and width != self.cfg.list_width:
+            self.cfg.list_width = width
+            self._save_no_sync()
+
+    def _update_stack(self):
+        """Mit Sitzung die Reiter, sonst die Startseite mit den zuletzt verwendeten Verbindungen."""
+        self.stack.setCurrentWidget(self.tabs if self.tabs.count() else self.start_page)
+
+    def _build_start_page(self) -> QWidget:
+        page = QWidget()
+        page.setObjectName("startPage")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(24, 24, 24, 24)
+        lay.setSpacing(10)
+        self.start_title = QLabel(tr("Zuletzt verwendet"))
+        self.start_title.setObjectName("startTitle")
+        self.start_hint = QLabel(tr("Noch keine Verbindung verwendet. Doppelklick in der Liste links öffnet eine Sitzung."))
+        self.start_hint.setObjectName("startHint")
+        self.start_hint.setWordWrap(True)
+        self.start_list = QListWidget()
+        self.start_list.setObjectName("startList")
+        self.start_list.setFrameShape(QFrame.Shape.NoFrame)
+        self.start_list.setIconSize(QSize(18, 18))
+        self.start_list.itemActivated.connect(self._start_item_activated)
+        lay.addWidget(self.start_title)
+        lay.addWidget(self.start_list, 1)
+        lay.addWidget(self.start_hint)
+        return page
+
+    def _fill_start_page(self):
+        """Die jüngsten Verbindungen (ohne gelöschte), neueste zuerst."""
+        if not hasattr(self, "start_list"):
+            return
+        self.start_list.clear()
+        now = time.time()
+        used = sorted(self.cfg.recent.items(), key=lambda kv: kv[1], reverse=True)
+        shown = 0
+        for conn_id, when in used:
+            conn = self.cfg.connection_by_id(conn_id)
+            if conn is None:
+                continue
+            direct = bool(conn.remote) and conn.remote_mode == "direct"
+            icon = style.icon("monitor" if direct else "server", colors.hex_of(conn.color) or theme.colors()["muted"])
+            item = QListWidgetItem(icon, f"{conn.name or conn.host}\n{self._target(conn)}  ·  {quick.ago(now - when)}")
+            item.setData(Qt.ItemDataRole.UserRole, conn.id)
+            item.setToolTip(self._kind_tip(conn))
+            self.start_list.addItem(item)
+            shown += 1
+            if shown >= self.START_RECENT:
+                break
+        self.start_list.setVisible(bool(shown))
+        self.start_hint.setVisible(not shown)
+
+    def _start_item_activated(self, item: QListWidgetItem):
+        conn = self.cfg.connection_by_id(item.data(Qt.ItemDataRole.UserRole))
+        if conn is not None:
+            self._connect(conn)
+
     def _restore_window_size(self):
         """Fenstergröße vom letzten Beenden wiederherstellen (nie größer als der Bildschirm)."""
         w, h = self.cfg.window_size if len(self.cfg.window_size) == 2 else (1000, 600)
@@ -578,7 +646,7 @@ class MainWindow(QMainWindow):
 
     # --- Integriertes Terminal ---
     def _terminal_tabs(self) -> list[TerminalTab]:
-        return [w for i in range(1, self.tabs.count()) if isinstance(w := self.tabs.widget(i), TerminalTab)]
+        return [w for i in range(self.tabs.count()) if isinstance(w := self.tabs.widget(i), TerminalTab)]
 
     def _terminal_views(self) -> list[TerminalView]:
         return [v for tab in self._terminal_tabs() for v in tab.views()]
@@ -592,7 +660,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_tab(self, tab: TerminalTab):
         index = self.tabs.indexOf(tab)
-        if index > 0:
+        if index >= 0:
             self.tabs.setTabText(index, tab.title())
             self.tabs.setTabToolTip(index, tab.title())
 
@@ -617,7 +685,7 @@ class MainWindow(QMainWindow):
         view.tile_dropped.connect(lambda source, zone, v=view: self._drop_tile(source, v, zone))
         target, self._split_target = self._split_target, None
         tab = self._tab_of(target[0]) if target is not None else None
-        if tab is not None and self.tabs.indexOf(tab) > 0:
+        if tab is not None and self.tabs.indexOf(tab) >= 0:
             tab.add_view(view, target[0], target[1])
             self.tabs.setCurrentWidget(tab)
         else:
@@ -655,16 +723,18 @@ class MainWindow(QMainWindow):
         self.tabs.setTabToolTip(index, view.title)
         view.show()
         self._update_tile_button()
+        self._update_stack()
         return tab
 
     def _drop_tab(self, tab: TerminalTab):
         index = self.tabs.indexOf(tab)
-        if index > 0:
+        if index >= 0:
             self.tabs.removeTab(index)
         if self._recent_terminal_tab is tab:
             self._recent_terminal_tab = None
         tab.deleteLater()
         self._update_tile_button()
+        self._update_stack()
 
     def _split_view(self, view: TerminalView, orientation: Qt.Orientation):
         """Öffnet neben/unter der Kachel eine weitere Sitzung mit demselben Befehl (dieselbe Verbindung)."""
@@ -696,7 +766,7 @@ class MainWindow(QMainWindow):
         if tab is None:
             return None
         try:
-            return tab if self.tabs.indexOf(tab) > 0 else None
+            return tab if self.tabs.indexOf(tab) >= 0 else None
         except RuntimeError:  # Reiter wurde inzwischen gelöscht
             self._recent_terminal_tab = None
             return None
@@ -870,7 +940,7 @@ class MainWindow(QMainWindow):
 
     def _close_terminal_tab(self, index: int):
         tab = self.tabs.widget(index)
-        if index == 0 or not isinstance(tab, TerminalTab):
+        if not isinstance(tab, TerminalTab):
             return
         self._end_views(tab.views())
 
@@ -959,7 +1029,7 @@ class MainWindow(QMainWindow):
     def _tab_menu(self, pos):
         menu = QMenu(self)
         index = self.tabs.tabBar().tabAt(pos)
-        tab = self.tabs.widget(index) if index > 0 else None
+        tab = self.tabs.widget(index) if index >= 0 else None
         if isinstance(tab, TerminalTab):
             view = tab.active()
             if view is not None:
@@ -984,10 +1054,10 @@ class MainWindow(QMainWindow):
 
     def _tab_changed(self, index: int):
         widget = self.tabs.widget(index)
-        if index > 0 and isinstance(widget, TerminalTab):
+        if isinstance(widget, TerminalTab):
             self._recent_terminal_tab = widget
             widget.focus_active()
-        elif index > 0 and widget is not None:
+        elif widget is not None:
             widget.setFocus()
         else:
             self.tree.setFocus()
@@ -1013,6 +1083,7 @@ class MainWindow(QMainWindow):
         self.remote.stop_all()  # die Tunnel des Fernzugriffs enden mit dem Programm
         self.tunnels.stop_all()  # Tunnel gehören zu dieser Sitzung und enden mit ihr
         self._flush_window_size()
+        self._flush_list_width()
         for window in list(self._sftp_windows):
             window.close()
         if self._width_timer.isActive():
@@ -1106,6 +1177,7 @@ class MainWindow(QMainWindow):
         self._rebuilding -= 1
         for cid in self._docker_expanded:  # z. B. nach dem Bearbeiten des Hosts: neu laden, sobald der Baum steht
             QTimer.singleShot(0, lambda cid=cid: self._load_if_needed(cid, retry_errors=False))
+        self._fill_start_page()
 
     def _connection_item(self, conn: Connection, c: dict[str, str], muted, favorite_entry: bool = False) -> QTreeWidgetItem:
         """Zeile einer Verbindung. ``favorite_entry``: Verweis im Favoriten-Abschnitt (ohne Stern, ohne Docker-/Proxmox-Unterelemente)."""
@@ -1839,6 +1911,7 @@ class MainWindow(QMainWindow):
     def _touch(self, conn: Connection) -> None:
         """Merkt sich den Zeitpunkt der Nutzung (nur lokal, für den Schnellstarter)."""
         self.cfg.recent[conn.id] = time.time()
+        self._fill_start_page()
         if len(self.cfg.recent) > storage.RECENT_MAX:
             keep = sorted(self.cfg.recent.items(), key=lambda kv: kv[1], reverse=True)[:storage.RECENT_MAX]
             self.cfg.recent = dict(keep)
@@ -2048,6 +2121,9 @@ class MainWindow(QMainWindow):
             if self._selected_container():
                 self.connect_container(terminal)
             return
+        self._connect(conn, terminal, sudo, new)
+
+    def _connect(self, conn: Connection, terminal: Terminal | None = None, sudo: bool = False, new: bool = False):
         terminal = terminal if isinstance(terminal, Terminal) else None
         if conn.remote and conn.remote_mode == "direct" and not (new or sudo or terminal):  # Gerät, das nur VNC/RDP spricht: Doppelklick öffnet den Fernzugriff
             self.open_remote(conn)

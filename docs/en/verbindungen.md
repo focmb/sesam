@@ -7,16 +7,16 @@
 The *Edit connection* dialog is split into four tabs: *General* (name, host, group, color, tags, terminal, notes), *Access* (identity, user, port, key, password), *Advanced* (jump host, extra options, remote command, sudo) and *Tree extensions* (Docker, Proxmox, Cisco). This keeps it usable on small screens.
 
 There is no menu bar: all actions (Connect, Files, New connection, New group, Edit, Duplicate, Delete, Sync now, Synchronization, Identities, Keys, Terminals)
-are stacked in a sidebar on the right edge (Ctrl+Q quits the program; *Import from ~/.ssh/config* is in the right-click menu of the connection list); the keyboard shortcuts (Enter, Ctrl+N, F2, Del, Ctrl+D, F5 …) work in the whole window.
+form a row of icons directly below the search box, above the connection list: Connect, Files (SFTP), Local terminal, New, Edit, Duplicate, Delete and Favorite as buttons, everything else (Quick launcher, New group, Sync, Identities, Keys, Snippets, Clipboard) in the **⋯** menu (“More actions”), and Settings at the far right (Ctrl+Q quits the program; *Import from ~/.ssh/config* is in the right-click menu of the connection list); the keyboard shortcuts (Enter, Ctrl+N, F2, Del, Ctrl+D, F5 …) work in the whole window.
 *Duplicate* creates a copy and opens it for editing right away with the name selected so you can overwrite it; if you cancel, the copy remains.
 
-At the bottom of the sidebar three icons switch between **Light** (sun), **Dark** (moon) and **Same as system** (monitor); the change takes effect immediately and is saved.
+In the **⋯** menu under **Appearance** you switch between **Light**, **Dark** and **Same as system**; the change takes effect immediately and is saved.
 Below them the **Settings** button opens the settings dialog (font size, language and WireGuard indicator, see [WireGuard indicator](geraete.md#wireguard-indicator)).
 With *Same as system*, Sesam follows the operating system’s light/dark switch where Qt reports it (Windows, macOS, Linux depending on the desktop);
 otherwise you set it manually.
 
 **Font size:** in the *Settings* dialog (80 to 200 % of the system font), or by keyboard with **Ctrl + Plus** (larger), **Ctrl + Minus** (smaller) and **Ctrl + 0** (back to 100 %).
-Icons and sidebar grow with it. The setting applies immediately, is saved, and stays local (it is not synchronized via Git).
+Icons and toolbar grow with it. The setting applies immediately, is saved, and stays local (it is not synchronized via Git).
 
 **Language:** Sesam is available in German and English. In the *Settings* dialog choose *System default* (German if the system runs in German, otherwise English), *Deutsch* or *English*.
 The language applies after the next start of Sesam and is stored locally (not synchronized via Git). This also applies to the command-line mode (`sesam --connect`).
@@ -30,7 +30,7 @@ Sesam uses the Qt style “Fusion” everywhere so that it looks the same on Win
 ## Groups
 
 Connections can be organized in nested groups (path with “/”, e.g. `Customer A/Production`).
-- *New group …* (Ctrl+Shift+N, sidebar or context menu) also creates empty groups; the context menu of a group offers: subgroup, rename/move, delete.
+- *New group …* (Ctrl+Shift+N, toolbar or context menu) also creates empty groups; the context menu of a group offers: subgroup, rename/move, delete.
 - Use **drag & drop** to move connections and whole groups; dropping on empty space means the top level.
 - **Multiple selection:** select several connections with Ctrl or Shift click (or Ctrl+A). In the context menu (right-click in the selection) you can set a common *Color* for all of them or delete them at once; *Del* deletes too. With drag & drop all selected connections move to the target group together. Groups in the selection are left untouched by these actions; Connect, Edit and Duplicate still act on the entry you clicked last.
 - Deleting a group does not remove any connections; they move up into the parent group.
@@ -42,7 +42,7 @@ Connections can be organized in nested groups (path with “/”, e.g. `Customer
 
 ## Favorites and quick launcher
 
-- **Favorites:** *Favorite* (Ctrl+B, sidebar or context menu) marks connections. They also appear in a *Favorites* section at the top of the tree (collapsible) and carry a ★ in their group. The flag belongs to the connection, so it is **synced via Git**. Duplicates are not favorites. Under **Settings › Show favorites** favorites can be switched off: the section, the ★ and the favorites entries in the menus then disappear from the main window, while the marks are kept. The setting applies to this computer only.
+- **Favorites:** *Favorite* (Ctrl+B, toolbar or context menu) marks connections. They also appear in a *Favorites* section at the top of the tree (collapsible) and carry a ★ in their group. The flag belongs to the connection, so it is **synced via Git**. Duplicates are not favorites. Under **Settings › Show favorites** favorites can be switched off: the section, the ★ and the favorites entries in the menus then disappear from the main window, while the marks are kept. The setting applies to this computer only.
 - **Quick launcher (Ctrl+K):** A search window over all connections. The search is fuzzy (`wbpd` finds `web-prod`), several words must all match, and name, host, user, group and tags are searched. Without a query it shows *Favorites*, *Recently used* (the latest eight, with “5 min ago” etc.) and *All connections*.
   - ↵ connects, Ctrl+↵ opens the files (SFTP), Ctrl+B toggles the favorite, Esc closes.
   - **Recently used** exists only here, not in the tree. The times stay local (not synced) and count on connect, SFTP, Docker/Proxmox/Cisco and when starting a tunnel.

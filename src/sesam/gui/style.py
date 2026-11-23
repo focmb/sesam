@@ -107,24 +107,17 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QMenu::item:disabled { color: @muted@; }
     QMenu::separator { height: 1px; background: @border@; margin: 5px 8px; }
 
-    /* Seitenleiste mit den Hauptaktionen */
-    QWidget#sidebar { background: transparent; }
-    QFrame#sideSep { background: @border@; border: none; }
-    QPushButton#side { background: transparent; color: @text@; border: 1px solid transparent; border-radius: 8px;
-        padding: 7px 12px; text-align: left; }
-    QPushButton#side:hover { background: @hover@; border-color: transparent; }
-    QPushButton#side:pressed { background: @pressed@; }
-    QPushButton#side:focus { border-color: @accent@; }
-    QPushButton#side:disabled { background: transparent; color: @muted@; border-color: transparent; }
-    QPushButton#seg { background: transparent; border: 1px solid @border@; border-radius: 0; padding: 6px 0; }
-    QPushButton#seg[pos="first"] { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
-    QPushButton#seg[pos="last"] { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
-    QPushButton#seg:hover { background: @hover@; }
-    QPushButton#seg:checked { background: @accent@; border-color: @accent@; }
-    QPushButton#seg:focus { border-color: @accent@; }
-    QPushButton#side[primary="true"] { background: @accent@; color: @accent_text@; font-weight: 600; }
-    QPushButton#side[primary="true"]:hover { background: @accent_hover@; }
-    QPushButton#side[primary="true"]:disabled { background: @hover@; color: @muted@; }
+    /* Werkzeugzeile mit den Hauptaktionen */
+    QWidget#toolbar { background: transparent; }
+    QToolButton#tool { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px; }
+    QToolButton#tool:hover { background: @hover@; }
+    QToolButton#tool:pressed, QToolButton#tool:open { background: @pressed@; }
+    QToolButton#tool:focus { border-color: @accent@; }
+    QToolButton#tool:disabled { background: transparent; }
+    QToolButton#tool::menu-indicator { image: none; width: 0; }
+    QToolButton#tool[primary="true"] { background: @accent@; }
+    QToolButton#tool[primary="true"]:hover { background: @accent_hover@; }
+    QToolButton#tool[primary="true"]:disabled { background: @hover@; }
 
     /* Eingabefelder */
     QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {
@@ -183,6 +176,14 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QTabBar::tab:hover:!selected { color: @text@; }
     QTabWidget#mainTabs::pane { border: none; background: transparent; }
     QTabWidget#mainTabs QTabBar::tab { padding: 8px 16px; }
+    QSplitter#mainSplitter::handle { background: @border@; width: 1px; margin: 10px 0; }
+
+    /* Startseite im Terminalbereich: zuletzt verwendete Verbindungen */
+    QLabel#startTitle { font-size: 120%; font-weight: 600; }
+    QLabel#startHint { color: @muted@; }
+    QListWidget#startList { background: transparent; }
+    QListWidget#startList::item { padding: 8px 10px; border-radius: 8px; }
+    QListWidget#startList::item:hover { background: @hover@; }
 
     /* Werkzeugknöpfe (Dateibrowser) und Fortschrittsbalken */
     QToolButton { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 5px; }
@@ -253,6 +254,7 @@ _ICONS = {
     "terminal": '<path d="M5 8l5 4-5 4M12.5 17H19"/>',
     "add": '<path d="M12 5v14M5 12h14"/>',
     "settings": '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    "more": '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
     "gear": '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
     "sun": '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
     "moon": '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',

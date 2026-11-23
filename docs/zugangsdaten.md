@@ -5,14 +5,14 @@
 ## Identitäten
 
 Eine Identität bündelt **Benutzer, Schlüsseldatei und Passwort** und kann von beliebig vielen Verbindungen verwendet werden.
-- Verwalten unter *Identitäten …* in der Seitenleiste oder direkt beim Anlegen einer Verbindung über *Identität → Neu …*.
+- Verwalten unter *Identitäten …* im Menü ⋯ oder direkt beim Anlegen einer Verbindung über *Identität → Neu …*.
 - Wählst du in einer Verbindung eine Identität, ersetzt sie Benutzer, Schlüsseldatei und Passwort der Verbindung (die Felder sind dann gesperrt, die eigenen Werte bleiben erhalten und gelten wieder bei „Keine“).
 - Das Passwort liegt im Schlüsselbund, einmal pro Identität. Ändert sich ein Passwort, wird es nur an einer Stelle angepasst. Das gilt auch für sudo.
 - Eine Identität zu löschen entfernt sie auch aus allen Verbindungen, die sie nutzen (diese brauchen danach wieder eigene Zugangsdaten).
 
 ## SSH-Schlüssel
 
-*Schlüssel …* in der Seitenleiste verwaltet Schlüssel direkt in Sesam – unter Windows und Linux gleich.
+*Schlüssel …* im Menü ⋯ verwaltet Schlüssel direkt in Sesam – unter Windows und Linux gleich.
 - **Erzeugen:** Ed25519 (empfohlen) oder RSA 4096, optional mit Passphrase. Das Format ist das normale OpenSSH-Format, `ssh-keygen` und Terminals verstehen es.
 - **Importieren:** eine vorhandene private Schlüsseldatei einlesen (OpenSSH oder klassisches PEM). Liegt daneben eine `.pub`-Datei, wird sie für geschützte Schlüssel genutzt, sonst fragt Sesam einmal nach der Passphrase.
 - **Ansehen:** Typ, Fingerabdruck (SHA256 wie bei `ssh-keygen -l`), Kommentar, Erstelldatum, öffentlicher Schlüssel und wer den Schlüssel verwendet. *Öffentlichen Schlüssel kopieren* legt die Zeile für `authorized_keys` in die Zwischenablage.

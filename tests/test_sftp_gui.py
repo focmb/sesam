@@ -346,7 +346,7 @@ class MainWindowIntegrationTests(GuiTestCase):
 
         w = MainWindow(Config(connections=[Connection(name="S", host="h")]), self.path)
         self.addCleanup(w.close)
-        self.assertIn("a_files", w.side_buttons)
+        self.assertIn("a_files", [a for g in w.MORE_GROUPS for a in g] + list(w.TOOLBAR_ACTIONS))
         self.assertEqual(w.a_files.shortcut().toString(), "F4")
         self.assertIn(w.a_files, w.actions())
 

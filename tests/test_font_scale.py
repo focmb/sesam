@@ -79,22 +79,17 @@ class FontScaleTests(GuiTestCase):
         w.set_font_scale(5000)  # unsinnige Werte werden begrenzt
         self.assertEqual(w.cfg.font_scale, 200)
 
-    def test_sidebar_and_icons_grow_with_font(self):
+    def test_toolbar_and_icons_grow_with_font(self):
         w = self._window()
-        small = w.sidebar.width(), w.tree.iconSize().width()
+        small = w.tool_buttons["a_new"].iconSize().width(), w.tree.iconSize().width()
         w.set_font_scale(200)
         self.app.processEvents()
         self.assertGreater(w.tree.iconSize().width(), small[1])
-        wide = w.sidebar.maximumWidth()
-        for button in w.side_buttons.values():  # nichts wird abgeschnitten
-            self.assertLessEqual(button.sizeHint().width(), w.sidebar.maximumWidth())
-        original = w.a_sync.text()
-        w.a_sync.setText("Jetzt synchronisieren (ein sehr langer Beschriftungstext)")  # Textwechsel bleibt passend
-        self.assertLessEqual(w.side_buttons["a_sync"].sizeHint().width(), w.sidebar.maximumWidth())
-        w.a_sync.setText(original)
+        self.assertGreater(w.tool_buttons["a_new"].iconSize().width(), small[0])
+        self.assertGreater(w.settings_button.iconSize().width(), small[0])
         w.set_font_scale(100)
         self.app.processEvents()
-        self.assertLess(w.sidebar.maximumWidth(), wide)  # und schrumpft mit der Schrift wieder
+        self.assertEqual(w.tool_buttons["a_new"].iconSize().width(), small[0])  # und schrumpft mit der Schrift wieder
 
     def test_system_resetting_the_app_font_does_not_undo_the_scale(self):
         """Wayland/GNOME setzen die Anwendungsschrift nach dem Start selbst zurück; die Skalierung muss das überstehen."""

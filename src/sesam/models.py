@@ -335,6 +335,7 @@ class Config:
     hidden_columns: list[str] = field(default_factory=lambda: list(DEFAULT_HIDDEN_COLUMNS))  # ausgeblendete Spalten (nur lokal, wird nicht synchronisiert)
     window_size: list[int] = field(default_factory=list)  # [Breite, Höhe] des Hauptfensters beim Beenden (nur lokal)
     window_maximized: bool = False  # Hauptfenster war beim Beenden maximiert (nur lokal)
+    list_width: int = 0  # Breite der Verbindungsliste links neben den Terminals in Pixeln; 0 = Standard (nur lokal)
     recent: dict[str, float] = field(default_factory=dict)  # Verbindungs-ID → Zeitpunkt der letzten Nutzung (Unix-Zeit; nur lokal, wird nicht synchronisiert)
     groups: list[str] = field(default_factory=list)  # explizit angelegte Gruppen (auch leere)
     group_colors: dict[str, str] = field(default_factory=dict)  # Gruppenpfad -> Farbschlüssel (sesam.colors)

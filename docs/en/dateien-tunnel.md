@@ -4,7 +4,7 @@
 
 ## Transferring files (SFTP)
 
-*Files (SFTP)* (F4, sidebar or the connection’s context menu) opens a file browser: your computer on the left, the server on the right.
+*Files (SFTP)* (F4, toolbar or the connection’s context menu) opens a file browser: your computer on the left, the server on the right.
 - **Transfer:** drag files and folders between the sides with **drag & drop**, use the *Upload* / *Download* buttons, or the context menu.
   On the server side you can also drop files straight from the file manager; if you drop onto a folder, they land inside it.
 - **Progress:** each transfer runs in the background with its own progress bar and can be cancelled (a half-transferred file is removed). Several transfers run at the same time.

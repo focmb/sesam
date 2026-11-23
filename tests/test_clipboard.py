@@ -437,7 +437,7 @@ if HAVE_GUI and not sys.platform.startswith("win"):
             self.assertFalse(self.w.clipboard.settings.persist)
 
         def test_sidebar_has_the_clipboard_button(self):
-            self.assertIn("a_clipboard", self.w.side_buttons)
+            self.assertIn("a_clipboard", [a for g in self.w.MORE_GROUPS for a in g] + list(self.w.TOOLBAR_ACTIONS))
             self.assertFalse(self.w.a_clipboard.icon().isNull())
 
         def test_tab_menu_paste_everywhere(self):

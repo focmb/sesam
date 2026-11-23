@@ -7,16 +7,16 @@
 Der Dialog *Verbindung bearbeiten* ist in vier Reiter gegliedert: *Allgemein* (Name, Host, Gruppe, Farbe, Tags, Terminal, Notizen), *Zugang* (Identität, Benutzer, Port, Schlüssel, Passwort), *Erweitert* (Jump-Host, zusätzliche Optionen, Remote-Befehl, sudo) und *Baum-Erweiterungen* (Docker, Proxmox, Cisco). So passt er auch auf kleine Bildschirme.
 
 Es gibt keine Menüleiste: Alle Aktionen (Verbinden, Dateien, Neue Verbindung, Neue Gruppe, Bearbeiten, Duplizieren, Löschen, Synchronisieren, Synchronisation, Identitäten, Schlüssel, Terminals)
-stehen untereinander in einer Seitenleiste am rechten Rand (Strg+Q beendet das Programm, *Aus ~/.ssh/config importieren* steht im Rechtsklick-Menü der Verbindungsliste); die Tastenkürzel (Enter, Strg+N, F2, Entf, Strg+D, F5 …) gelten im ganzen Fenster.
+stehen als Symbolzeile direkt unter dem Suchfeld über der Verbindungsliste: Verbinden, Dateien (SFTP), Lokales Terminal, Neu, Bearbeiten, Duplizieren, Löschen und Favorit als Knöpfe, alles Weitere (Schnellstarter, Neue Gruppe, Synchronisieren, Identitäten, Schlüssel, Snippets, Zwischenablage) im Menü **⋯** („Weitere Aktionen“), ganz rechts die Einstellungen (Strg+Q beendet das Programm, *Aus ~/.ssh/config importieren* steht im Rechtsklick-Menü der Verbindungsliste); die Tastenkürzel (Enter, Strg+N, F2, Entf, Strg+D, F5 …) gelten im ganzen Fenster.
 *Duplizieren* legt eine Kopie an und öffnet sie sofort zum Bearbeiten, der Name ist markiert und lässt sich gleich überschreiben; bricht man ab, bleibt die Kopie bestehen.
 
-Ganz unten in der Seitenleiste schalten drei Symbole zwischen **Hell** (Sonne), **Dunkel** (Mond) und **Wie das System** (Monitor) um (wirkt sofort, wird gespeichert).
+Im Menü **⋯** unter **Darstellung** schaltest du zwischen **Hell**, **Dunkel** und **Wie das System** um (wirkt sofort, wird gespeichert).
 Darunter öffnet der Knopf **Einstellungen** den Einstellungsdialog (Schriftgröße, Sprache und WireGuard-Anzeige, siehe [WireGuard-Anzeige](geraete.md#wireguard-anzeige)).
 Bei *Wie das System* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
 andernfalls stellst du es manuell ein.
 
 **Schriftgröße:** im Dialog *Einstellungen* (80 bis 200 % der Systemschrift), oder per Tastatur **Strg + Plus** (größer), **Strg + Minus** (kleiner) und **Strg + 0** (zurück auf 100 %).
-Icons und Seitenleiste wachsen mit. Die Einstellung gilt sofort, wird gespeichert und bleibt lokal (wird nicht per Git synchronisiert).
+Icons und Werkzeugzeile wachsen mit. Die Einstellung gilt sofort, wird gespeichert und bleibt lokal (wird nicht per Git synchronisiert).
 
 **Sprache:** Sesam gibt es auf Deutsch und Englisch. Im Dialog *Einstellungen* wählst du *Systemvorgabe* (Deutsch, wenn das System auf Deutsch läuft, sonst Englisch), *Deutsch* oder *English*.
 Die Sprache gilt nach dem nächsten Start von Sesam und wird lokal gespeichert (wird nicht per Git synchronisiert). Das gilt auch für den Befehlszeilenmodus (`sesam --connect`).
@@ -30,7 +30,7 @@ Sesam nutzt dafür überall den Qt-Stil „Fusion“, damit es unter Windows und
 ## Gruppen
 
 Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z. B. `Kunde A/Produktion`).
-- *Neue Gruppe …* (Strg+Umschalt+N, Seitenleiste oder Kontextmenü) legt auch leere Gruppen an; im Kontextmenü einer Gruppe: Untergruppe, Umbenennen/Verschieben, Löschen.
+- *Neue Gruppe …* (Strg+Umschalt+N, Symbolzeile oder Kontextmenü) legt auch leere Gruppen an; im Kontextmenü einer Gruppe: Untergruppe, Umbenennen/Verschieben, Löschen.
 - Per **Drag & Drop** verschiebst du Verbindungen und ganze Gruppen; Ablegen auf freier Fläche = oberste Ebene.
 - **Mehrfachauswahl:** Mit Strg- bzw. Umschalt-Klick (oder Strg+A) wählst du mehrere Verbindungen. Im Kontextmenü (Rechtsklick in die Auswahl) setzt du allen gemeinsam eine *Farbe* oder löschst sie auf einmal; mit *Entf* geht das Löschen ebenfalls. Per Drag & Drop wandern alle ausgewählten Verbindungen zusammen in die Zielgruppe. Gruppen in der Auswahl bleiben bei diesen Aktionen unberührt; Verbinden, Bearbeiten und Duplizieren wirken weiterhin auf den zuletzt angeklickten Eintrag.
 - Eine Gruppe zu löschen entfernt keine Verbindungen, sie rücken in die übergeordnete Gruppe.
@@ -42,7 +42,7 @@ Verbindungen lassen sich in verschachtelten Gruppen ordnen (Pfad mit „/“, z.
 
 ## Favoriten und Schnellstarter
 
-- **Favoriten:** *Favorit* (Strg+B, Seitenleiste oder Kontextmenü) markiert Verbindungen. Sie stehen zusätzlich in einem Abschnitt *Favoriten* oben im Baum (ein-/ausklappbar) und tragen in ihrer Gruppe ein ★. Das Merkmal gehört zur Verbindung und wird deshalb **per Git mit synchronisiert**. Duplikate sind keine Favoriten. Unter **Einstellungen › Favoriten anzeigen** lassen sich die Favoriten abschalten: Abschnitt, ★ und die Favoriten-Einträge in den Menüs verschwinden dann im Hauptfenster, die Markierungen bleiben erhalten. Die Einstellung gilt nur für diesen Rechner.
+- **Favoriten:** *Favorit* (Strg+B, Symbolzeile oder Kontextmenü) markiert Verbindungen. Sie stehen zusätzlich in einem Abschnitt *Favoriten* oben im Baum (ein-/ausklappbar) und tragen in ihrer Gruppe ein ★. Das Merkmal gehört zur Verbindung und wird deshalb **per Git mit synchronisiert**. Duplikate sind keine Favoriten. Unter **Einstellungen › Favoriten anzeigen** lassen sich die Favoriten abschalten: Abschnitt, ★ und die Favoriten-Einträge in den Menüs verschwinden dann im Hauptfenster, die Markierungen bleiben erhalten. Die Einstellung gilt nur für diesen Rechner.
 - **Schnellstarter (Strg+K):** Ein Suchfenster über alle Verbindungen. Die Suche ist unscharf (`wbpd` findet `web-prod`), mehrere Wörter müssen alle passen, durchsucht werden Name, Host, Benutzer, Gruppe und Tags. Ohne Suchbegriff erscheinen *Favoriten*, *Zuletzt verwendet* (die jüngsten acht, mit „vor 5 Min.“ usw.) und *Alle Verbindungen*.
   - ↵ verbindet, Strg+↵ öffnet die Dateien (SFTP), Strg+B schaltet den Favoriten um, Esc schließt.
   - **Zuletzt verwendet** gibt es nur hier, nicht im Baum. Die Zeiten bleiben lokal (nicht synchronisiert) und zählen beim Verbinden, bei SFTP, Docker/Proxmox/Cisco und beim Starten eines Tunnels.

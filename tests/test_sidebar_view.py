@@ -1,11 +1,10 @@
-"""Seitenleiste ohne Menüleiste: Farbschema-Umschalter und Einstellungen unter einem Trennstrich."""
+"""Werkzeugzeile ohne Menüleiste: Farbschema im Menü „Weitere Aktionen“, Einstellungen ganz rechts."""
 import unittest
 from unittest import mock
 
 from gui_base import GuiTestCase
 
 from sesam import storage
-from sesam.gui import theme
 from sesam.models import Config
 
 
@@ -38,81 +37,50 @@ class SidebarViewTests(GuiTestCase):
     def test_menu_bar_is_gone(self):
         self.assertEqual(self.w.menuBar().actions(), [])
 
-    def test_theme_switches_and_settings_button_sit_below_a_separator_at_the_end(self):
-        from PySide6.QtWidgets import QFrame
-
+    def test_settings_button_is_the_last_one_in_the_row(self):
         w = self.w
-        self.assertEqual(list(w.side_menu_buttons), ["settings"])  # „Darstellung“ und „Schriftgröße“ gibt es hier nicht mehr
-        self.assertEqual(w.side_menu_buttons["settings"].text(), "Einstellungen")
-        ys = [w.side_buttons["a_clipboard"].y(), w.theme_row.y(), w.side_menu_buttons["settings"].y()]
-        self.assertTrue(ys[0] < ys[1] < ys[2])  # Umschalter für das Farbschema, darunter die Einstellungen
-        separators = [f for f in w.sidebar.findChildren(QFrame) if f.objectName() == "sideSep"]
-        self.assertEqual(len(separators), 2)
-        self.assertEqual(len([s for s in separators if ys[0] < s.y() < ys[1]]), 1)
-        self.assertEqual([s for s in separators if s.y() > ys[1]], [])  # unter den Umschaltern kein weiterer Strich
-        self.assertEqual({b.width() for b in (*w.side_buttons.values(), *w.side_menu_buttons.values())}, {w.sidebar.width()})
-        self.assertEqual(w.theme_row.width(), w.sidebar.width())
+        self.assertEqual(w.settings_button.text(), "Einstellungen")
+        self.assertFalse(w.settings_button.icon().isNull())
+        self.assertGreater(w.settings_button.x(), w.more_button.x())
+        self.assertGreater(w.more_button.x(), w.tool_buttons["a_fav"].x())
+        self.assertIsNotNone(w.more_button.menu())
+        self.assertTrue(w.more_button.toolTip())
 
-    def test_three_icon_only_theme_switches(self):
+    def test_three_theme_entries_in_the_appearance_menu(self):
         w = self.w
-        self.assertEqual(list(w.theme_buttons), ["light", "dark", "system"])
-        for mode, b in w.theme_buttons.items():
-            self.assertEqual(b.text(), "")
-            self.assertFalse(b.icon().isNull())
-            self.assertTrue(b.toolTip())
-            self.assertTrue(b.isCheckable())
-        widths = {b.width() for b in w.theme_buttons.values()}
-        self.assertLessEqual(max(widths) - min(widths), 1)
-        self.assertLess(max(widths), w.sidebar.width() / 2)  # schmal: drei passen locker nebeneinander
+        self.assertEqual(list(w.theme_actions), ["light", "dark", "system"])
+        look = next(a.menu() for a in w.more_menu.actions() if a.menu() is not None)
+        self.assertEqual(look.actions(), list(w.theme_actions.values()))
+        for mode, action in w.theme_actions.items():
+            self.assertTrue(action.text())
+            self.assertTrue(action.isCheckable())
 
-    def test_exactly_one_switch_is_checked_and_follows_config(self):
+    def test_exactly_one_entry_is_checked_and_follows_config(self):
         w = self.w
-        self.assertEqual([m for m, b in w.theme_buttons.items() if b.isChecked()], [w.cfg.theme])
-        w.theme_buttons["dark"].click()
+        checked = lambda: [m for m, a in w.theme_actions.items() if a.isChecked()]
+        self.assertEqual(checked(), [w.cfg.theme])
+        w.theme_actions["dark"].trigger()
         self.assertEqual(w.cfg.theme, "dark")
-        self.assertEqual([m for m, b in w.theme_buttons.items() if b.isChecked()], ["dark"])
-        w.theme_buttons["light"].click()
-        self.assertEqual((w.cfg.theme, w.theme_buttons["dark"].isChecked()), ("light", False))
-        w.theme_buttons["system"].click()
+        self.assertEqual(checked(), ["dark"])
+        w.theme_actions["light"].trigger()
+        self.assertEqual((w.cfg.theme, w.theme_actions["dark"].isChecked()), ("light", False))
+        w.theme_actions["system"].trigger()
         self.assertEqual(w.cfg.theme, "system")
         self.assertEqual(storage.load(self.path).theme, "system")  # wird gespeichert
 
-    def test_clicking_the_checked_switch_keeps_it_selected(self):
+    def test_check_follows_a_theme_change_made_elsewhere(self):
         w = self.w
-        w.theme_buttons["dark"].click()
-        w.theme_buttons["dark"].click()
-        self.assertTrue(w.theme_buttons["dark"].isChecked())
-        self.assertEqual(w.cfg.theme, "dark")
-
-    def test_active_switch_icon_uses_accent_text_colour(self):
-        w = self.w
-        w.theme_buttons["dark"].click()
-        self.app.processEvents()
-        c = theme.colors()
-
-        def dominant(button):
-            image = button.icon().pixmap(18, 18).toImage()
-            counts = {}
-            for y in range(image.height()):
-                for x in range(image.width()):
-                    px = image.pixelColor(x, y)
-                    if px.alpha() > 100:
-                        counts[px.name()] = counts.get(px.name(), 0) + 1
-            return max(counts, key=counts.get)
-
-        def close(a, b):
-            return all(abs(int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) <= 8 for i in (1, 3, 5))
-
-        self.assertTrue(close(dominant(w.theme_buttons["dark"]), c["accent_text"]))
-        self.assertTrue(close(dominant(w.theme_buttons["light"]), c["text"]))
-        w.theme_buttons["system"].click()
+        w.cfg.theme = "dark"  # z. B. im Einstellungsdialog
+        w._refresh_icons()
+        self.assertEqual([m for m, a in w.theme_actions.items() if a.isChecked()], ["dark"])
+        w.theme_actions["system"].trigger()
 
     def test_settings_button_opens_the_settings_dialog(self):
         from sesam.gui.settings_dialog import SettingsDialog
 
         opened = []
         with mock.patch.object(SettingsDialog, "exec", lambda dlg: opened.append((dlg.windowTitle(), dlg.size_box.currentData(), dlg.language_box.currentData()))):
-            self.w.side_menu_buttons["settings"].click()
+            self.w.settings_button.click()
         self.assertEqual(opened, [("Einstellungen", 100, "system")])
 
     def test_font_shortcuts_work_without_menu(self):
@@ -133,9 +101,9 @@ class SidebarViewTests(GuiTestCase):
 
     def test_everything_formerly_in_menus_is_still_reachable(self):
         w = self.w
-        in_sidebar = [a for g in w.SIDEBAR_GROUPS for a in g]
+        in_toolbar = [*w.TOOLBAR_ACTIONS, *(a for g in w.MORE_GROUPS for a in g)]
         for attr in ("a_sync_settings", "a_terms", "a_viewers"):
-            self.assertNotIn(attr, in_sidebar)  # liegen jetzt in den Einstellungen
+            self.assertNotIn(attr, in_toolbar)  # liegen jetzt in den Einstellungen
         self.assertEqual(w.a_sync_settings.text(), "Synchronisation …")
         from sesam.gui import main_window
 
@@ -144,15 +112,16 @@ class SidebarViewTests(GuiTestCase):
             w._context_menu(w.tree.viewport().rect().bottomRight())
         self.assertIn(w.a_import.text(), texts)
 
-    def test_wider_font_keeps_all_buttons_equal_and_visible(self):
+    def test_wider_font_keeps_the_row_inside_the_list_column(self):
         self.w.set_font_scale(200)
         for _ in range(5):
             self.app.processEvents()
-        buttons = [*self.w.side_buttons.values(), *self.w.side_menu_buttons.values()]
-        self.assertEqual({b.width() for b in buttons}, {self.w.sidebar.width()})
-        self.assertEqual(self.w.theme_row.width(), self.w.sidebar.width())
-        self.assertGreaterEqual(self.w.sidebar.width(), max(b.sizeHint().width() for b in buttons))
-        self.w.set_font_scale(100)
+        w = self.w
+        size = w.tool_buttons["a_new"].iconSize().width()
+        self.assertGreater(size, 18)  # Symbole wachsen mit der Schrift
+        right = w.settings_button.mapTo(w, w.settings_button.rect().topRight()).x()
+        self.assertLessEqual(right, w.splitter.widget(0).mapTo(w, w.splitter.widget(0).rect().topRight()).x())
+        w.set_font_scale(100)
 
 
 if __name__ == "__main__":

@@ -146,6 +146,13 @@ def _window_size(value) -> list[int]:
     return []
 
 
+def _list_width(value) -> int:
+    """Breite der Verbindungsliste oder 0 (Standard); ein beschädigter Wert darf den Start nie verhindern."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and 200 <= value <= 20000:
+        return int(value)
+    return 0
+
+
 def _from_data(data: dict) -> Config:
     return Config(
         terminals=[Terminal.from_dict(t) for t in data.get("terminals", [])],
@@ -167,6 +174,7 @@ def _from_data(data: dict) -> Config:
         favorites=data.get("favorites") is not False,  # ohne gültigen Wert (auch alte Konfiguration): an
         window_size=_window_size(data.get("window_size")),
         window_maximized=data.get("window_maximized") is True,
+        list_width=_list_width(data.get("list_width")),
         recent=_recent(data.get("recent")),
         hidden_columns=_hidden_columns(data.get("hidden_columns")),
         column_widths=_column_widths(data.get("column_widths")),

@@ -324,7 +324,7 @@ class MainWindowKeyTests(KeyGuiBase):
         self.addCleanup(w.close)
         self.assertEqual(w.a_keys.text(), "Schlüssel …")
         self.assertFalse(w.a_keys.icon().isNull())
-        self.assertIn("a_keys", [a for g in w.SIDEBAR_GROUPS for a in g])
+        self.assertIn("a_keys", [a for g in w.MORE_GROUPS for a in g])
         self.assertFalse(w.menuBar().isVisible() and w.menuBar().actions())  # kein Menü mehr, alles in der Seitenleiste
 
     def test_opening_dialog_from_window(self):

@@ -1,4 +1,4 @@
-"""Seitenleiste am rechten Rand: Anordnung, Tastenkürzel, Zustand der Knöpfe, Suchfeld."""
+"""Werkzeugzeile über der Verbindungsliste: Anordnung, Tastenkürzel, Zustand der Knöpfe, Suchfeld."""
 import os
 import tempfile
 import unittest
@@ -75,23 +75,40 @@ class SidebarTests(unittest.TestCase):
     def _pos(widget, window):
         return widget.mapTo(window, widget.rect().topLeft())
 
-    def test_actions_stand_below_each_other_on_the_right(self):
+    def test_actions_form_one_row_between_search_and_list(self):
         from PySide6.QtWidgets import QToolBar
 
         w = self._window()
-        order = [attr for group in w.SIDEBAR_GROUPS for attr in group]
-        self.assertEqual(len(order), 15)
-        self.assertEqual(set(w.side_buttons), set(order))
-        points = [self._pos(w.side_buttons[attr], w) for attr in order]
-        ys = [p.y() for p in points]
-        self.assertTrue(all(a < b for a, b in zip(ys, ys[1:])), f"nicht untereinander: {ys}")
-        self.assertEqual(len({p.x() for p in points}), 1, "Knöpfe stehen nicht bündig")
-        tree_right = w.tree.mapTo(w, w.tree.rect().topRight()).x()
-        self.assertGreater(points[0].x(), tree_right)  # rechts vom Baum
-        self.assertGreater(points[0].x(), w.width() // 2)
+        order = list(w.TOOLBAR_ACTIONS)
+        self.assertEqual(set(w.tool_buttons), set(order))
+        points = [self._pos(w.tool_buttons[attr], w) for attr in order]
+        xs = [p.x() for p in points]
+        self.assertTrue(all(a < b for a, b in zip(xs, xs[1:])), f"nicht nebeneinander: {xs}")
+        self.assertEqual(len({p.y() for p in points}), 1, "Knöpfe stehen nicht bündig")
+        search_bottom = w.search.mapTo(w, w.search.rect().bottomLeft()).y()
+        tree_top = w.tree.mapTo(w, w.tree.rect().topLeft()).y()
+        self.assertGreater(points[0].y(), search_bottom - 1)  # unter dem Suchfeld
+        self.assertLess(points[0].y(), tree_top)  # über der Liste
+        # alles steht in einer Spalte links: keine zweite Leiste neben der Liste
+        list_right = w.tree.mapTo(w, w.tree.rect().topRight()).x()
+        self.assertLessEqual(self._pos(w.settings_button, w).x(), list_right)
+        self.assertLess(list_right, w.splitter.sizes()[0] + 1)
         self.assertEqual(w.findChildren(QToolBar), [])  # die alte Werkzeugleiste ist weg
-        widths = {w.side_buttons[attr].width() for attr in order}
-        self.assertEqual(len(widths), 1)  # alle gleich breit
+        self.assertEqual(w.tool_buttons["a_connect"].text(), w.a_connect.text())
+        self.assertIn("a_files", w.tool_buttons)  # Dateien (SFTP) und Lokales Terminal stehen direkt in der Zeile
+        self.assertIn("a_local", w.tool_buttons)
+        self.assertGreater(self._pos(w.more_button, w).x(), xs[-1])  # „Weitere Aktionen“ und Einstellungen am rechten Ende
+        self.assertGreater(self._pos(w.settings_button, w).x(), self._pos(w.more_button, w).x())
+
+    def test_more_menu_holds_the_rarer_actions(self):
+        w = self._window()
+        menu_actions = [a for a in w.more_menu.actions() if not a.isSeparator() and a.menu() is None]
+        expected = [getattr(w, attr) for group in w.MORE_GROUPS for attr in group]
+        self.assertEqual(menu_actions, expected)
+        self.assertEqual(len(expected), 7)
+        self.assertEqual(len(w.TOOLBAR_ACTIONS), 8)
+        self.assertEqual(len([a for a in w.more_menu.actions() if a.menu() is not None]), 1)  # „Darstellung“
+        self.assertFalse(set(w.TOOLBAR_ACTIONS) & {a for g in w.MORE_GROUPS for a in g})  # keine Aktion doppelt
 
     def test_shortcuts_are_registered_and_fire(self):
         from PySide6.QtCore import Qt
@@ -117,7 +134,7 @@ class SidebarTests(unittest.TestCase):
         w = self._window()
         fired = []
         w.a_dup.triggered.connect(lambda *_: fired.append(1))
-        button = w.side_buttons["a_dup"]
+        button = w.tool_buttons["a_dup"]
         button.click()
         self.assertEqual(fired, [1])
         self.assertIn("Duplizieren", button.toolTip())
@@ -128,19 +145,19 @@ class SidebarTests(unittest.TestCase):
         self.assertTrue(button.isEnabled())
         w.a_dup.setText("Kopieren")
         self.assertEqual(button.text(), "Kopieren")
-        for attr, btn in w.side_buttons.items():
+        for attr, btn in w.tool_buttons.items():
             self.assertFalse(btn.icon().isNull(), attr)
-        self.assertTrue(w.side_buttons["a_connect"].property("primary"))
-        self.assertFalse(w.side_buttons["a_new"].property("primary"))
+        self.assertTrue(w.tool_buttons["a_connect"].property("primary"))
+        self.assertFalse(w.tool_buttons["a_new"].property("primary"))
 
     def test_button_icons_follow_theme(self):
         from sesam.gui import theme
 
         w = self._window()
         theme.apply(self.app, "light")
-        light = w.side_buttons["a_new"].icon().pixmap(18, 18).toImage().pixelColor(9, 5).name()
+        light = w.tool_buttons["a_new"].icon().pixmap(18, 18).toImage().pixelColor(9, 5).name()
         theme.apply(self.app, "dark")
-        dark = w.side_buttons["a_new"].icon().pixmap(18, 18).toImage().pixelColor(9, 5).name()
+        dark = w.tool_buttons["a_new"].icon().pixmap(18, 18).toImage().pixelColor(9, 5).name()
         theme.apply(self.app, "system")
         self.assertNotEqual(light, dark)
 
