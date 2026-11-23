@@ -18,3 +18,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]  # immer den Code aus dem Projektordner testen, nie ein installiertes Sesam (z. B. das AUR-Paket)
