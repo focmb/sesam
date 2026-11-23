@@ -841,7 +841,6 @@ EN: dict[str, str] = {
     "Das Paket „pyte“ ist nicht installiert (pip install pyte).": "The package “pyte” is not installed (pip install pyte).",
     "Das Paket „pywinpty“ ist nicht installiert (pip install pywinpty).": "The package “pywinpty” is not installed (pip install pywinpty).",
     "Das Terminal konnte nicht gestartet werden: {exc}": "The terminal could not be started: {exc}",
-    "Verbindungen": "Connections",
     "Sitzung beenden": "End session",
     "Die Sitzung „{name}“ läuft noch. Beenden?": "The session “{name}” is still running. End it?",
     "Es laufen noch {n} Sitzungen im integrierten Terminal. Sesam beenden und die Sitzungen schließen?": "{n} sessions are still running in the integrated terminal. Quit Sesam and close the sessions?",

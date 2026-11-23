@@ -226,10 +226,10 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             view = self.w._terminal_views()[0]
             self.assertTrue(self.pump(lambda: view._pty is not None))
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
-                self.w._close_terminal_tab(1)
+                self.w._close_terminal_tab(0)
             self.assertEqual(self.w.tabs.count(), 1)
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
-                self.w._close_terminal_tab(1)
+                self.w._close_terminal_tab(0)
             self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
 
         def test_quitting_with_a_running_session_can_be_cancelled(self):
@@ -329,7 +329,7 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
             first, second = self._two_tiles()
             self.assertTrue(self.pump(lambda: second._pty is not None))
             with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes) as ask:
-                self.w._close_terminal_tab(1)
+                self.w._close_terminal_tab(0)
             self.assertEqual(ask.call_count, 1)
             self.assertTrue(self.pump(lambda: self.w.tabs.count() == 0))
 
