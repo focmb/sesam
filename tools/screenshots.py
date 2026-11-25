@@ -33,7 +33,7 @@ from sesam.gui import style, theme  # noqa: E402
 from sesam.models import Config, Connection, Snippet, Terminal  # noqa: E402
 
 MODES = (("light", "hell"), ("dark", "dunkel"))
-PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets", "synckonflikt", "kacheln", "einstellungen")
+PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets", "synckonflikt", "kacheln", "reiter", "einstellungen")
 
 
 def demo_config() -> tuple[Config, dict[str, Connection]]:
@@ -168,6 +168,33 @@ def terminal_tiles(cfg, conns, tmp: Path, out: Path, label: str) -> None:
     _close_terminal_window(w)
 
 
+def terminal_tabs(cfg, conns, tmp: Path, out: Path, label: str) -> None:
+    """Mehrere Sitzungen als einzelne Reiter, eingefärbt in der Farbe ihrer Verbindung (Einstellung „Reiter einfärben“)."""
+    from sesam.gui.main_window import MainWindow
+    from sesam.gui.terminal_view import TerminalView
+
+    w = MainWindow(cfg, tmp / "config.json")
+    w.resize(1180, 520)
+    w.show()
+    QApplication.processEvents()
+    keys = ("web1", "web2", "db", "docker", "pi")
+    with mock.patch.object(TerminalView, "start", lambda self, args, env: None):
+        views = [w._open_embedded(["true"], conns[key].name, {}, color=conns[key].color) for key in keys]
+    w.set_tab_colors(True)
+    w.tabs.setCurrentIndex(2)
+    for _ in range(5):
+        QApplication.processEvents()
+    for view, (_name, host, commands) in zip(views, DEMO_SESSIONS):
+        prompt = f"\x1b[1;32m{host}\x1b[0m:\x1b[1;34m~\x1b[0m$ "
+        text = "".join(prompt + command + "\r\n" + "".join(line + "\r\n" for line in output) for command, output in commands)
+        view._feed((text + prompt).encode())
+    views[2].setFocus()
+    for _ in range(5):
+        QApplication.processEvents()
+    grab(w, out / f"terminal-reiter-{label}.png")
+    _close_terminal_window(w)
+
+
 def terminal_broadcast(cfg, conns, tmp: Path, out: Path) -> None:
     w, _views = _terminal_window(cfg, tmp)
     w._toggle_broadcast(w._terminal_tabs()[0])
@@ -182,7 +209,7 @@ def settings_dialog(cfg, conns, out: Path) -> None:
 
     nothing = lambda *_: None  # noqa: E731
     d = SettingsDialog(100, "de", nothing, nothing, wireguard=True, set_wireguard=nothing, toasts=True, set_toasts=nothing,
-                       favorites=True, set_favorites=nothing, open_terminals=nothing, open_viewers=nothing, open_sync=nothing)
+                       favorites=True, set_favorites=nothing, tab_colors=True, set_tab_colors=nothing, open_terminals=nothing, open_viewers=nothing, open_sync=nothing)
     d.adjustSize()
     grab(d, out / "einstellungen.png")
     d.close()
@@ -298,6 +325,8 @@ def main() -> int:
                 terminal_tiles(cfg, conns, tmp, out, label)
                 if mode == "light":
                     terminal_broadcast(cfg, conns, tmp, out)
+            if "reiter" in parts:
+                terminal_tabs(cfg, conns, tmp, out, label)
             if "snippets" in parts:
                 snippets_dialog(cfg, conns, out, label)
             if "synckonflikt" in parts:

@@ -35,7 +35,7 @@ Häufige Verbindungen als Favoriten oben im Baum (werden mit synchronisiert); St
 Jede Verbindung öffnet sich im Terminal deiner Wahl (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, eigene Programme) über frei konfigurierbare Befehlsvorlagen, auch pro Verbindung verschieden.
 
 ### Integriertes Terminal
-Verbindungen öffnen sich auf Wunsch direkt in einem Reiter von Sesam, ohne externes Terminal (Auswahl, Kopieren, Verlauf, Schriftgröße). Mehrere Sitzungen lassen sich als **Kacheln** nebeneinander oder untereinander zeigen (per Drag & Drop umsortierbar), auf Knopfdruck **alle Sitzungen als Raster**; optional geht die Eingabe an **alle Kacheln gleichzeitig** (ausdrücklich zuschaltbar, deutlich gekennzeichnet).
+Verbindungen öffnen sich auf Wunsch direkt in einem Reiter von Sesam, ohne externes Terminal (Auswahl, Kopieren, Verlauf, Schriftgröße). Die Reiter lassen sich per Drag & Drop umsortieren und auf Wunsch **in der Farbe der Verbindung einfärben**. Mehrere Sitzungen lassen sich als **Kacheln** nebeneinander oder untereinander zeigen (per Drag & Drop umsortierbar), auf Knopfdruck **alle Sitzungen als Raster**; optional geht die Eingabe an **alle Kacheln gleichzeitig** (ausdrücklich zuschaltbar, deutlich gekennzeichnet).
 
 ### Zwischenablage-Verlauf
 Im Terminal Kopiertes bleibt abrufbar und lässt sich in einem oder mehreren Terminals einfügen; der Verlauf wird verschlüsselt gespeichert und nie synchronisiert.
@@ -167,6 +167,10 @@ Der Befehl `sesam` liegt in `~/.local/bin` (bei manchen Distributionen muss der 
 | Integriertes Terminal mit Kacheln (hell) | Integriertes Terminal mit Kacheln (dunkel) |
 | ---------------------------------------- | ------------------------------------------ |
 | ![Kacheln (hell)](docs/screenshots/terminal-kacheln-hell.png) | ![Kacheln (dunkel)](docs/screenshots/terminal-kacheln-dunkel.png) |
+
+| Reiter in der Farbe der Verbindung (hell) | Reiter in der Farbe der Verbindung (dunkel) |
+| ----------------------------------------- | ------------------------------------------- |
+| ![Farbige Reiter (hell)](docs/screenshots/terminal-reiter-hell.png) | ![Farbige Reiter (dunkel)](docs/screenshots/terminal-reiter-dunkel.png) |
 
 | „Eingabe an alle Kacheln senden“ (roter Rand) | Einstellungen |
 | --------------------------------------------- | ------------- |

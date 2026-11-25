@@ -51,6 +51,7 @@ Connections can be organized in nested groups (path with “/”, e.g. `Customer
 
 - **Color:** connections and groups can get one of eight colors; it tints the icon in the tree (the row itself stays unchanged and remains readable in the dark theme).
   For connections you pick it in the edit dialog (*Color*) or by right-click → *Color*, for groups by right-click → *Color*. A group color moves along when you rename or move the group.
+  A connection's color can also tint the tabs of the integrated terminal (*Settings › Tabs*, off by default; see [Terminals and snippets](terminals-snippets.md)).
 - **Tags:** a connection can carry several tags (*Tags* in the edit dialog, separated by commas, e.g. `prod, customer-a`). The dialog suggests tags that already exist.
   The tree shows them in the *Tags* column, and the search field finds them just like names, hosts and groups. Case does not matter.
 - Colors and tags are synchronized too (group colors in `groups.json`). If the same group color was changed in conflicting ways, the local one wins.

@@ -35,7 +35,7 @@ Frequent connections as favorites at the top of the tree (synced too); Ctrl+K op
 Every connection opens in the terminal of your choice (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, custom programs) through freely configurable command templates, also different per connection.
 
 ### Integrated terminal
-Connections can open right in a tab of Sesam, without an external terminal (selection, copy, history, font size). Several sessions can be shown as **tiles** side by side or one below the other (rearrangeable by drag and drop), and with one click **all sessions as a grid**; optionally your input goes to **all tiles at once** (switched on explicitly and clearly marked).
+Connections can open right in a tab of Sesam, without an external terminal (selection, copy, history, font size). Tabs can be reordered by drag and drop and, if you like, **tinted in the connection's color**. Several sessions can be shown as **tiles** side by side or one below the other (rearrangeable by drag and drop), and with one click **all sessions as a grid**; optionally your input goes to **all tiles at once** (switched on explicitly and clearly marked).
 
 ### Clipboard history
 Text copied in the terminal stays available and can be pasted into one or several terminals; the history is stored encrypted and never synced.
@@ -166,6 +166,10 @@ The screenshots show the German interface; the English interface looks the same 
 | Integrated terminal with tiles (light) | Integrated terminal with tiles (dark) |
 | --- | --- |
 | ![Tiles (light)](docs/screenshots/terminal-kacheln-hell.png) | ![Tiles (dark)](docs/screenshots/terminal-kacheln-dunkel.png) |
+
+| Tabs in the connection's color (light) | Tabs in the connection's color (dark) |
+| --- | --- |
+| ![Colored tabs (light)](docs/screenshots/terminal-reiter-hell.png) | ![Colored tabs (dark)](docs/screenshots/terminal-reiter-dunkel.png) |
 
 | “Send input to all tiles” (red border) | Settings |
 | --- | --- |
