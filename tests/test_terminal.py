@@ -205,6 +205,9 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
                 time.sleep(0.01)
             return False
 
+        def test_tabs_are_movable(self):
+            self.assertTrue(self.w.tabs.isMovable())
+
         def test_session_opens_as_tab_and_closes_with_the_process(self):
             self.assertEqual(self.w.tabs.count(), 0)
             self.w._open_connection(self.conn)

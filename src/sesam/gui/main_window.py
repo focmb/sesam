@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self.tabs.setObjectName("mainTabs")
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)  # Reiter per Drag & Drop umsortieren
         self.tabs.tabCloseRequested.connect(self._close_terminal_tab)
         self.tabs.currentChanged.connect(self._tab_changed)
         self._build_tile_button()
