@@ -38,6 +38,7 @@ from .sync_conflict_dialog import SyncConflictDialog
 from .sync_controller import SyncController
 from .sync_dialog import SyncDialog
 from .terminal_tab import TerminalTab
+from .color_tabs import ColorTabWidget
 from .terminal_view import TerminalView, available as terminal_available
 from .terminals_dialog import TerminalsDialog
 from .toast import ToastHost
@@ -210,7 +211,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tree, 1)
         # Links bleibt die Verbindungsliste immer sichtbar; rechts stehen die Sitzungen des integrierten Terminals als Reiter
         # (ohne Sitzung zeigt die rechte Seite stattdessen die zuletzt verwendeten Verbindungen)
-        self.tabs = QTabWidget()
+        self.tabs = ColorTabWidget()
         self.tabs.setObjectName("mainTabs")
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
@@ -664,12 +665,15 @@ class MainWindow(QMainWindow):
         if index >= 0:
             self.tabs.setTabText(index, tab.title())
             self.tabs.setTabToolTip(index, tab.title())
+            active = tab.active()
+            self.tabs.tabBar().setTabData(index, (colors.hex_of(active.color_key) if active is not None and self.cfg.tab_colors else None))
 
-    def _open_embedded(self, args: list[str], title: str, env: dict[str, str]) -> TerminalView:
+    def _open_embedded(self, args: list[str], title: str, env: dict[str, str], color: str = "") -> TerminalView:
         """Wird vom Launcher gerufen, wenn das gewählte Terminal das integrierte ist: öffnet einen Reiter oder eine Kachel."""
         if not terminal_available():
             raise launcher.LaunchError(tr("Das Paket „pyte“ ist nicht installiert (pip install pyte)."))
         view = TerminalView(title, theme.scale(), theme.is_dark())
+        view.color_key = color  # Farbschlüssel der Verbindung (sesam.colors), für die Reiterfarbe
         view.closed.connect(lambda _code, v=view: self._terminal_closed(v))
         view.copied.connect(lambda text, v=view: self._terminal_copied(text, v.title))
         view.history_requested.connect(lambda v=view: self.show_clipboard_popup(v))
@@ -744,7 +748,7 @@ class MainWindow(QMainWindow):
         args, env = view.command
         self._split_target = (view, orientation)
         try:
-            new = self._open_embedded(args, view.title, env)
+            new = self._open_embedded(args, view.title, env, color=view.color_key)
         except launcher.LaunchError as exc:
             QMessageBox.critical(self, tr("Verbindung konnte nicht geöffnet werden"), str(exc))
             return
@@ -2582,6 +2586,13 @@ class MainWindow(QMainWindow):
         self._save_no_sync()
         self.wg_indicator.set_enabled(enabled)
 
+    def set_tab_colors(self, enabled: bool):
+        """Terminal-Reiter in der Farbe ihrer Verbindung einfärben (wirkt sofort auf offene Reiter, nur lokal gespeichert)."""
+        self.cfg.tab_colors = bool(enabled)
+        for tab in self._terminal_tabs():
+            self._refresh_tab(tab)
+        self._save_no_sync()
+
     def set_toasts(self, enabled: bool):
         """Meldungen als Einblendung (an) oder in der Statuszeile (aus); wirkt sofort, nur lokal gespeichert."""
         self.cfg.toasts = bool(enabled)
@@ -2594,6 +2605,7 @@ class MainWindow(QMainWindow):
                              wireguard=self.cfg.wireguard, set_wireguard=self.set_wireguard,
                              toasts=self.cfg.toasts, set_toasts=self.set_toasts,
                              favorites=self.cfg.favorites, set_favorites=self.set_favorites,
+                             tab_colors=self.cfg.tab_colors, set_tab_colors=self.set_tab_colors,
                              open_terminals=self.edit_terminals, open_viewers=self.edit_viewers, open_sync=self.edit_sync)
         dlg.exec()
 

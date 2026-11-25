@@ -12,7 +12,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, font_scale: int, language: str, set_font_scale, set_language, parent=None, *,
                  wireguard: bool = False, set_wireguard=None, toasts: bool = False, set_toasts=None,
-                 favorites: bool = True, set_favorites=None,
+                 favorites: bool = True, set_favorites=None, tab_colors: bool = False, set_tab_colors=None,
                  open_terminals=None, open_viewers=None, open_sync=None):
         super().__init__(parent)
         self.setWindowTitle(tr("Einstellungen"))
@@ -72,6 +72,14 @@ class SettingsDialog(QDialog):
         else:
             self.favorites_box.setEnabled(False)
 
+        self.tab_colors_box = QCheckBox(tr("Reiter in der Farbe der Verbindung einfärben"))
+        self.tab_colors_box.setToolTip(tr("Hinterlegt jeden Terminal-Reiter mit der Farbe, die in der Verbindung ausgewählt ist. Verbindungen ohne Farbe bleiben unverändert."))
+        self.tab_colors_box.setChecked(bool(tab_colors))
+        if set_tab_colors is not None:
+            self.tab_colors_box.toggled.connect(lambda checked: set_tab_colors(checked))
+        else:
+            self.tab_colors_box.setEnabled(False)
+
         # Verwaltungsdialoge (früher in der Seitenleiste): jeder öffnet seinen Dialog mit diesem Fenster als Elternfenster
         manage_row = QHBoxLayout()
         self.manage_buttons: dict[str, QPushButton] = {}
@@ -93,6 +101,7 @@ class SettingsDialog(QDialog):
         form.addRow(tr("WireGuard"), self.wireguard_box)
         form.addRow(tr("Meldungen"), self.toasts_box)
         form.addRow(tr("Favoriten"), self.favorites_box)
+        form.addRow(tr("Reiter"), self.tab_colors_box)
         form.addRow(tr("Verwalten"), manage_row)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)

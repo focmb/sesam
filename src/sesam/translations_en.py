@@ -748,6 +748,10 @@ EN: dict[str, str] = {
     "Favorit": "Favorite",
     "Favoriten": "Favorites",
     "Favoriten anzeigen": "Show favorites",
+    "Reiter": "Tabs",
+    "Reiter in der Farbe der Verbindung einfärben": "Color tabs with the connection's color",
+    "Hinterlegt jeden Terminal-Reiter mit der Farbe, die in der Verbindung ausgewählt ist. Verbindungen ohne Farbe bleiben unverändert.":
+        "Tints each terminal tab with the color chosen in its connection. Connections without a color stay unchanged.",
     "Zeigt den Abschnitt „Favoriten“ und den Stern im Baum. Ausgeschaltet bleiben die Markierungen erhalten und erscheinen wieder, sobald die Favoriten eingeschaltet werden.":
         "Shows the “Favorites” section and the star in the tree. When switched off, the marks are kept and reappear as soon as favorites are switched on again.",
     "Zu Favoriten hinzufügen": "Add to favorites",

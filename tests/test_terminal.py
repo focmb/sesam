@@ -16,7 +16,7 @@ try:
 except ImportError:  # PySide6 oder pyte fehlt
     HAVE = False
 
-from sesam import launcher, terminals
+from sesam import colors, launcher, storage, terminals
 from sesam.models import Config, Connection, Terminal
 
 
@@ -46,7 +46,7 @@ class IntegratedTerminalConfigTests(unittest.TestCase):
             def poll(self):
                 return None
 
-        launcher.set_embedded_opener(lambda args, title, env: calls.append((args, title)) or Session())
+        launcher.set_embedded_opener(lambda args, title, env, color="": calls.append((args, title)) or Session())
         try:
             launcher.launch(cfg, conn, term)
             self.assertEqual(calls[0][1], "Server")
@@ -204,6 +204,22 @@ if GuiTestCase is not None and HAVE and not sys.platform.startswith("win"):
                     return True
                 time.sleep(0.01)
             return False
+
+        def test_tab_gets_the_connection_color_only_when_enabled(self):
+            self.conn.color = "red"
+            self.assertFalse(self.w.cfg.tab_colors)  # Standard: aus
+            self.w._open_connection(self.conn)
+            self.assertIsNone(self.w.tabs.tabBar().tabData(0))
+            self.w.set_tab_colors(True)  # wirkt sofort auf den offenen Reiter
+            self.assertEqual(self.w.tabs.tabBar().tabData(0), colors.hex_of("red"))
+            self.assertTrue(storage.load(self.path).tab_colors)  # wird gespeichert
+            self.w.set_tab_colors(False)
+            self.assertIsNone(self.w.tabs.tabBar().tabData(0))
+
+        def test_tab_without_connection_color_stays_uncolored(self):
+            self.w.set_tab_colors(True)
+            self.w._open_connection(self.conn)  # Verbindung ohne Farbe
+            self.assertIsNone(self.w.tabs.tabBar().tabData(0))
 
         def test_tabs_are_movable(self):
             self.assertTrue(self.w.tabs.isMovable())

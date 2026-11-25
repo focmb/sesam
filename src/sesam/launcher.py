@@ -176,7 +176,7 @@ def wrapper_args(conn: Connection, remote_command: str | None = None) -> list[st
     return args
 
 
-_embedded_opener = None  # vom Hauptfenster gesetzt: (Argumente, Titel, Umgebung) -> Sitzung mit ``poll()``
+_embedded_opener = None  # vom Hauptfenster gesetzt: (Argumente, Titel, Umgebung, color=Farbschlüssel) -> Sitzung mit ``poll()``
 
 
 def set_embedded_opener(opener) -> None:
@@ -265,7 +265,7 @@ def launch(cfg: Config, conn: Connection, terminal: Terminal | None = None, remo
         if _embedded_opener is None:
             raise LaunchError(tr("Das integrierte Terminal ist nur in der Oberfläche verfügbar."))
         cmd = wrapper_args(conn, remote_command)
-        session = _embedded_opener(cmd, conn.name or conn.host, runtime.clean_env())
+        session = _embedded_opener(cmd, conn.name or conn.host, runtime.clean_env(), color=conn.color)
         if track if track is not None else remote_command is None:
             _terminals.setdefault(conn.id, []).append(session)
         return cmd

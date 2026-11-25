@@ -172,6 +172,7 @@ class TerminalView(QWidget):
     def __init__(self, title: str, scale: int = 100, dark: bool = True, parent=None):
         super().__init__(parent)
         self.title = title
+        self.color_key = ""  # Farbschlüssel der Verbindung (sesam.colors), leer = keine Farbe
         self._scheme = SCHEMES["dark" if dark else "light"]
         self._scale = scale
         self._zoom = 0
