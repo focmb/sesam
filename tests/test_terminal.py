@@ -89,6 +89,156 @@ class KeyTests(unittest.TestCase):
         self.assertIsNone(self.k(Qt.Key.Key_Shift))
 
 
+@unittest.skipUnless(HAVE, "PySide6 und pyte nötig")
+class MouseBytesTests(unittest.TestCase):
+    def test_sgr_format(self):
+        none, ctrl, alt = Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ControlModifier, Qt.KeyboardModifier.AltModifier
+        self.assertEqual(terminal_view.mouse_bytes(0, 4, 2, none, True), b"\x1b[<0;5;3M")
+        self.assertEqual(terminal_view.mouse_bytes(0, 4, 2, none, True, release=True), b"\x1b[<0;5;3m")
+        self.assertEqual(terminal_view.mouse_bytes(2, 0, 0, none, True), b"\x1b[<2;1;1M")
+        self.assertEqual(terminal_view.mouse_bytes(0, 4, 2, none, True, motion=True), b"\x1b[<32;5;3M")
+        self.assertEqual(terminal_view.mouse_bytes(3, 4, 2, none, True, motion=True), b"\x1b[<35;5;3M")
+        self.assertEqual(terminal_view.mouse_bytes(64, 4, 2, ctrl, True), b"\x1b[<80;5;3M")
+        self.assertEqual(terminal_view.mouse_bytes(65, 4, 2, alt, True), b"\x1b[<73;5;3M")
+        self.assertEqual(terminal_view.mouse_bytes(0, 300, 100, none, True), b"\x1b[<0;301;101M")
+
+    def test_classic_format_and_its_limit(self):
+        none = Qt.KeyboardModifier.NoModifier
+        self.assertEqual(terminal_view.mouse_bytes(0, 4, 2, none, False), b"\x1b[M" + bytes((32, 37, 35)))
+        self.assertEqual(terminal_view.mouse_bytes(1, 4, 2, none, False, release=True), b"\x1b[M" + bytes((35, 37, 35)))
+        self.assertEqual(terminal_view.mouse_bytes(64, 0, 0, none, False), b"\x1b[M" + bytes((96, 33, 33)))
+        self.assertIsNone(terminal_view.mouse_bytes(0, 223, 0, none, False))  # Spalte 224 passt nicht mehr in ein Byte
+
+
+@unittest.skipUnless(HAVE, "PySide6 und pyte nötig")
+class MouseReportingTests(unittest.TestCase):
+    """Maus im Programm (z. B. micro): Klicks, Ziehen und Rad gehen an das Programm, mit Umschalt bleibt die Auswahl beim Terminal."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        from PySide6.QtCore import QPointF
+
+        self.QPointF = QPointF
+        self.view = terminal_view.TerminalView("t")
+        self.view.resize(800, 400)
+        self.view.show()
+        self.sent = []
+        self.view._pty = object()  # läuft „eine Sitzung“; gesendet wird nur in die Liste
+        self.view._send = self.sent.append
+
+    def pos(self, col, row):
+        v = self.view
+        return self.QPointF(terminal_view.PADDING + (col + 0.5) * v._cell_w, terminal_view.PADDING + (row + 0.5) * v._cell_h)
+
+    def mouse(self, kind, col, row, button=Qt.MouseButton.LeftButton, buttons=Qt.MouseButton.NoButton, mods=Qt.KeyboardModifier.NoModifier):
+        from PySide6.QtGui import QMouseEvent
+
+        pos = self.pos(col, row)
+        ev = QMouseEvent(kind, pos, pos, button, buttons, mods)
+        handler = {QMouseEvent.Type.MouseButtonPress: self.view.mousePressEvent, QMouseEvent.Type.MouseButtonRelease: self.view.mouseReleaseEvent,
+                   QMouseEvent.Type.MouseMove: self.view.mouseMoveEvent}[kind]
+        handler(ev)
+
+    def click_drag(self, mods=Qt.KeyboardModifier.NoModifier):
+        from PySide6.QtGui import QMouseEvent
+
+        left = Qt.MouseButton.LeftButton
+        self.mouse(QMouseEvent.Type.MouseButtonPress, 4, 2, left, left, mods)
+        self.mouse(QMouseEvent.Type.MouseMove, 6, 3, Qt.MouseButton.NoButton, left, mods)
+        self.mouse(QMouseEvent.Type.MouseButtonRelease, 6, 3, left, Qt.MouseButton.NoButton, mods)
+
+    def wheel(self, delta, mods=Qt.KeyboardModifier.NoModifier):
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QWheelEvent
+
+        pos = self.pos(4, 2)
+        self.view.wheelEvent(QWheelEvent(pos, pos, QPoint(0, 0), QPoint(0, delta), Qt.MouseButton.NoButton, mods, Qt.ScrollPhase.NoScrollPhase, False))
+
+    def test_without_mouse_mode_the_terminal_selects(self):
+        self.click_drag()
+        self.assertEqual(self.sent, [])
+        self.assertIsNotNone(self.view._sel)
+
+    def test_click_is_reported_in_sgr_format(self):
+        from PySide6.QtGui import QMouseEvent
+
+        self.view._feed(b"\x1b[?1000h\x1b[?1006h")
+        left = Qt.MouseButton.LeftButton
+        self.mouse(QMouseEvent.Type.MouseButtonPress, 4, 2, left, left)
+        self.mouse(QMouseEvent.Type.MouseButtonRelease, 4, 2, left)
+        self.assertEqual(self.sent, [b"\x1b[<0;5;3M", b"\x1b[<0;5;3m"])
+        self.assertIsNone(self.view._sel)
+
+    def test_click_without_sgr_uses_the_classic_format(self):
+        from PySide6.QtGui import QMouseEvent
+
+        self.view._feed(b"\x1b[?1000h")
+        left = Qt.MouseButton.LeftButton
+        self.mouse(QMouseEvent.Type.MouseButtonPress, 4, 2, left, left)
+        self.mouse(QMouseEvent.Type.MouseButtonRelease, 4, 2, left)
+        self.assertEqual(self.sent, [b"\x1b[M" + bytes((32, 37, 35)), b"\x1b[M" + bytes((35, 37, 35))])
+
+    def test_dragging_is_only_reported_in_drag_mode(self):
+        self.view._feed(b"\x1b[?1000h\x1b[?1006h")
+        self.click_drag()
+        self.assertEqual(self.sent, [b"\x1b[<0;5;3M", b"\x1b[<0;7;4m"])  # nur Drücken und Loslassen
+        self.sent.clear()
+        self.view._feed(b"\x1b[?1002h")
+        self.click_drag()
+        self.assertEqual(self.sent, [b"\x1b[<0;5;3M", b"\x1b[<32;7;4M", b"\x1b[<0;7;4m"])
+
+    def test_motion_without_button_only_in_any_motion_mode(self):
+        from PySide6.QtGui import QMouseEvent
+
+        none = Qt.MouseButton.NoButton
+        self.view._feed(b"\x1b[?1002h\x1b[?1006h")
+        self.mouse(QMouseEvent.Type.MouseMove, 3, 1, none, none)
+        self.assertEqual(self.sent, [])
+        self.view._feed(b"\x1b[?1003h")
+        self.mouse(QMouseEvent.Type.MouseMove, 3, 1, none, none)
+        self.mouse(QMouseEvent.Type.MouseMove, 3, 1, none, none)  # gleiche Zelle: nichts Neues
+        self.assertEqual(self.sent, [b"\x1b[<35;4;2M"])
+        self.assertTrue(self.view.hasMouseTracking())
+
+    def test_shift_keeps_the_selection_in_the_terminal(self):
+        self.view._feed(b"\x1b[?1000h\x1b[?1006h")
+        self.click_drag(Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(self.sent, [])
+        self.assertIsNotNone(self.view._sel)
+
+    def test_reset_of_the_mode_gives_the_mouse_back(self):
+        self.view._feed(b"\x1b[?1000h\x1b[?1006h")
+        self.view._feed(b"\x1b[?1000l")
+        self.click_drag()
+        self.assertEqual(self.sent, [])
+        self.assertIsNotNone(self.view._sel)
+
+    def test_finished_session_reports_nothing(self):
+        self.view._feed(b"\x1b[?1000h\x1b[?1006h")
+        self.view._on_finished(0)
+        self.click_drag()
+        self.assertEqual(self.sent, [])
+
+    def test_wheel_is_one_event_per_notch(self):
+        self.view._feed(b"\x1b[?1000h\x1b[?1006h")
+        self.wheel(120)
+        self.wheel(-120)
+        self.assertEqual(self.sent, [b"\x1b[<64;5;3M", b"\x1b[<65;5;3M"])
+        self.sent.clear()
+        self.wheel(60)
+        self.assertEqual(self.sent, [])
+        self.wheel(60)  # zwei halbe Schritte (Touchpad) ergeben einen
+        self.assertEqual(self.sent, [b"\x1b[<64;5;3M"])
+
+    def test_wheel_in_alt_screen_without_mouse_mode_still_sends_arrow_keys(self):
+        self.view._feed(b"\x1b[?1049h")
+        self.wheel(120)
+        self.assertEqual(self.sent, [b"\x1b[A" * 3])
+
+
 @unittest.skipUnless(HAVE and not sys.platform.startswith("win"), "PySide6, pyte und ein POSIX-Pseudoterminal nötig")
 class SessionTests(unittest.TestCase):
     @classmethod

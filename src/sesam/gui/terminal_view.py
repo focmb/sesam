@@ -27,6 +27,11 @@ BROADCAST_COLOR = "#d6336c"  # Rand und Hinweis bei „Eingabe an alle Kacheln�
 ALT_SCREEN_MODES = (47, 1047, 1049)
 BRACKETED_PASTE = 2004 << 5  # private Modi sind in pyte um 5 Bit verschoben
 APP_CURSOR_KEYS = 1 << 5  # DECCKM
+MOUSE_CLICKS = 1000 << 5  # Programm will Klicks und Mausrad (DECSET 1000)
+MOUSE_DRAG = 1002 << 5  # … und Bewegung bei gedrückter Taste (1002)
+MOUSE_ANY = 1003 << 5  # … und jede Bewegung (1003)
+MOUSE_SGR = 1006 << 5  # Koordinaten im SGR-Format statt im klassischen X10-Format (1006)
+MOUSE_MODES = (MOUSE_CLICKS, MOUSE_DRAG, MOUSE_ANY)
 
 _ANSI = ("black", "red", "green", "brown", "blue", "magenta", "cyan", "white")
 SCHEMES = {
@@ -121,6 +126,19 @@ _CTRL_SYMBOLS = {
 Mod = Qt.KeyboardModifier
 
 
+def mouse_bytes(button: int, col: int, row: int, mods, sgr: bool, release: bool = False, motion: bool = False) -> bytes | None:
+    """Bytes eines Mausereignisses für das Programm im Terminal (xterm-Mausberichte).
+
+    ``button``: 0 links, 1 Mitte, 2 rechts, 64/65 Mausrad hoch/runter, 3 keine Taste (nur Bewegung); ``col`` und ``row`` zählen ab 0.
+    Das klassische Format kennt nur Koordinaten bis 223, darüber wird nichts gesendet (``None``)."""
+    extra = (8 if mods & Mod.AltModifier else 0) + (16 if mods & Mod.ControlModifier else 0) + (32 if motion else 0)
+    if sgr:
+        return f"\x1b[<{button + extra};{col + 1};{row + 1}{'m' if release else 'M'}".encode()
+    if col + 1 > 223 or row + 1 > 223:
+        return None
+    return b"\x1b[M" + bytes((32 + (3 if release else button) + extra, 32 + col + 1, 32 + row + 1))
+
+
 def key_bytes(key: int, text: str, mods, app_cursor: bool) -> bytes | None:
     """Bytes, die eine Taste an das Terminal schickt; ``None`` wenn die Taste nichts sendet."""
     ctrl, alt, shift = bool(mods & Mod.ControlModifier), bool(mods & Mod.AltModifier), bool(mods & Mod.ShiftModifier)
@@ -189,6 +207,10 @@ class TerminalView(QWidget):
         self._pty: pty_session.PtySession | None = None
         self._finished: int | None = None
         self._notice = ""
+        self._mouse_button: int | None = None  # an das Programm gemeldete, noch gedrückte Maustaste
+        self._mouse_cell: tuple[int, int] | None = None  # zuletzt gemeldete Zelle (Bewegung nur bei Wechsel melden)
+        self._mouse_state: tuple | None = None
+        self._wheel_accum = 0  # Rad-Deltas, die noch keinen vollen Schritt ergeben
         self._cell_w, self._cell_h, self._ascent = 8.0, 16.0, 12.0
         self._fonts: dict[bool, QFont] = {}
         self._apply_font()
@@ -243,9 +265,10 @@ class TerminalView(QWidget):
     def set_tiled(self, tiled: bool) -> None:
         if tiled != self._tiled:
             self._tiled = tiled
-            self.setMouseTracking(tiled)  # für den Mauszeiger über dem Griff
+            self._mouse_state = None
+            self._sync_mouse()  # Mauszeiger über dem Griff
             if not tiled:
-                self.setCursor(Qt.CursorShape.IBeamCursor)
+                self.setCursor(self._text_cursor())
             self.update()
 
     def set_broadcast(self, enabled: bool) -> None:
@@ -279,6 +302,8 @@ class TerminalView(QWidget):
     def _on_finished(self, code: int):
         crashlog.note("view: _on_finished")
         self._finished = code
+        self._mouse_button = None
+        self._sync_mouse()
         self.closed.emit(code)
         crashlog.note("view: closed emitted")
 
@@ -340,6 +365,7 @@ class TerminalView(QWidget):
         sb = self._screen.scrollback
         before_len, before_scrolled = len(sb), self._screen.scrolled
         self._stream.feed(data)
+        self._sync_mouse()
         added = self._screen.scrolled - before_scrolled
         dropped = max(0, before_len + added - len(sb))
         if dropped and self._sel:
@@ -706,12 +732,76 @@ class TerminalView(QWidget):
             self._fit()
             self.update()
             return
+        if self._mouse_wanted(ev.modifiers()):  # Programm will die Maus (z. B. micro): Rad als Mausereignis, ein Schritt je Raste
+            self._scroll_to_end()
+            self._wheel_accum += delta
+            notches = int(self._wheel_accum / 120)
+            self._wheel_accum -= notches * 120
+            for _ in range(abs(notches)):
+                self._report_mouse(64 if notches > 0 else 65, ev.position(), ev.modifiers())
+            return
         steps = max(1, abs(delta) // 40)
         if self._screen.in_alt:  # vim, less, htop: Rad wie Pfeiltasten
             key = Qt.Key.Key_Up if delta > 0 else Qt.Key.Key_Down
             self._send(key_bytes(key, "", Mod.NoModifier, APP_CURSOR_KEYS in self._screen.mode) * steps)
         else:
             self._scroll(steps if delta > 0 else -steps)
+
+    # --- Maus für Programme im Terminal ---
+    def _mouse_on(self) -> bool:
+        """Hat das Programm die Maus angefordert (xterm-Mausmodi 1000, 1002, 1003) und läuft die Sitzung noch?"""
+        return self._pty is not None and self._finished is None and any(m in self._screen.mode for m in MOUSE_MODES)
+
+    def _mouse_wanted(self, mods) -> bool:
+        """Mausereignisse gehen an das Programm; mit Umschalt bleibt das Terminal zuständig (Auswahl, Menü, Einfügen)."""
+        return self._mouse_on() and not (mods & Mod.ShiftModifier)
+
+    def _text_cursor(self):
+        return Qt.CursorShape.ArrowCursor if self._mouse_on() else Qt.CursorShape.IBeamCursor
+
+    def _sync_mouse(self) -> None:
+        """Mauszeiger und Bewegungsmeldungen an den Mausmodus des Programms anpassen."""
+        on = self._mouse_on()
+        state = (on, on and MOUSE_ANY in self._screen.mode, self._tiled)
+        if state == self._mouse_state:
+            return
+        self._mouse_state = state
+        self.setMouseTracking(self._tiled or state[1])  # Bewegung ohne Taste: für den Griff der Kachel und Modus 1003
+        self.setCursor(self._text_cursor())
+
+    def _screen_cell(self, pos) -> tuple[int, int]:
+        col = max(0, min(self._cols - 1, int((pos.x() - PADDING) / self._cell_w)))
+        row = max(0, min(self._rows - 1, int((pos.y() - PADDING) / self._cell_h)))
+        return col, row
+
+    def _report_mouse(self, button: int, pos, mods, release: bool = False, motion: bool = False) -> None:
+        col, row = self._screen_cell(pos)
+        data = mouse_bytes(button, col, row, mods, MOUSE_SGR in self._screen.mode, release, motion)
+        if data:
+            self._send(data)
+
+    def _press_to_program(self, ev) -> bool:
+        """Meldet einen Tastendruck dem Programm (``True``), wenn es die Maus angefordert hat und Umschalt nicht gedrückt ist."""
+        button = {Qt.MouseButton.LeftButton: 0, Qt.MouseButton.MiddleButton: 1, Qt.MouseButton.RightButton: 2}.get(ev.button())
+        if button is None or not self._mouse_wanted(ev.modifiers()):
+            return False
+        self._scroll_to_end()
+        if self._sel:
+            self._sel = None
+            self.update()
+        self._mouse_button = button
+        self._mouse_cell = self._screen_cell(ev.position())
+        self._report_mouse(button, ev.position(), ev.modifiers())
+        return True
+
+    def _motion_to_program(self, ev, button: int) -> None:
+        mode = self._screen.mode
+        if not self._mouse_on() or not (MOUSE_ANY in mode or (button != 3 and MOUSE_DRAG in mode)):
+            return
+        cell = self._screen_cell(ev.position())
+        if cell != self._mouse_cell:
+            self._mouse_cell = cell
+            self._report_mouse(button, ev.position(), ev.modifiers(), motion=True)
 
     # --- Maus, Auswahl ---
     def _cell_at(self, pos) -> tuple[int, int]:
@@ -723,6 +813,8 @@ class TerminalView(QWidget):
         self.setFocus()
         if ev.button() == Qt.MouseButton.LeftButton and self._on_grip(ev.position()):
             self._grip_press = ev.position()
+        elif self._press_to_program(ev):
+            pass
         elif ev.button() == Qt.MouseButton.LeftButton:
             cell = self._cell_at(ev.position())
             self._sel = (cell, cell)
@@ -741,7 +833,13 @@ class TerminalView(QWidget):
                 self._start_drag()
             return
         if self._tiled and not self._dragging:
-            self.setCursor(Qt.CursorShape.OpenHandCursor if self._on_grip(ev.position()) else Qt.CursorShape.IBeamCursor)
+            self.setCursor(Qt.CursorShape.OpenHandCursor if self._on_grip(ev.position()) else self._text_cursor())
+        if self._mouse_button is not None:  # Taste wurde dem Programm gemeldet: Ziehen weitergeben
+            self._motion_to_program(ev, self._mouse_button)
+            return
+        if not ev.buttons() and self._mouse_wanted(ev.modifiers()):
+            self._motion_to_program(ev, 3)
+            return
         if self._dragging and self._sel:
             pos = ev.position()
             if pos.y() < 0:
@@ -753,6 +851,13 @@ class TerminalView(QWidget):
 
     def mouseReleaseEvent(self, ev):
         self._grip_press = None
+        if self._mouse_button is not None:
+            button = {Qt.MouseButton.LeftButton: 0, Qt.MouseButton.MiddleButton: 1, Qt.MouseButton.RightButton: 2}.get(ev.button())
+            if button == self._mouse_button:
+                self._mouse_button = None
+                if self._mouse_on():
+                    self._report_mouse(button, ev.position(), ev.modifiers(), release=True)
+            return
         if ev.button() != Qt.MouseButton.LeftButton or not self._dragging:
             return
         self._dragging = False
@@ -765,6 +870,8 @@ class TerminalView(QWidget):
         self.update()
 
     def mouseDoubleClickEvent(self, ev):
+        if self._press_to_program(ev):  # für das Programm ist der zweite Klick ein weiterer Tastendruck
+            return
         if ev.button() != Qt.MouseButton.LeftButton:
             return
         absolute, col = self._cell_at(ev.position())
@@ -840,6 +947,9 @@ class TerminalView(QWidget):
         self.update()
 
     def contextMenuEvent(self, ev):
+        if ev.reason() != ev.Reason.Keyboard and self._mouse_wanted(ev.modifiers()):  # Rechtsklick gehört dem Programm; Umschalt+Rechtsklick öffnet das Menü
+            ev.accept()
+            return
         menu = QMenu(self)
         copy = menu.addAction(tr("Kopieren"))
         copy.setEnabled(bool(self._sel and self.selected_text()))
