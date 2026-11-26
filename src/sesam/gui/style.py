@@ -190,6 +190,12 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QToolButton:hover { background: @hover@; }
     QToolButton:pressed { background: @pressed@; }
     QToolButton:disabled { color: @muted@; }
+
+    /* Kachel-Button rechts neben den Reitern: bewusst auffällig */
+    QToolButton#tileButton { background: @accent_soft@; color: @text@; border: 1px solid @accent@; border-radius: 8px;
+        padding: 4px 12px; margin: 2px 6px; font-weight: 600; }
+    QToolButton#tileButton:hover { background: @accent@; color: @accent_text@; }
+    QToolButton#tileButton:pressed, QToolButton#tileButton:open { background: @accent_hover@; color: @accent_text@; }
     QProgressBar { background: @surface@; color: @text@; border: 1px solid @border@; border-radius: 8px; text-align: center; min-height: 18px; }
     QProgressBar::chunk { background: @accent_soft@; border-radius: 7px; }
 

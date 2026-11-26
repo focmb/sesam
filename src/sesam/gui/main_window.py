@@ -897,9 +897,11 @@ class MainWindow(QMainWindow):
     def _build_tile_button(self):
         """Schaltfläche „Kacheln“ rechts neben den Reitern (nur sichtbar, solange es Terminal-Reiter gibt)."""
         button = QToolButton()
-        button.setText(tr("Kacheln"))
+        button.setObjectName("tileButton")  # eigener Stil in style.py: bewusst auffällig
+        button.setText("▦  " + tr("Kacheln"))
         button.setToolTip(tr("Sitzungen kacheln, Eingabe an alle senden"))
-        button.setAutoRaise(True)
+        button.setAutoRaise(False)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(button)
         menu.aboutToShow.connect(lambda: self._fill_tile_menu(menu))
