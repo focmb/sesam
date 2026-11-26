@@ -147,33 +147,31 @@ The `sesam` command lives in `~/.local/bin` (on some distributions the folder mu
 
 ## Screenshots
 
-The screenshots show the German interface; the English interface looks the same apart from the texts.
-
-![Main window (light)](docs/screenshots/hauptfenster-hell.png)
+![Main window (light)](docs/screenshots-en/hauptfenster-hell.png)
 
 | Dark | Edit connection |
 | --- | --- |
-| ![Main window (dark)](docs/screenshots/hauptfenster-dunkel.png) | ![“Edit connection” dialog](docs/screenshots/verbindung-bearbeiten.png) |
+| ![Main window (dark)](docs/screenshots-en/hauptfenster-dunkel.png) | ![“Edit connection” dialog](docs/screenshots-en/verbindung-bearbeiten.png) |
 
 | File browser (SFTP, light) | File browser (SFTP, dark) |
 | --- | --- |
-| ![File browser (light)](docs/screenshots/dateibrowser-hell.png) | ![File browser (dark)](docs/screenshots/dateibrowser-dunkel.png) |
+| ![File browser (light)](docs/screenshots-en/dateibrowser-hell.png) | ![File browser (dark)](docs/screenshots-en/dateibrowser-dunkel.png) |
 
 | Snippets (light) | Snippets (dark) |
 | --- | --- |
-| ![Snippets (light)](docs/screenshots/snippets-hell.png) | ![Snippets (dark)](docs/screenshots/snippets-dunkel.png) |
+| ![Snippets (light)](docs/screenshots-en/snippets-hell.png) | ![Snippets (dark)](docs/screenshots-en/snippets-dunkel.png) |
 
 | Integrated terminal with tiles (light) | Integrated terminal with tiles (dark) |
 | --- | --- |
-| ![Tiles (light)](docs/screenshots/terminal-kacheln-hell.png) | ![Tiles (dark)](docs/screenshots/terminal-kacheln-dunkel.png) |
+| ![Tiles (light)](docs/screenshots-en/terminal-kacheln-hell.png) | ![Tiles (dark)](docs/screenshots-en/terminal-kacheln-dunkel.png) |
 
 | Tabs in the connection's color (light) | Tabs in the connection's color (dark) |
 | --- | --- |
-| ![Colored tabs (light)](docs/screenshots/terminal-reiter-hell.png) | ![Colored tabs (dark)](docs/screenshots/terminal-reiter-dunkel.png) |
+| ![Colored tabs (light)](docs/screenshots-en/terminal-reiter-hell.png) | ![Colored tabs (dark)](docs/screenshots-en/terminal-reiter-dunkel.png) |
 
 | “Send input to all tiles” (red border) | Settings |
 | --- | --- |
-| ![Input to all tiles](docs/screenshots/terminal-eingabe-an-alle.png) | ![Settings](docs/screenshots/einstellungen.png) |
+| ![Input to all tiles](docs/screenshots-en/terminal-eingabe-an-alle.png) | ![Settings](docs/screenshots-en/einstellungen.png) |
 
 The images show sample data (made-up hosts) and were created with the Qt platform plugin “offscreen”; real windows may differ in frame and font depending on the desktop.
 
