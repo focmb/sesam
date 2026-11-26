@@ -1,6 +1,6 @@
 # Managing connections
 
-← [Back to the README](../../README.en.md) · *[Deutsche Fassung](../verbindungen.md)*
+← [Back to the README](../../README.md) · *[Deutsche Fassung](../verbindungen.md)*
 
 ## Appearance
 

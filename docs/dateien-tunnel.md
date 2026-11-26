@@ -1,6 +1,6 @@
 # Dateien und Tunnel
 
-← [Zur README](../README.md) · *[English version](en/dateien-tunnel.md)*
+← [Zur README](../README.de.md) · *[English version](en/dateien-tunnel.md)*
 
 ## Dateien übertragen (SFTP)
 

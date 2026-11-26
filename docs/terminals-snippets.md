@@ -1,6 +1,6 @@
 # Terminals und Snippets
 
-← [Zur README](../README.md) · *[English version](en/terminals-snippets.md)*
+← [Zur README](../README.de.md) · *[English version](en/terminals-snippets.md)*
 
 ## Terminals konfigurieren
 

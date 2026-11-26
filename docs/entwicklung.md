@@ -1,6 +1,6 @@
 # Entwicklung: Bauen, Builds und Tests
 
-← [Zur README](../README.md) · *[English version](en/entwicklung.md)*
+← [Zur README](../README.de.md) · *[English version](en/entwicklung.md)*
 
 ## Programm bauen (Linux und Windows)
 

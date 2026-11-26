@@ -1,6 +1,6 @@
 # Synchronization and data
 
-← [Back to the README](../../README.en.md) · *[Deutsche Fassung](../synchronisation.md)*
+← [Back to the README](../../README.md) · *[Deutsche Fassung](../synchronisation.md)*
 
 ## Synchronization via Git
 

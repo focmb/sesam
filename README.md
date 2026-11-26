@@ -5,192 +5,190 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey)
 
-<p align="center"><img src="packaging/linux/sesam.svg" alt="Sesam-Icon" width="128" height="128"></p>
+<p align="center"><img src="packaging/linux/sesam.svg" alt="Sesam icon" width="128" height="128"></p>
 
 # Sesam
 
-SSH-Verbindungsmanager (Windows und Linux, Python + PySide6) zum Verwalten von SSH-Verbindungen.
-Verbindungen werden in einem **frei konfigurierbaren Terminal** geöffnet.
+SSH connection manager (Windows and Linux, Python + PySide6) for managing SSH connections.
+Connections open in a **freely configurable terminal**.
 
-*[English version: README.en.md](README.en.md)*
+*[Deutsche Fassung: README.de.md](README.de.md)*
 
-## Inhaltsverzeichnis
+## Table of contents
 
-- [Funktionen](#funktionen)
-- [Start](#start)
-- [Aus dem Release-Archiv installieren (Linux)](#aus-dem-release-archiv-installieren-linux)
-- [Im Anwendungsmenü / Dash installieren (Linux)](#im-anwendungsmenü--dash-installieren-linux)
+- [Features](#features)
+- [Getting started](#getting-started)
+- [Installing from the release archive (Linux)](#installing-from-the-release-archive-linux)
+- [Installing in the application menu / dash (Linux)](#installing-in-the-application-menu--dash-linux)
 - [Screenshots](#screenshots)
-- [Dokumentation](#dokumentation)
+- [Documentation](#documentation)
 
-## Funktionen
+## Features
 
-### Verbindungsverwaltung
-SSH-Verbindungen in verschachtelten Gruppen mit Drag & Drop, Farben, Tags, Suche und Mehrfachauswahl; Import aus `~/.ssh/config`.
+### Connection management
+SSH connections in nested groups with drag & drop, colors, tags, search and multi-select; import from `~/.ssh/config`.
 
-### Favoriten und Schnellstarter
-Häufige Verbindungen als Favoriten oben im Baum (werden mit synchronisiert); Strg+K öffnet eine unscharfe Suche über alle Verbindungen mit den zuletzt verwendeten.
+### Favorites and quick launcher
+Frequent connections as favorites at the top of the tree (synced too); Ctrl+K opens a fuzzy search over all connections with the recently used ones.
 
-### Eigenes Terminal
-Jede Verbindung öffnet sich im Terminal deiner Wahl (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, eigene Programme) über frei konfigurierbare Befehlsvorlagen, auch pro Verbindung verschieden.
+### Your own terminal
+Every connection opens in the terminal of your choice (Windows Terminal, PowerShell, cmd, PuTTY, GNOME Terminal, custom programs) through freely configurable command templates, also different per connection.
 
-### Integriertes Terminal
-Verbindungen öffnen sich auf Wunsch direkt in einem Reiter von Sesam, ohne externes Terminal (Auswahl, Kopieren, Verlauf, Schriftgröße). Die Reiter lassen sich per Drag & Drop umsortieren und auf Wunsch **in der Farbe der Verbindung einfärben**. Mehrere Sitzungen lassen sich als **Kacheln** nebeneinander oder untereinander zeigen (per Drag & Drop umsortierbar), auf Knopfdruck **alle Sitzungen als Raster**; optional geht die Eingabe an **alle Kacheln gleichzeitig** (ausdrücklich zuschaltbar, deutlich gekennzeichnet).
+### Integrated terminal
+Connections can open right in a tab of Sesam, without an external terminal (selection, copy, history, font size). Tabs can be reordered by drag and drop and, if you like, **tinted in the connection's color**. Several sessions can be shown as **tiles** side by side or one below the other (rearrangeable by drag and drop), and with one click **all sessions as a grid**; optionally your input goes to **all tiles at once** (switched on explicitly and clearly marked).
 
-### Zwischenablage-Verlauf
-Im Terminal Kopiertes bleibt abrufbar und lässt sich in einem oder mehreren Terminals einfügen; der Verlauf wird verschlüsselt gespeichert und nie synchronisiert.
+### Clipboard history
+Text copied in the terminal stays available and can be pasted into one or several terminals; the history is stored encrypted and never synced.
 
-### Zugangsdaten
-Passwörter im Schlüsselbund des Betriebssystems, nicht in der Konfigurationsdatei. Identitäten bündeln Benutzer, Schlüssel und Passwort für viele Verbindungen.
+### Credentials
+Passwords live in the operating system’s keychain, not in the configuration file. Identities bundle user, key and password for many connections.
 
-### SSH-Schlüssel in der App
-Ed25519/RSA erzeugen oder importieren, Fingerabdruck ansehen, per Klick auf Server installieren (wie `ssh-copy-id`) und Verbindungen zuweisen.
+### SSH keys in the app
+Generate or import Ed25519/RSA keys, view fingerprints, install them on servers with one click (like `ssh-copy-id`) and assign them to connections.
 
 ### sudo
-Nach dem Login direkt zu root oder einem anderen Benutzer wechseln, auf Wunsch mit dem gespeicherten Passwort und ohne erneute Eingabe.
+Switch straight to root or another user after login, optionally with the stored password and without typing it again.
 
 ### Snippets
-Gespeicherte Befehle (mit Kategorien) auf einem oder mehreren Hosts gleichzeitig ausführen, optional mit sudo, danach Shell offen lassen, auf eine Taste warten oder das Terminal schließen.
+Run saved commands (with categories) on one or several hosts at once, optionally with sudo, then keep the shell open, wait for a key or close the terminal.
 
-### Dateien übertragen (SFTP)
-Zweigeteilter Dateibrowser mit Drag & Drop, Fortschritt im Hintergrund, Umbenennen, Löschen und Ordner anlegen, ohne `sftp` oder `scp` auf dem Rechner.
+### File transfer (SFTP)
+Two-pane file browser with drag & drop, background progress, rename, delete and new folder; no `sftp` or `scp` needed on your computer.
 
-### Port-Weiterleitungen (Tunnel)
-Lokale (`-L`), Remote- (`-R`) und dynamische SOCKS-Weiterleitungen (`-D`) je Verbindung speichern und per Klick starten und beenden; laufende Tunnel zeigt der Baum an.
+### Port forwarding (tunnels)
+Save local (`-L`), remote (`-R`) and dynamic SOCKS (`-D`) forwardings per connection and start and stop them with a click; running tunnels show in the tree.
 
-### Fernzugriff (VNC und RDP)
-Den Bildschirm eines Geräts öffnen, im **eingebauten VNC-Viewer** oder im Viewer deiner Wahl (Remmina, TigerVNC, FreeRDP, mstsc), durch einen SSH-Tunnel oder direkt, wenn das Gerät nur VNC oder RDP spricht; das Passwort liegt im Schlüsselbund. Abzeichen in der Spalte *Typ* zeigen, was eine Verbindung kann (SSH, VNC, RDP).
+### Remote access (VNC and RDP)
+Open a device's screen in the **built-in VNC viewer** or in the viewer of your choice (Remmina, TigerVNC, FreeRDP, mstsc), through an SSH tunnel or directly if the device only speaks VNC or RDP; the password lives in the keyring. Badges in the *Type* column show what a connection can do (SSH, VNC, RDP).
 
 ### Docker
-Container eines Hosts im Verbindungsbaum anzeigen, starten, stoppen, neu starten, löschen und per Doppelklick eine Shell im Container öffnen.
+Show a host’s containers in the connection tree; start, stop, restart and delete them, and open a shell in a container with a double-click.
 
 ### Proxmox
-VMs und LXC-Container des jeweiligen Knotens im Baum (in einem Cluster je Knoten eine Verbindung), Shell in LXC und VM, Starten, Herunterfahren, Stoppen und Neustarten.
+VMs and LXC containers of the respective node in the tree (in a cluster one connection per node), shell in LXC and VMs, start, shut down, stop and restart.
 
-### Cisco-Switches
-Ports im Baum mit Zustand, VLAN und Geschwindigkeit; ein- und ausschalten, Beschreibung ändern, Konfiguration speichern.
+### Cisco switches
+Ports in the tree with state, VLAN and speed; switch them on and off, change descriptions, save the configuration.
 
-### WireGuard-Anzeige (optional)
-Die Statuszeile zeigt, ob der Rechner mit einem WireGuard-Tunnel verbunden ist (Tunnelname, verbunden, veraltet oder getrennt); ein Klick zeigt Einzelheiten.
+### WireGuard indicator (optional)
+The status bar shows whether the computer is connected to a WireGuard tunnel (tunnel name; connected, stale or disconnected); a click shows details.
 
-### Synchronisation über Git
-Verbindungen, Gruppen, Identitäten, Schlüssel und Snippets zwischen mehreren Geräten abgleichen; Passwörter und private Schlüssel nur verschlüsselt (AES-256-GCM).
+### Git synchronization
+Sync connections, groups, identities, keys and snippets between several devices; passwords and private keys are stored encrypted only (AES-256-GCM).
 
-### Windows und Linux
-Gleiche Bedienung auf beiden Systemen, helles und dunkles Design, einstellbare Schriftgröße, Oberfläche auf Deutsch und Englisch. Terminals, Viewer und Synchronisation verwaltest du in den **Einstellungen**.
+### Windows and Linux
+The same experience on both systems, light and dark theme, adjustable font size, interface in German and English. You manage terminals, viewers and synchronization in the **Settings**.
 
-## Start
+## Getting started
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e .
-sesam                            # oder: python -m sesam
+sesam                            # or: python -m sesam
 ```
 
-Ohne Python-Umgebung: siehe „Aus dem Release-Archiv installieren“. Für einen Starter im Anwendungsmenü/Dash siehe „Im Anwendungsmenü / Dash installieren“.
+Without a Python environment: see “Installing from the release archive”. For a launcher in the application menu / dash see “Installing in the application menu / dash”.
 
-## Aus dem Release-Archiv installieren (Linux)
+## Installing from the release archive (Linux)
 
-Auf der [Release-Seite](https://github.com/focmb/sesam/releases) liegt zu jeder Version `sesam-<Version>-linux-x86_64.tar.gz`: ein fertig
-gebautes Programm, das ohne installiertes Python läuft (gebaut auf Ubuntu 22.04). Nicht zu verwechseln mit dem Archiv „Source code (tar.gz)“,
-das GitHub automatisch anbietet und das nur den Quelltext enthält.
+Every release on the [releases page](https://github.com/focmb/sesam/releases) contains `sesam-<version>-linux-x86_64.tar.gz`: a ready-built
+program that runs without Python installed (built on Ubuntu 22.04). Not to be confused with the “Source code (tar.gz)” archive that GitHub
+offers automatically, which only contains the source.
 
-**Voraussetzungen:** die üblichen Qt-Bibliotheken sowie `openssh-client` und `git`. Unter Debian/Ubuntu:
+**Requirements:** the usual Qt libraries plus `openssh-client` and `git`. On Debian/Ubuntu:
 
 ```bash
 sudo apt install libxcb-cursor0 libegl1 openssh-client git
 ```
 
-Optional vorher die Prüfsumme kontrollieren (Archiv und `SHA256SUMS` aus demselben Release im selben Ordner):
+Optionally check the checksum first (archive and `SHA256SUMS` of the same release in the same folder):
 
 ```bash
 sha256sum -c --ignore-missing SHA256SUMS
 ```
 
-**Variante A: mit Starter im Anwendungsmenü/Dash (empfohlen).** Das Skript `install.sh` liegt im Quelltext, nicht im Archiv. Es erwartet das
-entpackte Programm im Ordner `dist/` des Repositorys:
+**Option A: with a launcher in the application menu / dash (recommended).** The script `install.sh` is part of the source, not of the archive.
+It expects the unpacked program in the repository’s `dist/` folder:
 
 ```bash
 git clone https://github.com/focmb/sesam.git && cd sesam
-mkdir -p dist && tar -xzf ~/Downloads/sesam-<Version>-linux-x86_64.tar.gz -C dist
+mkdir -p dist && tar -xzf ~/Downloads/sesam-<version>-linux-x86_64.tar.gz -C dist
 ./packaging/linux/install.sh
 ```
 
-Das Programm liegt danach in `~/.local/share/sesam-app`, der Befehl `sesam` in `~/.local/bin` (bei manchen Distributionen muss der Ordner erst
-im `PATH` stehen), dazu kommen Starter und Icon. Für ein Update: im Repository `git pull`, `rm -rf dist/sesam`, das neue Archiv wie oben
-entpacken und `install.sh` erneut ausführen. Entfernen mit `./packaging/linux/install.sh --uninstall`; die Konfiguration in `~/.config/sesam` bleibt erhalten.
+Afterwards the program lives in `~/.local/share/sesam-app` and the `sesam` command in `~/.local/bin` (on some distributions the folder has to be
+added to the `PATH` first); a launcher and icon are added as well. To update: run `git pull` in the repository, `rm -rf dist/sesam`, unpack the
+new archive as above and run `install.sh` again. Remove with `./packaging/linux/install.sh --uninstall`; the configuration in `~/.config/sesam` is kept.
 
-**Variante B: nur entpacken und starten (ohne Menüeintrag).**
-
-```bash
-mkdir -p ~/opt && tar -xzf ~/Downloads/sesam-<Version>-linux-x86_64.tar.gz -C ~/opt
-~/opt/sesam/sesam                                  # starten
-ln -s ~/opt/sesam/sesam ~/.local/bin/sesam         # optional: Befehl „sesam“ im Terminal
-```
-
-Ein Update ist dasselbe noch einmal mit dem neuen Archiv (vorher `rm -rf ~/opt/sesam`). Fehlt beim Start eine Bibliothek, zeigt
-`QT_DEBUG_PLUGINS=1 ~/opt/sesam/sesam`, welche. Unter Arch Linux/Manjaro ist das Pacman-Paket aus `packaging/aur` bequemer (siehe [Programm bauen](docs/entwicklung.md#programm-bauen-linux-und-windows)).
-
-## Im Anwendungsmenü / Dash installieren (Linux)
-
-Ein Skript legt Sesam für deinen Benutzer an (ohne root): Starter im Anwendungsmenü bzw. Dash, Icon und den Befehl `sesam`.
+**Option B: just unpack and run (no menu entry).**
 
 ```bash
-./packaging/linux/install.sh --dev        # startet direkt aus dem Projektordner (.venv), immer aktueller Code
-./packaging/linux/install.sh              # oder: aus dem gebauten Programm (dist/sesam, siehe docs/entwicklung.md und „Aus dem Release-Archiv installieren“)
-./packaging/linux/install.sh --uninstall  # entfernt alles wieder; ~/.config/sesam bleibt erhalten
+mkdir -p ~/opt && tar -xzf ~/Downloads/sesam-<version>-linux-x86_64.tar.gz -C ~/opt
+~/opt/sesam/sesam                                  # run
+ln -s ~/opt/sesam/sesam ~/.local/bin/sesam         # optional: the "sesam" command in a terminal
 ```
 
-Nach Änderungen am Code genügt bei `--dev` ein Neustart von Sesam; beim gebauten Programm musst du neu bauen und das Skript erneut ausführen.
-Der Befehl `sesam` liegt in `~/.local/bin` (bei manchen Distributionen muss der Ordner erst im `PATH` stehen).
+To update, do the same again with the new archive (run `rm -rf ~/opt/sesam` first). If a library is missing at startup,
+`QT_DEBUG_PLUGINS=1 ~/opt/sesam/sesam` shows which one. On Arch Linux/Manjaro the pacman package from `packaging/aur` is more convenient (see [Building the program](docs/en/entwicklung.md#building-the-program-linux-and-windows)).
+
+## Installing in the application menu / dash (Linux)
+
+A script sets Sesam up for your user (no root needed): launcher in the application menu or dash, icon, and the `sesam` command.
+
+```bash
+./packaging/linux/install.sh --dev        # runs directly from the project folder (.venv), always current code
+./packaging/linux/install.sh              # or: from the built program (dist/sesam, see docs/en/entwicklung.md and “Installing from the release archive”)
+./packaging/linux/install.sh --uninstall  # removes everything again; ~/.config/sesam is kept
+```
+
+After code changes, `--dev` only needs a restart of Sesam; with the built program you have to rebuild and run the script again.
+The `sesam` command lives in `~/.local/bin` (on some distributions the folder must first be added to your `PATH`).
 
 ## Screenshots
 
-![Hauptfenster (hell)](docs/screenshots/hauptfenster-hell.png)
+The screenshots show the German interface; the English interface looks the same apart from the texts.
 
+![Main window (light)](docs/screenshots/hauptfenster-hell.png)
 
-| Dunkel                                                             | Verbindung bearbeiten                                                           |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| ![Hauptfenster (dunkel)](docs/screenshots/hauptfenster-dunkel.png) | ![Dialog „Verbindung bearbeiten“](docs/screenshots/verbindung-bearbeiten.png) |
+| Dark | Edit connection |
+| --- | --- |
+| ![Main window (dark)](docs/screenshots/hauptfenster-dunkel.png) | ![“Edit connection” dialog](docs/screenshots/verbindung-bearbeiten.png) |
 
+| File browser (SFTP, light) | File browser (SFTP, dark) |
+| --- | --- |
+| ![File browser (light)](docs/screenshots/dateibrowser-hell.png) | ![File browser (dark)](docs/screenshots/dateibrowser-dunkel.png) |
 
-| Dateibrowser (SFTP, hell)                                      | Dateibrowser (SFTP, dunkel)                                        |
-| -------------------------------------------------------------- | ------------------------------------------------------------------ |
-| ![Dateibrowser (hell)](docs/screenshots/dateibrowser-hell.png) | ![Dateibrowser (dunkel)](docs/screenshots/dateibrowser-dunkel.png) |
+| Snippets (light) | Snippets (dark) |
+| --- | --- |
+| ![Snippets (light)](docs/screenshots/snippets-hell.png) | ![Snippets (dark)](docs/screenshots/snippets-dunkel.png) |
 
+| Integrated terminal with tiles (light) | Integrated terminal with tiles (dark) |
+| --- | --- |
+| ![Tiles (light)](docs/screenshots/terminal-kacheln-hell.png) | ![Tiles (dark)](docs/screenshots/terminal-kacheln-dunkel.png) |
 
-| Snippets (hell)                                        | Snippets (dunkel)                                          |
-| ------------------------------------------------------ | ---------------------------------------------------------- |
-| ![Snippets (hell)](docs/screenshots/snippets-hell.png) | ![Snippets (dunkel)](docs/screenshots/snippets-dunkel.png) |
+| Tabs in the connection's color (light) | Tabs in the connection's color (dark) |
+| --- | --- |
+| ![Colored tabs (light)](docs/screenshots/terminal-reiter-hell.png) | ![Colored tabs (dark)](docs/screenshots/terminal-reiter-dunkel.png) |
 
-| Integriertes Terminal mit Kacheln (hell) | Integriertes Terminal mit Kacheln (dunkel) |
-| ---------------------------------------- | ------------------------------------------ |
-| ![Kacheln (hell)](docs/screenshots/terminal-kacheln-hell.png) | ![Kacheln (dunkel)](docs/screenshots/terminal-kacheln-dunkel.png) |
+| “Send input to all tiles” (red border) | Settings |
+| --- | --- |
+| ![Input to all tiles](docs/screenshots/terminal-eingabe-an-alle.png) | ![Settings](docs/screenshots/einstellungen.png) |
 
-| Reiter in der Farbe der Verbindung (hell) | Reiter in der Farbe der Verbindung (dunkel) |
-| ----------------------------------------- | ------------------------------------------- |
-| ![Farbige Reiter (hell)](docs/screenshots/terminal-reiter-hell.png) | ![Farbige Reiter (dunkel)](docs/screenshots/terminal-reiter-dunkel.png) |
+The images show sample data (made-up hosts) and were created with the Qt platform plugin “offscreen”; real windows may differ in frame and font depending on the desktop.
 
-| „Eingabe an alle Kacheln senden“ (roter Rand) | Einstellungen |
-| --------------------------------------------- | ------------- |
-| ![Eingabe an alle Kacheln](docs/screenshots/terminal-eingabe-an-alle.png) | ![Einstellungen](docs/screenshots/einstellungen.png) |
+## Documentation
 
-Die Bilder zeigen Beispieldaten (erfundene Hosts) und wurden mit dem Qt-Plattform-Plugin „offscreen“ erzeugt; echte Fenster können je nach Desktop in Rahmen und Schrift abweichen.
+The detailed guide is in the [`docs/en/`](docs/en/) folder:
 
-## Dokumentation
-
-Die ausführliche Anleitung steht im Ordner [`docs/`](docs/):
-
-
-| Seite                                                       | Inhalt                                                                                   |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [Verbindungen verwalten](docs/verbindungen.md)              | Darstellung, Gruppen, Favoriten und Schnellstarter, Farben und Tags, offene Verbindungen |
-| [Zugangsdaten und sudo](docs/zugangsdaten.md)               | Identitäten, SSH-Schlüssel, sudo, Passwörter                                          |
-| [Terminals und Snippets](docs/terminals-snippets.md)        | Terminals konfigurieren, integriertes Terminal mit Kacheln, Zwischenablage-Verlauf, Verbindungsfehler und Host-Schlüssel, Snippets |
-| [Dateien und Tunnel](docs/dateien-tunnel.md)                | SFTP-Dateibrowser, Port-Weiterleitungen                                                  |
-| [Fernzugriff (VNC und RDP)](docs/fernzugriff.md)            | Eingebauter VNC-Viewer, externe Viewer, Tunnel und Direktverbindung, Passwort            |
-| [Docker, Proxmox, Cisco und WireGuard](docs/geraete.md)     | Container, Gäste, Switch-Ports, WireGuard-Anzeige                                       |
-| [Synchronisation und Daten](docs/synchronisation.md)        | Abgleich über Git, Speicherort der Daten                                                |
-| [Entwicklung: Bauen, Builds und Tests](docs/entwicklung.md) | Programm bauen, automatische Builds, Tests                                               |
-| [Release-Ablauf](docs/release.md)                           | Von der Codeänderung zum installierten Paket (Manjaro)                                  |
+| Page | Contents |
+|---|---|
+| [Managing connections](docs/en/verbindungen.md) | Appearance, groups, favorites and quick launcher, colors and tags, open connections |
+| [Credentials and sudo](docs/en/zugangsdaten.md) | Identities, SSH keys, sudo, passwords |
+| [Terminals and snippets](docs/en/terminals-snippets.md) | Configuring terminals, integrated terminal with tiles, clipboard history, connection errors and host keys, snippets |
+| [Files and tunnels](docs/en/dateien-tunnel.md) | SFTP file browser, port forwarding |
+| [Remote access (VNC and RDP)](docs/en/fernzugriff.md) | Built-in VNC viewer, external viewers, tunnel and direct connection, password |
+| [Docker, Proxmox, Cisco and WireGuard](docs/en/geraete.md) | Containers, guests, switch ports, WireGuard indicator |
+| [Synchronization and data](docs/en/synchronisation.md) | Syncing via Git, where the data lives |
+| [Development: building, builds and tests](docs/en/entwicklung.md) | Building the program, automatic builds, tests |
+| [Release process](docs/release.md) (German) | From a code change to the installed package (Manjaro) |

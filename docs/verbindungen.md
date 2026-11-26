@@ -1,6 +1,6 @@
 # Verbindungen verwalten
 
-← [Zur README](../README.md) · *[English version](en/verbindungen.md)*
+← [Zur README](../README.de.md) · *[English version](en/verbindungen.md)*
 
 ## Darstellung
 

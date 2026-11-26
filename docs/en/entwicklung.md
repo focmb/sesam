@@ -1,6 +1,6 @@
 # Development: building, builds and tests
 
-← [Back to the README](../../README.en.md) · *[Deutsche Fassung](../entwicklung.md)*
+← [Back to the README](../../README.md) · *[Deutsche Fassung](../entwicklung.md)*
 
 ## Building the program (Linux and Windows)
 

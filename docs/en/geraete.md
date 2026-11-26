@@ -1,6 +1,6 @@
 # Docker, Proxmox, Cisco and WireGuard
 
-← [Back to the README](../../README.en.md) · *[Deutsche Fassung](../geraete.md)*
+← [Back to the README](../../README.md) · *[Deutsche Fassung](../geraete.md)*
 
 ## Docker containers
 

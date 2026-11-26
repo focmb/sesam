@@ -1,6 +1,6 @@
 # Remote access (VNC and RDP)
 
-← [Back to the README](../../README.en.md) · *[Deutsche Fassung](../fernzugriff.md)*
+← [Back to the README](../../README.md) · *[Deutsche Fassung](../fernzugriff.md)*
 
 Sesam can also open a device's screen: for **VNC** it includes a **built-in viewer**, and it can start the **VNC or RDP viewer of your choice** (for example Remmina,
 TigerVNC, FreeRDP or `mstsc`). If you want, it routes the session through an SSH tunnel. **RDP** needs an external program: Sesam does not include an RDP viewer of its own.

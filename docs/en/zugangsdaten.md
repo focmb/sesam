@@ -1,6 +1,6 @@
 # Credentials and sudo
 
-← [Back to the README](../../README.en.md) · *[Deutsche Fassung](../zugangsdaten.md)*
+← [Back to the README](../../README.md) · *[Deutsche Fassung](../zugangsdaten.md)*
 
 ## Identities
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aktualisiert das Inhaltsverzeichnis in README.md und README.en.md.
+"""Aktualisiert das Inhaltsverzeichnis in README.de.md und README.md.
 
 Das Verzeichnis wird aus den ``##``-Überschriften erzeugt (Codeblöcke werden
 ignoriert) und vor dem ersten Abschnitt eingefügt. Ein vorhandenes
@@ -14,8 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # Datei -> (Titel des Verzeichnisses)
 FILES = {
-    "README.md": "Inhaltsverzeichnis",
-    "README.en.md": "Table of contents",
+    "README.de.md": "Inhaltsverzeichnis",
+    "README.md": "Table of contents",
 }
 
 
