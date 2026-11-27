@@ -14,7 +14,7 @@ class SettingsDialog(QDialog):
                  wireguard: bool = False, set_wireguard=None, toasts: bool = False, set_toasts=None,
                  favorites: bool = True, set_favorites=None, tab_colors: bool = False, set_tab_colors=None,
                  theme_mode: str = "system", set_theme=None, terminal_scheme: bool = True, set_terminal_scheme=None,
-                 open_terminals=None, open_viewers=None, open_sync=None):
+                 open_terminals=None, open_viewers=None, open_sync=None, open_schemes=None, get_theme=None):
         super().__init__(parent)
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(420)
@@ -50,18 +50,25 @@ class SettingsDialog(QDialog):
         self.restart_hint.setVisible(False)
 
         # Farbschema: „Systemvorgabe“ folgt dem Betriebssystem, die beiden Sesam-Schemas heißen weiter hell/dunkel (Config.theme)
+        self._open_schemes = open_schemes
+        self._get_theme = get_theme
         self.scheme_box = QComboBox()
-        self.scheme_box.addItem(tr("Systemvorgabe"), "system")
-        for index, scheme in enumerate(schemes.BUILTIN):
-            if index == 2:
-                self.scheme_box.insertSeparator(self.scheme_box.count())
-            self.scheme_box.addItem(tr(scheme.name), schemes.mode_for(scheme))
-        self.scheme_box.setCurrentIndex(max(0, self.scheme_box.findData(theme_mode)))
+        self._fill_schemes(theme_mode)
         self.scheme_box.setToolTip(tr("Farben der Oberfläche und des integrierten Terminals. „Systemvorgabe“ folgt dem Hell/Dunkel-Wechsel des Betriebssystems."))
         if set_theme is not None:
             self.scheme_box.currentIndexChanged.connect(lambda *_: set_theme(self.scheme_box.currentData()))
         else:
             self.scheme_box.setEnabled(False)
+        self.schemes_button = QPushButton(tr("Verwalten …"))
+        self.schemes_button.setAutoDefault(False)
+        self.schemes_button.setToolTip(tr("Eigene Farbschemas anlegen, bearbeiten, importieren und exportieren"))
+        if open_schemes is not None:
+            self.schemes_button.clicked.connect(self._manage_schemes)
+        else:
+            self.schemes_button.setEnabled(False)
+        scheme_row = QHBoxLayout()
+        scheme_row.addWidget(self.scheme_box, 1)
+        scheme_row.addWidget(self.schemes_button, 0)
 
         self.terminal_scheme_box = QCheckBox(tr("Farbschema im Terminal verwenden"))
         self.terminal_scheme_box.setToolTip(tr("Das integrierte Terminal übernimmt die Farben des gewählten Farbschemas. Ausgeschaltet behält es die Standardfarben von Sesam (hell oder dunkel)."))
@@ -121,7 +128,7 @@ class SettingsDialog(QDialog):
         form.setVerticalSpacing(10)
         form.addRow(tr("Schriftgröße"), size_row)
         form.addRow(tr("Sprache"), self.language_box)
-        form.addRow(tr("Farbschema"), self.scheme_box)
+        form.addRow(tr("Farbschema"), scheme_row)
         form.addRow(tr("Terminal"), self.terminal_scheme_box)
         form.addRow(tr("WireGuard"), self.wireguard_box)
         form.addRow(tr("Meldungen"), self.toasts_box)
@@ -141,6 +148,31 @@ class SettingsDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(self.restart_hint)
         layout.addWidget(buttons)
+
+    def _fill_schemes(self, mode: str) -> None:
+        """Füllt die Liste (Systemvorgabe, mitgelieferte, dann eigene Schemas) und wählt ``mode``, ohne ``set_theme`` auszulösen."""
+        box = self.scheme_box
+        blocked = box.blockSignals(True)
+        try:
+            box.clear()
+            box.addItem(tr("Systemvorgabe"), "system")
+            for index, scheme in enumerate(schemes.BUILTIN):
+                if index == 2:
+                    box.insertSeparator(box.count())
+                box.addItem(tr(scheme.name), schemes.mode_for(scheme))
+            custom = schemes.custom()
+            if custom:
+                box.insertSeparator(box.count())
+            for scheme in custom:
+                box.addItem(scheme.name, schemes.mode_for(scheme))
+            box.setCurrentIndex(max(0, box.findData(mode)))
+        finally:
+            box.blockSignals(blocked)
+
+    def _manage_schemes(self):
+        self._open_schemes(self)
+        mode = self._get_theme() if self._get_theme is not None else self.scheme_box.currentData()
+        self._fill_schemes(mode)
 
     def _language_changed(self, *_):
         code = self.language_box.currentData()

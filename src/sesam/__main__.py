@@ -75,7 +75,7 @@ def main() -> int:
 
     from PySide6.QtWidgets import QApplication
 
-    from . import migration, storage
+    from . import migration, schemes, storage
     from .gui import safe, style, theme
     from .gui.main_window import MainWindow
 
@@ -93,6 +93,7 @@ def main() -> int:
     if cfg is None:
         return 1
     i18n.set_language(cfg.language)
+    schemes.set_custom([c.to_scheme() for c in cfg.color_schemes])  # vor dem Anwenden: das Farbschema kann ein eigenes sein
     theme.set_terminal_follow(cfg.terminal_scheme)
     theme.apply(app, cfg.theme)
     theme.apply_scale(app, cfg.font_scale)

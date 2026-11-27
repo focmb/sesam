@@ -20,6 +20,12 @@ SRC = Path(__file__).resolve().parent.parent / "src" / "sesam"
 SAME_IN_ENGLISH = {"Name*", "Host*", "Port", "Jump-Host", "Docker", "Proxmox", "Cisco", "root", "VM", "Tags", "Terminal", "Shell", "Branch", "Orange", "Monokai", "Dracula", "Nord", "One Dark", "Tokyo Night"}
 
 
+def _dialog_labels() -> list[str]:
+    from sesam.gui import schemes_dialog as sd
+
+    return [*sd.UI_LABELS.values(), *sd.TERMINAL_LABELS.values(), *sd.ANSI_NAMES]
+
+
 def _fields(text: str) -> set[str]:
     return {name for _, name, _, _ in string.Formatter().parse(text) if name}
 
@@ -103,7 +109,7 @@ class CatalogTests(unittest.TestCase):
         used = set(_literal_keys())
         used |= {sync_dialog.HELP, terminals_dialog.HELP, viewers_dialog.HELP, *snippets_dialog.AFTER_LABELS.values(), *main_window.MainWindow.THEME_TIPS.values(),
                  *(name for name, _ in colors.PALETTE.values()), "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values(),
-                 *(s.name for s in schemes.BUILTIN)}
+                 *(s.name for s in schemes.BUILTIN), *_dialog_labels()}
         self.assertEqual([k for k in EN if k not in used], [])
 
     def test_texts_assembled_from_constants_are_translated(self):
@@ -112,7 +118,7 @@ class CatalogTests(unittest.TestCase):
 
         constants = [sync_dialog.HELP, terminals_dialog.HELP, viewers_dialog.HELP, *snippets_dialog.AFTER_LABELS.values(),
                      *main_window.MainWindow.THEME_TIPS.values(), *(name for name, _ in colors.PALETTE.values()),
-                     "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values(), *(s.name for s in schemes.BUILTIN)]
+                     "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values(), *(s.name for s in schemes.BUILTIN), *_dialog_labels()]
         self.assertEqual([c for c in constants if c not in EN and c not in SAME_IN_ENGLISH], [])
 
     def test_english_has_no_german_leftovers(self):

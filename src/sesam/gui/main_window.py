@@ -30,6 +30,7 @@ from .docker_dialog import DockerConnectDialog
 from .hostkey import HostKeyAsker
 from .identities_dialog import IdentitiesDialog
 from .keys_dialog import KeysDialog
+from .schemes_dialog import SchemesDialog
 from .settings_dialog import SettingsDialog
 from .quick_dialog import QuickLauncher
 from .snippets_dialog import SnippetsDialog
@@ -244,6 +245,7 @@ class MainWindow(QMainWindow):
         launcher.set_embedded_opener(self._open_embedded)
         self._init_clipboard()
 
+        schemes.set_custom([c.to_scheme() for c in self.cfg.color_schemes])
         self.sync = SyncController(self.cfg, lambda: storage.save(self.cfg, self.path), self, resolver=self._ask_sync_conflicts)
         self.sync.status.connect(self._sync_status)
         self.sync.cfg_changed.connect(self._sync_changed_config)
@@ -2507,6 +2509,7 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _sync_finished(self, report, error, manual: bool):
+        self._refresh_schemes()  # ein Abgleich kann eigene Farbschemas geändert haben
         if error and manual:
             QMessageBox.warning(self, tr("Synchronisation fehlgeschlagen"), str(error))
 
@@ -2612,8 +2615,26 @@ class MainWindow(QMainWindow):
                              tab_colors=self.cfg.tab_colors, set_tab_colors=self.set_tab_colors,
                              theme_mode=self.cfg.theme, set_theme=self.set_theme,
                              terminal_scheme=self.cfg.terminal_scheme, set_terminal_scheme=self.set_terminal_scheme,
-                             open_terminals=self.edit_terminals, open_viewers=self.edit_viewers, open_sync=self.edit_sync)
+                             open_terminals=self.edit_terminals, open_viewers=self.edit_viewers, open_sync=self.edit_sync,
+                             open_schemes=self.edit_schemes, get_theme=lambda: self.cfg.theme)
         dlg.exec()
+
+    def edit_schemes(self, parent=None):
+        """Eigene Farbschemas verwalten (Live-Vorschau in der ganzen Oberfläche; „Abbrechen“ stellt alles wieder her)."""
+        selected = self.cfg.theme[len(schemes.PREFIX):] if self.cfg.theme.startswith(schemes.PREFIX) else ""
+        dlg = SchemesDialog(self.cfg, self._save, self.set_theme, selected, parent or self)
+        dlg.exec()
+        self._refresh_schemes()
+
+    def _refresh_schemes(self):
+        """Register der eigenen Schemas an die Konfiguration angleichen (nach dem Editor und nach einem Abgleich) und anwenden."""
+        new = [c.to_scheme() for c in self.cfg.color_schemes]
+        changed = {s.id: s for s in schemes.custom()} != {s.id: s for s in new}
+        schemes.set_custom(new)
+        app = QApplication.instance()
+        if changed and app is not None and self.cfg.theme.startswith(schemes.PREFIX):
+            theme.apply(app, self.cfg.theme)
+        self._sync_theme_checks()
 
     def set_theme(self, mode: str):
         """Darstellung oder Farbschema wechseln (``system``, ``light``, ``dark`` oder ``scheme:<id>``); wirkt sofort."""
