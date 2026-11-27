@@ -93,6 +93,7 @@ def main() -> int:
     if cfg is None:
         return 1
     i18n.set_language(cfg.language)
+    theme.set_terminal_follow(cfg.terminal_scheme)
     theme.apply(app, cfg.theme)
     theme.apply_scale(app, cfg.font_scale)
     window = MainWindow(cfg, path)

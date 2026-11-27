@@ -10,7 +10,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QMenu, QWidget
 
-from .. import crashlog, pty_session
+from .. import crashlog, pty_session, schemes
 from ..i18n import tr
 
 try:
@@ -34,18 +34,7 @@ MOUSE_SGR = 1006 << 5  # Koordinaten im SGR-Format statt im klassischen X10-Form
 MOUSE_MODES = (MOUSE_CLICKS, MOUSE_DRAG, MOUSE_ANY)
 
 _ANSI = ("black", "red", "green", "brown", "blue", "magenta", "cyan", "white")
-SCHEMES = {
-    "dark": {
-        "bg": "#1b1d23", "fg": "#d5d8df", "cursor": "#e8a317", "selection": "#3b4a6b",
-        "ansi": ["#2b2e37", "#e06c75", "#8fc07a", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#abb2bf",
-                 "#5c6370", "#ff7b86", "#a6d98f", "#f0d28a", "#7cc0ff", "#d78cf0", "#6fd0dc", "#ffffff"],
-    },
-    "light": {
-        "bg": "#fbfbfc", "fg": "#2b2f36", "cursor": "#b8780a", "selection": "#bcd3f5",
-        "ansi": ["#2b2f36", "#c4332f", "#2e7d32", "#9a6700", "#1f5fbf", "#8e3bb0", "#0e7c86", "#7b8190",
-                 "#5c6370", "#e5484d", "#3d9a42", "#b8860b", "#3b82e0", "#a855c9", "#1596a2", "#4b5060"],
-    },
-}
+SCHEMES = {"dark": schemes.SESAM_DARK.terminal, "light": schemes.SESAM_LIGHT.terminal}  # Standardfarben ohne Farbschema
 
 
 def available() -> bool:
@@ -187,11 +176,11 @@ class TerminalView(QWidget):
 
     _dragged: "TerminalView | None" = None  # die Kachel, die gerade gezogen wird
 
-    def __init__(self, title: str, scale: int = 100, dark: bool = True, parent=None):
+    def __init__(self, title: str, scale: int = 100, dark: bool = True, parent=None, scheme: dict | None = None):
         super().__init__(parent)
         self.title = title
         self.color_key = ""  # Farbschlüssel der Verbindung (sesam.colors), leer = keine Farbe
-        self._scheme = SCHEMES["dark" if dark else "light"]
+        self._scheme = scheme or SCHEMES["dark" if dark else "light"]  # Terminalfarben (bg, fg, cursor, selection, ansi)
         self._scale = scale
         self._zoom = 0
         self._cols, self._rows = 80, 24
@@ -332,8 +321,9 @@ class TerminalView(QWidget):
         self._fit()
         self.update()
 
-    def set_dark(self, dark: bool):
-        self._scheme = SCHEMES["dark" if dark else "light"]
+    def set_dark(self, dark: bool, scheme: dict | None = None):
+        """Wechselt die Terminalfarben: ``scheme`` (aus einem Farbschema) oder die Standardfarben für hell/dunkel."""
+        self._scheme = scheme or SCHEMES["dark" if dark else "light"]
         self.update()
 
     def _fit(self):

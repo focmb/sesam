@@ -17,7 +17,7 @@ from sesam.translations_en import EN
 
 SRC = Path(__file__).resolve().parent.parent / "src" / "sesam"
 # im Englischen gleich geschrieben: bewusst nicht im Katalog
-SAME_IN_ENGLISH = {"Name*", "Host*", "Port", "Jump-Host", "Docker", "Proxmox", "Cisco", "root", "VM", "Tags", "Terminal", "Shell", "Branch", "Orange"}
+SAME_IN_ENGLISH = {"Name*", "Host*", "Port", "Jump-Host", "Docker", "Proxmox", "Cisco", "root", "VM", "Tags", "Terminal", "Shell", "Branch", "Orange", "Monokai", "Dracula", "Nord", "One Dark", "Tokyo Night"}
 
 
 def _fields(text: str) -> set[str]:
@@ -98,21 +98,22 @@ class CatalogTests(unittest.TestCase):
 
     def test_no_unused_entries(self):
         from sesam.gui import sync_dialog, terminals_dialog, snippets_dialog, main_window, quick_dialog, viewers_dialog
-        from sesam import colors
+        from sesam import colors, schemes
 
         used = set(_literal_keys())
         used |= {sync_dialog.HELP, terminals_dialog.HELP, viewers_dialog.HELP, *snippets_dialog.AFTER_LABELS.values(), *main_window.MainWindow.THEME_TIPS.values(),
-                 *(name for name, _ in colors.PALETTE.values()), "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values()}
+                 *(name for name, _ in colors.PALETTE.values()), "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values(),
+                 *(s.name for s in schemes.BUILTIN)}
         self.assertEqual([k for k in EN if k not in used], [])
 
     def test_texts_assembled_from_constants_are_translated(self):
-        from sesam import colors
+        from sesam import colors, schemes
         from sesam.gui import main_window, quick_dialog, snippets_dialog, sync_dialog, terminals_dialog, viewers_dialog
 
         constants = [sync_dialog.HELP, terminals_dialog.HELP, viewers_dialog.HELP, *snippets_dialog.AFTER_LABELS.values(),
                      *main_window.MainWindow.THEME_TIPS.values(), *(name for name, _ in colors.PALETTE.values()),
-                     "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values()]
-        self.assertEqual([c for c in constants if c not in EN], [])
+                     "Eingabeaufforderung (cmd)", *quick_dialog.SECTION_TITLES.values(), *(s.name for s in schemes.BUILTIN)]
+        self.assertEqual([c for c in constants if c not in EN and c not in SAME_IN_ENGLISH], [])
 
     def test_english_has_no_german_leftovers(self):
         umlauts = re.compile(r"[äöüÄÖÜß]")

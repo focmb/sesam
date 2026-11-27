@@ -209,7 +209,8 @@ def settings_dialog(cfg, conns, out: Path) -> None:
 
     nothing = lambda *_: None  # noqa: E731
     d = SettingsDialog(100, "de", nothing, nothing, wireguard=True, set_wireguard=nothing, toasts=True, set_toasts=nothing,
-                       favorites=True, set_favorites=nothing, tab_colors=True, set_tab_colors=nothing, open_terminals=nothing, open_viewers=nothing, open_sync=nothing)
+                       favorites=True, set_favorites=nothing, tab_colors=True, set_tab_colors=nothing,
+                       theme_mode="light", set_theme=nothing, terminal_scheme=True, set_terminal_scheme=nothing, open_terminals=nothing, open_viewers=nothing, open_sync=nothing)
     d.adjustSize()
     grab(d, out / "einstellungen.png")
     d.close()

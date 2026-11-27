@@ -400,6 +400,15 @@ EN: dict[str, str] = {
     "Schriftgröße der ganzen Oberfläche (Strg + Plus/Minus, Strg + 0 setzt auf 100 % zurück)":
         "Font size of the whole interface (Ctrl + Plus/Minus, Ctrl + 0 resets to 100 %)",
     "Systemvorgabe": "System default",
+    "Farbschema": "Color scheme",
+    "Farbschema im Terminal verwenden": "Use the color scheme in the terminal",
+    "Farben der Oberfläche und des integrierten Terminals. „Systemvorgabe“ folgt dem Hell/Dunkel-Wechsel des Betriebssystems.": "Colors of the interface and the built-in terminal. “System default” follows the operating system's light/dark setting.",
+    "Das integrierte Terminal übernimmt die Farben des gewählten Farbschemas. Ausgeschaltet behält es die Standardfarben von Sesam (hell oder dunkel).": "The built-in terminal uses the colors of the selected color scheme. When off, it keeps Sesam's default colors (light or dark).",
+    "Sesam hell": "Sesam light",
+    "Sesam dunkel": "Sesam dark",
+    "Solarized hell": "Solarized light",
+    "Solarized dunkel": "Solarized dark",
+    "Gruvbox dunkel": "Gruvbox dark",
     "Die Sprache wird beim nächsten Start von Sesam übernommen.":
         "The language will be applied the next time Sesam starts.",
     "Schriftgröße": "Font size",

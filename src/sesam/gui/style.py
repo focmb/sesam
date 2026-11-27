@@ -8,56 +8,12 @@ from PySide6.QtCore import QByteArray, QRectF, QStandardPaths, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-# Alle Farben an einer Stelle; das Stylesheet und die Palette werden daraus erzeugt.
+from .. import schemes
+
+# Die Farben liegen in sesam.schemes (Sesam hell/dunkel und weitere Schemas); das Stylesheet und die Palette werden daraus erzeugt.
 TOKENS: dict[str, dict[str, str]] = {
-    "light": {
-        "bg": "#f4f5f8",
-        "surface": "#ffffff",
-        "surface_alt": "#f0f2f6",
-        "border": "#dde1e8",
-        "text": "#1d2230",
-        "muted": "#667085",
-        "accent": "#3a6cf0",
-        "accent_hover": "#2f5bd6",
-        "accent_text": "#ffffff",
-        "accent_soft": "rgba(58, 108, 240, 0.14)",
-        "badge_rdp": "#7a3fd1",
-        "sel": "#e3eafd",
-        "row_hover": "#f0f0f1",
-        "hover": "rgba(29, 34, 48, 0.07)",
-        "pressed": "rgba(29, 34, 48, 0.13)",
-        "danger": "#d92d20",
-        "ok": "#166534",
-        "ok_bg": "#e3f5e9",
-        "ok_border": "#a7dcb7",
-        "warn": "#92400e",
-        "warn_bg": "#fdf2d6",
-        "warn_border": "#e8c777",
-    },
-    "dark": {
-        "bg": "#1a1c22",
-        "surface": "#22252d",
-        "surface_alt": "#292d36",
-        "border": "#343944",
-        "text": "#e7e9ef",
-        "muted": "#9aa1b1",
-        "accent": "#5b8cff",
-        "accent_hover": "#76a0ff",
-        "accent_text": "#0f1420",
-        "accent_soft": "rgba(91, 140, 255, 0.22)",
-        "badge_rdp": "#b995f5",
-        "sel": "#2f3c5b",
-        "row_hover": "#32343c",
-        "hover": "rgba(255, 255, 255, 0.07)",
-        "pressed": "rgba(255, 255, 255, 0.12)",
-        "danger": "#f97066",
-        "ok": "#4ade80",
-        "ok_bg": "rgba(74, 222, 128, 0.12)",
-        "ok_border": "rgba(74, 222, 128, 0.45)",
-        "warn": "#fbbf24",
-        "warn_bg": "rgba(251, 191, 36, 0.12)",
-        "warn_border": "rgba(251, 191, 36, 0.45)",
-    },
+    "light": schemes.tokens(schemes.SESAM_LIGHT),
+    "dark": schemes.tokens(schemes.SESAM_DARK),
 }
 
 

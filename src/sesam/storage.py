@@ -8,6 +8,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
+from . import schemes
 from .i18n import normalize as _normalize_language
 from .i18n import tr
 from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal, Viewer
@@ -166,7 +167,8 @@ def _from_data(data: dict) -> Config:
         # reiner Anzeigezustand: ein beschädigter Wert darf den Start nie verhindern
         collapsed_groups=[g for g in data["collapsed_groups"] if isinstance(g, str)] if isinstance(data.get("collapsed_groups"), list) else [],
         sync=SyncSettings.from_dict(data.get("sync", {})),
-        theme=data.get("theme", "system") if data.get("theme") in ("system", "light", "dark") else "system",
+        theme=schemes.normalize_mode(data.get("theme")),
+        terminal_scheme=data.get("terminal_scheme") is not False,  # ohne gültigen Wert (auch alte Konfiguration): an
         language=_normalize_language(data.get("language")),
         font_scale=_font_scale(data.get("font_scale")),
         wireguard=data.get("wireguard") is True,

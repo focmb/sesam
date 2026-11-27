@@ -325,7 +325,8 @@ class Config:
     default_viewer_id: str = ""  # Standard-Viewer für VNC
     default_rdp_viewer_id: str = ""  # Standard-Viewer für RDP
     sync: SyncSettings = field(default_factory=SyncSettings)
-    theme: str = "system"  # "system", "light" oder "dark"
+    theme: str = "system"  # "system", "light", "dark" oder "scheme:<id>" (ein Farbschema aus sesam.schemes; nur lokal, wird nicht synchronisiert)
+    terminal_scheme: bool = True  # das integrierte Terminal übernimmt die Farben des Farbschemas (nur lokal, wird nicht synchronisiert)
     language: str = "system"  # Oberflächensprache: "system", "de" oder "en" (nur lokal, wird nicht synchronisiert)
     font_scale: int = 100  # Schriftgröße der Oberfläche in Prozent (nur lokal, wird nicht synchronisiert)
     wireguard: bool = False  # WireGuard-Anzeige in der Statuszeile; aus = gar nicht abfragen und nicht anzeigen (nur lokal, wird nicht synchronisiert)

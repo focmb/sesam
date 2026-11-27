@@ -19,6 +19,7 @@ from ..i18n import tr
 from .. import groups as grp
 from . import safe, style, theme, type_badges
 from ..clipboard_history import History as ClipboardHistory
+from .. import schemes
 from .. import colors, crashlog, quick, docker, duplicates, cisco, launcher, localshell, osinfo, passwords, proxmox, runtime, sftp, snippets, remote, storage, tunnels, wireguard
 from .. import tags as tag_util
 from ..models import COLUMN_KEYS, Config, Connection, Terminal, new_id
@@ -454,7 +455,7 @@ class MainWindow(QMainWindow):
 
     def _theme_changed(self):
         for view in self._terminal_views():
-            view.set_dark(theme.is_dark())
+            view.set_dark(theme.is_dark(), theme.terminal_colors())
         self._fit_to_font()
         QTimer.singleShot(0, self._fit_to_font)  # Qt reicht die neue Schrift erst danach an alle Widgets weiter
         self._refresh_icons()
@@ -673,7 +674,7 @@ class MainWindow(QMainWindow):
         """Wird vom Launcher gerufen, wenn das gewählte Terminal das integrierte ist: öffnet einen Reiter oder eine Kachel."""
         if not terminal_available():
             raise launcher.LaunchError(tr("Das Paket „pyte“ ist nicht installiert (pip install pyte)."))
-        view = TerminalView(title, theme.scale(), theme.is_dark())
+        view = TerminalView(title, theme.scale(), theme.is_dark(), scheme=theme.terminal_colors())
         view.color_key = color  # Farbschlüssel der Verbindung (sesam.colors), für die Reiterfarbe
         view.closed.connect(lambda _code, v=view: self._terminal_closed(v))
         view.copied.connect(lambda text, v=view: self._terminal_copied(text, v.title))
@@ -2609,14 +2610,24 @@ class MainWindow(QMainWindow):
                              toasts=self.cfg.toasts, set_toasts=self.set_toasts,
                              favorites=self.cfg.favorites, set_favorites=self.set_favorites,
                              tab_colors=self.cfg.tab_colors, set_tab_colors=self.set_tab_colors,
+                             theme_mode=self.cfg.theme, set_theme=self.set_theme,
+                             terminal_scheme=self.cfg.terminal_scheme, set_terminal_scheme=self.set_terminal_scheme,
                              open_terminals=self.edit_terminals, open_viewers=self.edit_viewers, open_sync=self.edit_sync)
         dlg.exec()
 
     def set_theme(self, mode: str):
-        self.cfg.theme = mode
+        """Darstellung oder Farbschema wechseln (``system``, ``light``, ``dark`` oder ``scheme:<id>``); wirkt sofort."""
+        self.cfg.theme = schemes.normalize_mode(mode)
         app = QApplication.instance()
         if app is not None:
-            theme.apply(app, mode)
+            theme.apply(app, self.cfg.theme)
+        self._sync_theme_checks()
+        self._save_no_sync()
+
+    def set_terminal_scheme(self, enabled: bool):
+        """Das integrierte Terminal übernimmt die Farben des Farbschemas (wirkt sofort, nur lokal gespeichert)."""
+        self.cfg.terminal_scheme = bool(enabled)
+        theme.set_terminal_follow(self.cfg.terminal_scheme)
         self._save_no_sync()
 
     def _save_no_sync(self):

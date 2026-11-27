@@ -5,6 +5,7 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
+from .. import schemes
 from ..models import FONT_SCALE_MAX, FONT_SCALE_MIN
 from . import style
 
@@ -14,6 +15,9 @@ LABELS = {"system": "Systemvorgabe", "light": "Hell", "dark": "Dunkel"}
 _applying = False
 _mode = "system"
 _effective = "light"
+_scheme: schemes.Scheme = schemes.SESAM_LIGHT  # Farbschema der aktiven Darstellung
+_tokens: dict[str, str] = style.tokens("light")  # dessen Oberflächenwerte (einmal je Wechsel berechnet)
+_terminal_follow = True  # das Terminal übernimmt die Farben des Schemas
 _connected = False
 _scale = 100
 _base_font: QFont | None = None  # Schrift des Systems vor jeder Skalierung
@@ -39,11 +43,32 @@ def notifier() -> QObject:
 
 def colors() -> dict[str, str]:
     """Farbwerte der gerade aktiven Darstellung."""
-    return style.tokens(_effective)
+    return _tokens
 
 
 def is_dark() -> bool:
     return _effective == "dark"
+
+
+def scheme() -> schemes.Scheme:
+    """Das Farbschema der gerade aktiven Darstellung (bei Hell/Dunkel/System: „Sesam hell“ oder „Sesam dunkel“)."""
+    return _scheme
+
+
+def terminal_colors() -> dict:
+    """Farben des integrierten Terminals: die des Schemas, sonst die Standardfarben von Sesam (hell oder dunkel)."""
+    if _terminal_follow:
+        return _scheme.terminal
+    return (schemes.SESAM_DARK if _effective == "dark" else schemes.SESAM_LIGHT).terminal
+
+
+def set_terminal_follow(follow: bool) -> None:
+    """Terminal übernimmt die Farben des Farbschemas (an) oder behält die Standardfarben (aus)."""
+    global _terminal_follow
+    follow = bool(follow)
+    if follow != _terminal_follow:
+        _terminal_follow = follow
+        notifier().changed.emit()
 
 
 def system_is_dark(app) -> bool:
@@ -53,22 +78,30 @@ def system_is_dark(app) -> bool:
 
 
 def apply(app, mode: str) -> str:
-    """Wendet die Darstellung an und liefert den tatsächlich genutzten Modus („light“ oder „dark“)."""
-    global _applying, _mode, _effective, _connected
-    mode = mode if mode in MODES else "system"
+    """Wendet die Darstellung an und liefert den tatsächlich genutzten Modus („light“ oder „dark“).
+
+    ``mode``: ``system``, ``light``, ``dark`` oder ``scheme:<id>`` (ein Farbschema; unbekannte Schemas ergeben „system“).
+    """
+    global _applying, _mode, _effective, _connected, _scheme, _tokens
+    mode = schemes.normalize_mode(mode)
+    chosen = schemes.for_mode(mode)
+    if mode not in MODES and chosen is None:
+        mode = "system"
     _mode = mode
     _applying = True
     try:
         hints = app.styleHints()
-        scheme = getattr(Qt, "ColorScheme", None)
-        if scheme and hasattr(hints, "setColorScheme"):  # ab Qt 6.8: Titelleiste und native Elemente mitziehen
+        qt_scheme = getattr(Qt, "ColorScheme", None)
+        base = chosen.base if chosen is not None else mode  # ein Farbschema legt hell/dunkel fest (Titelleiste, native Elemente)
+        if qt_scheme and hasattr(hints, "setColorScheme"):  # ab Qt 6.8: Titelleiste und native Elemente mitziehen
             try:
-                hints.setColorScheme({"system": scheme.Unknown, "light": scheme.Light, "dark": scheme.Dark}[mode])
+                hints.setColorScheme({"system": qt_scheme.Unknown, "light": qt_scheme.Light, "dark": qt_scheme.Dark}[base])
             except Exception:  # noqa: BLE001
                 pass
-        dark = mode == "dark" or (mode == "system" and system_is_dark(app))
+        dark = base == "dark" or (base == "system" and system_is_dark(app))
         _effective = "dark" if dark else "light"
-        t = style.tokens(_effective)
+        _scheme = chosen or (schemes.SESAM_DARK if dark else schemes.SESAM_LIGHT)
+        t = _tokens = schemes.tokens(_scheme)
         app.setStyle("Fusion")  # überall gleich; das Stylesheet baut darauf auf
         app.setPalette(style.palette(t))
         app.setStyleSheet(style.stylesheet(t))
