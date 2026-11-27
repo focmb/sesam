@@ -588,8 +588,9 @@ class MainWindow(QMainWindow):
         self.start_list.setIconSize(QSize(18, 18))
         self.start_list.itemActivated.connect(self._start_item_activated)
         lay.addWidget(self.start_title)
+        lay.addWidget(self.start_hint)  # ohne Verbindungen direkt unter dem Titel (die Liste ist dann ausgeblendet)
         lay.addWidget(self.start_list, 1)
-        lay.addWidget(self.start_hint)
+        lay.addStretch()
         return page
 
     def _fill_start_page(self):
