@@ -19,7 +19,14 @@ otherwise you set it manually.
 *System default* (follows the operating system), *Sesam light*, *Sesam dark* or one of the well-known schemes *Monokai*, *Dracula*, *Nord*, *Solarized light/dark*, *Gruvbox dark*, *One Dark* and *Tokyo Night*.
 The choice takes effect immediately and is stored locally (it is not synchronized via Git). With *Use the color scheme in the terminal* the built-in terminal takes the scheme's colors (background, text, cursor, selection and the 16 ANSI colors);
 when off, it keeps Sesam's default colors. The *Light*, *Dark* and *Same as system* entries in the **⋯** menu remain as shortcuts.
-The schemes live in `src/sesam/schemes.py`: each consists of seven base colors for the interface plus the terminal colors; all other values (borders, hover, selection, muted text …) are derived from them and checked for sufficient contrast.
+**Custom color schemes:** *Manage …* next to the selection opens the editor. The built-in schemes (read-only) and your own are listed on the left; *New* and *Duplicate* create an editable copy.
+On the right you set the name, the base (*Light* or *Dark*, which decides the title bar and native elements), the seven interface colors, the four terminal colors and the 16 ANSI colors, each as a hex value (`#rrggbb`) or through the color dialog.
+Every change is visible in the whole interface immediately; *Cancel* restores the previous state. Below the fields Sesam warns about too little contrast between text and background (also in the terminal);
+success, warning, error and accent are made readable automatically where needed. *Use the scheme after saving* selects the edited scheme right away. If the active custom scheme is deleted, *System default* applies again.
+*Export …* writes the selected scheme as a JSON file, *Import …* reads such a file (at most 64 KiB, strict validation; the import gets a new ID and an existing name becomes “Name (2)”).
+Custom color schemes are synchronized with the Git repository (folder `schemes/`, see [Synchronization](synchronisation.md)); the *choice* of scheme stays local. Foreign formats (Windows Terminal, iTerm) are not read.
+![Editor for custom color schemes](../screenshots-en/farbschemas.png)
+The built-in schemes live in `src/sesam/schemes.py`: each consists of seven base colors for the interface plus the terminal colors; all other values (borders, hover, selection, muted text …) are derived from them and checked for sufficient contrast.
 
 **Font size:** in the *Settings* dialog (80 to 200 % of the system font), or by keyboard with **Ctrl + Plus** (larger), **Ctrl + Minus** (smaller) and **Ctrl + 0** (back to 100 %).
 Icons and toolbar grow with it. The setting applies immediately, is saved, and stays local (it is not synchronized via Git).

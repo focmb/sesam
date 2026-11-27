@@ -37,7 +37,6 @@ class ColorField(QWidget):
         self._on_change = on_change
         self._value = value
         self.swatch = QPushButton()
-        self.swatch.setFixedSize(26, 22)
         self.swatch.setAutoDefault(False)
         self.swatch.setToolTip(tr("Farbe auswählen …"))
         self.swatch.clicked.connect(self._pick)
@@ -46,6 +45,7 @@ class ColorField(QWidget):
         self.edit.setMinimumWidth(72)
         self.edit.setPlaceholderText("#rrggbb")
         self.edit.setAccessibleName(label)
+        self.swatch.setFixedSize(30, self.edit.sizeHint().height())
         self.swatch.setAccessibleName(label)
         self.edit.textEdited.connect(self._edited)
         row = QHBoxLayout(self)
@@ -164,8 +164,6 @@ class SchemesDialog(QDialog):
         holder = QWidget()
         inner = QVBoxLayout(holder)
         inner.addLayout(form)
-        inner.addWidget(self.hints)
-        inner.addWidget(self.preview)
         inner.addStretch(1)
         self.editor = QScrollArea()
         self.editor.setWidgetResizable(True)
@@ -179,9 +177,13 @@ class SchemesDialog(QDialog):
         buttons.rejected.connect(self.reject)
         self.buttons = buttons
 
+        right = QVBoxLayout()  # Hinweise und Vorschau bleiben beim Scrollen der Felder sichtbar
+        right.addWidget(self.editor, 1)
+        right.addWidget(self.hints)
+        right.addWidget(self.preview)
         body = QHBoxLayout()
         body.addLayout(left, 0)
-        body.addWidget(self.editor, 1)
+        body.addLayout(right, 1)
         layout = QVBoxLayout(self)
         layout.addLayout(body, 1)
         layout.addWidget(self.use_after)

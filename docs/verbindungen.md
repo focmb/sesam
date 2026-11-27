@@ -19,7 +19,14 @@ andernfalls stellst du es manuell ein.
 *Systemvorgabe* (folgt dem Betriebssystem), *Sesam hell*, *Sesam dunkel* oder eines der bekannten Schemas *Monokai*, *Dracula*, *Nord*, *Solarized hell/dunkel*, *Gruvbox dunkel*, *One Dark* und *Tokyo Night*.
 Die Auswahl gilt sofort und wird lokal gespeichert (wird nicht per Git synchronisiert). Mit *Farbschema im Terminal verwenden* übernimmt das integrierte Terminal die Farben des Schemas (Hintergrund, Schrift, Cursor, Auswahl und die 16 ANSI-Farben);
 ausgeschaltet behält es die Standardfarben von Sesam. Die Einträge *Hell*, *Dunkel* und *Wie das System* im Menü **⋯** bleiben als Kurzwahl bestehen.
-Die Farbschemas stehen in `src/sesam/schemes.py`: Jedes besteht aus sieben Grundfarben für die Oberfläche und den Terminalfarben, alle weiteren Werte (Rahmen, Hover, Auswahl, gedämpfter Text …) werden daraus berechnet und auf ausreichenden Kontrast geprüft.
+**Eigene Farbschemas:** *Verwalten …* neben der Auswahl öffnet den Editor. Links stehen die mitgelieferten Schemas (nur lesbar) und deine eigenen; *Neu* und *Duplizieren* legen eine bearbeitbare Kopie an.
+Rechts stellst du Name, Grundlage (*Hell* oder *Dunkel*, bestimmt Titelleiste und native Elemente), die sieben Farben der Oberfläche, die vier Terminalfarben und die 16 ANSI-Farben ein, jeweils als Hex-Wert (`#rrggbb`) oder über den Farbdialog.
+Alle Änderungen sind sofort in der ganzen Oberfläche zu sehen; *Abbrechen* stellt den vorherigen Zustand wieder her. Unter den Feldern warnt Sesam bei zu geringem Kontrast von Text und Hintergrund (auch im Terminal);
+Erfolg, Warnung, Fehler und Akzent werden bei Bedarf automatisch lesbar gemacht. *Schema nach dem Speichern verwenden* wählt das bearbeitete Schema gleich aus. Wird das aktive eigene Schema gelöscht, gilt wieder *Systemvorgabe*.
+*Exportieren …* schreibt das gewählte Schema als JSON-Datei, *Importieren …* liest eine solche Datei (höchstens 64 KiB, strenge Prüfung; der Import bekommt eine neue ID, ein schon vorhandener Name wird zu „Name (2)“).
+Eigene Farbschemas werden mit dem Git-Repository synchronisiert (Ordner `schemes/`, siehe [Synchronisation](synchronisation.md)), die *Auswahl* des Schemas bleibt lokal. Fremde Formate (Windows Terminal, iTerm) werden nicht gelesen.
+![Editor für eigene Farbschemas](screenshots/farbschemas.png)
+Die mitgelieferten Farbschemas stehen in `src/sesam/schemes.py`: Jedes besteht aus sieben Grundfarben für die Oberfläche und den Terminalfarben, alle weiteren Werte (Rahmen, Hover, Auswahl, gedämpfter Text …) werden daraus berechnet und auf ausreichenden Kontrast geprüft.
 
 **Schriftgröße:** im Dialog *Einstellungen* (80 bis 200 % der Systemschrift), oder per Tastatur **Strg + Plus** (größer), **Strg + Minus** (kleiner) und **Strg + 0** (zurück auf 100 %).
 Icons und Werkzeugzeile wachsen mit. Die Einstellung gilt sofort, wird gespeichert und bleibt lokal (wird nicht per Git synchronisiert).

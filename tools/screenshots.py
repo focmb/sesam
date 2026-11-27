@@ -33,7 +33,7 @@ from sesam.gui import style, theme  # noqa: E402
 from sesam.models import Config, Connection, Snippet, Terminal  # noqa: E402
 
 MODES = (("light", "hell"), ("dark", "dunkel"))
-PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets", "synckonflikt", "kacheln", "reiter", "einstellungen")
+PARTS = ("hauptfenster", "verbindung", "dateibrowser", "snippets", "synckonflikt", "kacheln", "reiter", "einstellungen", "farbschemas")
 
 
 def demo_config() -> tuple[Config, dict[str, Connection]]:
@@ -210,10 +210,30 @@ def settings_dialog(cfg, conns, out: Path) -> None:
     nothing = lambda *_: None  # noqa: E731
     d = SettingsDialog(100, "de", nothing, nothing, wireguard=True, set_wireguard=nothing, toasts=True, set_toasts=nothing,
                        favorites=True, set_favorites=nothing, tab_colors=True, set_tab_colors=nothing,
-                       theme_mode="light", set_theme=nothing, terminal_scheme=True, set_terminal_scheme=nothing, open_terminals=nothing, open_viewers=nothing, open_sync=nothing)
+                       theme_mode="light", set_theme=nothing, terminal_scheme=True, set_terminal_scheme=nothing, open_terminals=nothing, open_viewers=nothing, open_sync=nothing, open_schemes=nothing)
     d.adjustSize()
     grab(d, out / "einstellungen.png")
     d.close()
+
+
+def schemes_dialog(cfg, conns, out: Path) -> None:
+    """Editor für eigene Farbschemas mit einem Beispielschema (Kopie von Dracula)."""
+    from sesam import schemes
+    from sesam.gui.schemes_dialog import SchemesDialog
+    from sesam.models import ColorScheme
+
+    nothing = lambda *_: None  # noqa: E731
+    mine = ColorScheme.from_scheme(schemes.DRACULA, "Mein Dracula")
+    mine.ui["accent"] = "#ff79c6"
+    cfg.color_schemes = [mine]
+    d = SchemesDialog(cfg, nothing, nothing, mine.id)
+    d.resize(900, 800)
+    d.show()
+    QApplication.processEvents()
+    d._timer.stop()  # nur der Dialog selbst, ohne die Oberfläche umzufärben
+    grab(d, out / "farbschemas.png")
+    d.close()
+    cfg.color_schemes = []
 
 
 def connection_dialog(cfg, conns, out: Path) -> None:
@@ -322,6 +342,8 @@ def main() -> int:
                 connection_dialog(cfg, conns, out)
             if "einstellungen" in parts and mode == "light":
                 settings_dialog(cfg, conns, out)
+            if "farbschemas" in parts and mode == "light":
+                schemes_dialog(cfg, conns, out)
             if "kacheln" in parts:
                 terminal_tiles(cfg, conns, tmp, out, label)
                 if mode == "light":
