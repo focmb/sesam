@@ -8,10 +8,10 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from . import schemes
 from .i18n import normalize as _normalize_language
 from .i18n import tr
-from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal, Viewer
+from . import schemes
+from .models import COLUMN_KEYS, DEFAULT_HIDDEN_COLUMNS, FONT_SCALE_MAX, FONT_SCALE_MIN, ColorScheme, Config, Connection, Identity, SshKey, Snippet, SyncSettings, Terminal, Viewer
 from .terminals import default_terminals, ensure_integrated
 from .viewers import BUILTIN_COMMAND, BUILTIN_ID, builtin_viewer, default_viewers, is_builtin
 
@@ -154,6 +154,26 @@ def _list_width(value) -> int:
     return 0
 
 
+def _color_schemes(value) -> list[ColorScheme]:
+    """Eigene Farbschemas: Beschädigtes wird übersprungen, doppelte IDs und IDs mitgelieferter Schemas werden nicht übernommen."""
+    if not isinstance(value, list):
+        return []
+    out: list[ColorScheme] = []
+    seen = {s.id for s in schemes.BUILTIN}
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            scheme = ColorScheme.from_dict(entry)
+        except (TypeError, ValueError):
+            continue
+        if scheme.id in seen:
+            continue
+        seen.add(scheme.id)
+        out.append(scheme)
+    return out
+
+
 def _from_data(data: dict) -> Config:
     return Config(
         terminals=[Terminal.from_dict(t) for t in data.get("terminals", [])],
@@ -184,6 +204,7 @@ def _from_data(data: dict) -> Config:
         identities=[Identity.from_dict(i) for i in data.get("identities", [])],
         snippets=[Snippet.from_dict(s) for s in data.get("snippets", []) if isinstance(s, dict)] if isinstance(data.get("snippets"), list) else [],
         ssh_keys=[SshKey.from_dict(k) for k in data.get("ssh_keys", []) if isinstance(k, dict)],
+        color_schemes=_color_schemes(data.get("color_schemes")),
         version=data.get("version", 1),
     )
 

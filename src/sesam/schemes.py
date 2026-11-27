@@ -235,10 +235,27 @@ BUILTIN: tuple[Scheme, ...] = (SESAM_LIGHT, SESAM_DARK, MONOKAI, DRACULA, NORD, 
                                GRUVBOX_DARK, ONE_DARK, TOKYO_NIGHT)
 _BY_ID = {s.id: s for s in BUILTIN}
 _MODE_IDS = {"light": SESAM_LIGHT.id, "dark": SESAM_DARK.id}  # die klassischen Werte von Config.theme
+_custom: dict[str, Scheme] = {}  # eigene Schemas (aus der Konfiguration), siehe set_custom()
+NAME_MAX = 60
+
+
+def set_custom(items) -> None:
+    """Setzt die eigenen Schemas. Eine ID, die einem mitgelieferten Schema gehört, wird nicht übernommen."""
+    global _custom
+    _custom = {s.id: s for s in items if s.id not in _BY_ID}
+
+
+def custom() -> list[Scheme]:
+    return sorted(_custom.values(), key=lambda s: s.name.casefold())
+
+
+def all_schemes() -> list[Scheme]:
+    """Mitgelieferte Schemas in fester Reihenfolge, danach die eigenen nach Namen."""
+    return [*BUILTIN, *custom()]
 
 
 def by_id(scheme_id: str) -> Scheme | None:
-    return _BY_ID.get(scheme_id)
+    return _BY_ID.get(scheme_id) or _custom.get(scheme_id)
 
 
 def for_mode(mode: str) -> Scheme | None:
@@ -246,7 +263,7 @@ def for_mode(mode: str) -> Scheme | None:
     if mode in _MODE_IDS:
         return _BY_ID[_MODE_IDS[mode]]
     if isinstance(mode, str) and mode.startswith(PREFIX):
-        return _BY_ID.get(mode[len(PREFIX):])
+        return by_id(mode[len(PREFIX):])
     return None
 
 

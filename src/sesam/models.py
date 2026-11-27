@@ -4,6 +4,8 @@ import uuid
 from dataclasses import MISSING, dataclass, field, fields
 from typing import Any
 
+from . import schemes
+
 
 def new_id() -> str:
     return uuid.uuid4().hex
@@ -182,6 +184,55 @@ class Snippet:
         return s
 
 
+@dataclass
+class ColorScheme:
+    """Ein eigenes Farbschema (Oberfläche und Terminal); die mitgelieferten Schemas stehen in :mod:`sesam.schemes`.
+
+    ``ui``: die Grundfarben der Oberfläche (``schemes.UI_KEYS``), ``terminal``: ``bg``, ``fg``, ``cursor``, ``selection`` und
+    ``ansi`` (16 Farben). Fehlende oder ungültige Farben werden beim Laden durch die von Sesam hell bzw. dunkel ersetzt.
+    """
+
+    name: str
+    id: str = field(default_factory=new_id)
+    base: str = "dark"  # "light" oder "dark"
+    ui: dict = field(default_factory=dict)
+    terminal: dict = field(default_factory=dict)
+    use_password: bool = False  # ohne Bedeutung, nur damit der Abgleich Farbschemas wie andere Einträge behandeln kann
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ColorScheme":
+        if not isinstance(data, dict):
+            raise TypeError(f"Objekt erwartet, {type(data).__name__} gefunden")
+        base = data.get("base") if data.get("base") in ("light", "dark") else "dark"
+        default = schemes.SESAM_LIGHT if base == "light" else schemes.SESAM_DARK
+        name = data.get("name")
+        name = " ".join(name.split())[:schemes.NAME_MAX] if isinstance(name, str) else ""
+        ident = data.get("id")
+        ui_in = data.get("ui") if isinstance(data.get("ui"), dict) else {}
+        term_in = data.get("terminal") if isinstance(data.get("terminal"), dict) else {}
+        ansi = term_in.get("ansi")
+        if not (isinstance(ansi, list) and len(ansi) == schemes.ANSI_COUNT and all(schemes.is_hex(c) for c in ansi)):
+            ansi = default.terminal["ansi"]
+        return cls(
+            name=name or "Farbschema",
+            id=ident if isinstance(ident, str) and ident else new_id(),
+            base=base,
+            ui={k: ui_in[k].lower() if schemes.is_hex(ui_in.get(k)) else default.ui[k] for k in schemes.UI_KEYS},
+            terminal={**{k: term_in[k].lower() if schemes.is_hex(term_in.get(k)) else default.terminal[k] for k in schemes.TERMINAL_KEYS},
+                      "ansi": [c.lower() for c in ansi]},
+        )
+
+    @classmethod
+    def from_scheme(cls, scheme: "schemes.Scheme", name: str | None = None) -> "ColorScheme":
+        """Kopie eines (mitgelieferten oder eigenen) Schemas mit neuer ID."""
+        return cls(name=name or scheme.name, base=scheme.base, ui=dict(scheme.ui),
+                   terminal={**{k: scheme.terminal[k] for k in schemes.TERMINAL_KEYS}, "ansi": list(scheme.terminal["ansi"])})
+
+    def to_scheme(self) -> "schemes.Scheme":
+        return schemes.Scheme(self.id, self.name, self.base, dict(self.ui),
+                              {**{k: self.terminal[k] for k in schemes.TERMINAL_KEYS}, "ansi": list(self.terminal["ansi"])}, builtin=False)
+
+
 FORWARD_KINDS = ("local", "remote", "dynamic")  # ssh -L / -R / -D
 
 
@@ -320,6 +371,7 @@ class Config:
     identities: list[Identity] = field(default_factory=list)
     ssh_keys: list[SshKey] = field(default_factory=list)
     snippets: list[Snippet] = field(default_factory=list)
+    color_schemes: list[ColorScheme] = field(default_factory=list)  # eigene Farbschemas (werden mit synchronisiert)
     default_terminal_id: str = ""
     viewers: list[Viewer] = field(default_factory=list)  # Viewer für VNC und RDP (nur lokal, wird nicht synchronisiert)
     default_viewer_id: str = ""  # Standard-Viewer für VNC
