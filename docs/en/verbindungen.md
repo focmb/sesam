@@ -15,6 +15,12 @@ Below them the **Settings** button opens the settings dialog (font size, languag
 With *Same as system*, Sesam follows the operating system’s light/dark switch where Qt reports it (Windows, macOS, Linux depending on the desktop);
 otherwise you set it manually.
 
+**Color scheme:** In the *Settings* dialog, *Color scheme* sets the colors of the interface and the built-in terminal:
+*System default* (follows the operating system), *Sesam light*, *Sesam dark* or one of the well-known schemes *Monokai*, *Dracula*, *Nord*, *Solarized light/dark*, *Gruvbox dark*, *One Dark* and *Tokyo Night*.
+The choice takes effect immediately and is stored locally (it is not synchronized via Git). With *Use the color scheme in the terminal* the built-in terminal takes the scheme's colors (background, text, cursor, selection and the 16 ANSI colors);
+when off, it keeps Sesam's default colors. The *Light*, *Dark* and *Same as system* entries in the **⋯** menu remain as shortcuts.
+The schemes live in `src/sesam/schemes.py`: each consists of seven base colors for the interface plus the terminal colors; all other values (borders, hover, selection, muted text …) are derived from them and checked for sufficient contrast.
+
 **Font size:** in the *Settings* dialog (80 to 200 % of the system font), or by keyboard with **Ctrl + Plus** (larger), **Ctrl + Minus** (smaller) and **Ctrl + 0** (back to 100 %).
 Icons and toolbar grow with it. The setting applies immediately, is saved, and stays local (it is not synchronized via Git).
 
@@ -24,7 +30,7 @@ The source texts are German; `src/sesam/i18n.py` returns the English version fro
 the test `tests/test_i18n.py` fails as long as a text is missing from the catalog. Another language needs a second catalog file and an entry in `i18n.LANGUAGES`.
 
 The look (colors, spacing, icons) comes from `src/sesam/gui/style.py`: a shared stylesheet for light and dark, generated from a
-color table (`TOKENS`). You change colors in that one place; icons are simple line drawings in the same module.
+color table (`TOKENS`, taken from the Sesam schemes in `src/sesam/schemes.py`). You change colors in that one place; icons are simple line drawings in the same module.
 Sesam uses the Qt style “Fusion” everywhere so that it looks the same on Windows and Linux.
 
 ## Groups

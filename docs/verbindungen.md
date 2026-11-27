@@ -15,6 +15,12 @@ Darunter öffnet der Knopf **Einstellungen** den Einstellungsdialog (Schriftgrö
 Bei *Wie das System* folgt Sesam dem Hell/Dunkel-Wechsel des Betriebssystems, sofern Qt ihn meldet (Windows, macOS, Linux je nach Desktop);
 andernfalls stellst du es manuell ein.
 
+**Farbschema:** Im Dialog *Einstellungen* wählst du unter *Farbschema* die Farben der Oberfläche und des integrierten Terminals:
+*Systemvorgabe* (folgt dem Betriebssystem), *Sesam hell*, *Sesam dunkel* oder eines der bekannten Schemas *Monokai*, *Dracula*, *Nord*, *Solarized hell/dunkel*, *Gruvbox dunkel*, *One Dark* und *Tokyo Night*.
+Die Auswahl gilt sofort und wird lokal gespeichert (wird nicht per Git synchronisiert). Mit *Farbschema im Terminal verwenden* übernimmt das integrierte Terminal die Farben des Schemas (Hintergrund, Schrift, Cursor, Auswahl und die 16 ANSI-Farben);
+ausgeschaltet behält es die Standardfarben von Sesam. Die Einträge *Hell*, *Dunkel* und *Wie das System* im Menü **⋯** bleiben als Kurzwahl bestehen.
+Die Farbschemas stehen in `src/sesam/schemes.py`: Jedes besteht aus sieben Grundfarben für die Oberfläche und den Terminalfarben, alle weiteren Werte (Rahmen, Hover, Auswahl, gedämpfter Text …) werden daraus berechnet und auf ausreichenden Kontrast geprüft.
+
 **Schriftgröße:** im Dialog *Einstellungen* (80 bis 200 % der Systemschrift), oder per Tastatur **Strg + Plus** (größer), **Strg + Minus** (kleiner) und **Strg + 0** (zurück auf 100 %).
 Icons und Werkzeugzeile wachsen mit. Die Einstellung gilt sofort, wird gespeichert und bleibt lokal (wird nicht per Git synchronisiert).
 
@@ -24,7 +30,7 @@ Die Quelltexte sind deutsch; `src/sesam/i18n.py` liefert über `tr("deutscher Te
 der Test `tests/test_i18n.py` schlägt fehl, solange ein Text im Katalog fehlt. Eine weitere Sprache braucht eine zweite Katalogdatei und einen Eintrag in `i18n.LANGUAGES`.
 
 Das Erscheinungsbild (Farben, Abstände, Icons) kommt aus `src/sesam/gui/style.py`: ein gemeinsames Stylesheet für Hell und Dunkel, das aus einer
-Farbtabelle (`TOKENS`) erzeugt wird. Farben änderst du dort an einer Stelle; Icons sind einfache Linienzeichnungen im gleichen Modul.
+Farbtabelle (`TOKENS`, aus den Sesam-Schemas in `src/sesam/schemes.py`) erzeugt wird. Farben änderst du dort an einer Stelle; Icons sind einfache Linienzeichnungen im gleichen Modul.
 Sesam nutzt dafür überall den Qt-Stil „Fusion“, damit es unter Windows und Linux gleich aussieht.
 
 ## Gruppen
