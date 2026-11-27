@@ -146,9 +146,26 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QPushButton:hover { background: @surface_alt@; border-color: @muted@; }
     QPushButton:pressed { background: @pressed@; }
     QPushButton:disabled { color: @muted@; background: @surface_alt@; border-color: @border@; }
+    QPushButton:focus { border-color: @accent@; }
     QPushButton:default { background: @accent@; color: @accent_text@; border-color: @accent@; font-weight: 600; }
     QPushButton:default:hover { background: @accent_hover@; border-color: @accent_hover@; }
     QPushButton:default:disabled { background: @hover@; color: @muted@; border-color: @border@; }
+
+    /* Kontrollkästchen und Optionsfelder */
+    QCheckBox, QRadioButton { spacing: 8px; }
+    QCheckBox:disabled, QRadioButton:disabled { color: @muted@; }
+    QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; background: @surface@;
+        border: 1px solid @border@; }
+    QCheckBox::indicator { border-radius: 4px; }
+    QRadioButton::indicator { border-radius: 9px; }
+    QCheckBox::indicator:hover, QRadioButton::indicator:hover { border-color: @muted@; }
+    QCheckBox::indicator:focus, QRadioButton::indicator:focus { border-color: @accent@; }
+    QCheckBox::indicator:checked { background: @accent@; border-color: @accent@; image: url("@check@"); }
+    QCheckBox::indicator:checked:hover { background: @accent_hover@; border-color: @accent_hover@; }
+    QRadioButton::indicator:checked { border-color: @accent@; background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.5,
+        fx: 0.5, fy: 0.5, stop: 0 @accent@, stop: 0.45 @accent@, stop: 0.5 @surface@, stop: 1 @surface@); }
+    QCheckBox::indicator:disabled, QRadioButton::indicator:disabled { background: @surface_alt@; border-color: @border@; }
+    QCheckBox::indicator:checked:disabled { background: @muted@; border-color: @muted@; }
 
     /* Baum und Listen */
     QTreeView, QListView, QListWidget, QTableView {
@@ -190,6 +207,7 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QToolButton:hover { background: @hover@; }
     QToolButton:pressed { background: @pressed@; }
     QToolButton:disabled { color: @muted@; }
+    QToolButton:focus { border-color: @accent@; }
 
     /* Kachel-Button rechts neben den Reitern: bewusst auffällig */
     QToolButton#tileButton { background: @accent_soft@; color: @text@; border: 1px solid @accent@; border-radius: 8px;
@@ -225,6 +243,7 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
     QScrollBar::handle:hover { background: @muted@; }
     QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; background: none; border: none; }
     QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+    QAbstractScrollArea::corner { background: transparent; border: none; }
     """
     for key, value in t.items():
         qss = qss.replace(f"@{key}@", value)
@@ -232,23 +251,23 @@ def stylesheet(t: dict[str, str], base: Path | None = None) -> str:
 
 
 def _arrow_files(t: dict[str, str], base: Path | None = None) -> dict[str, str]:
-    """Schreibt die Auf-/Zuklapp-Pfeile des Baums als PNG (Stylesheets können nur Dateien einbinden)."""
+    """Schreibt die Auf-/Zuklapp-Pfeile des Baums und das Häkchen der Kontrollkästchen als PNG (Stylesheets können nur Dateien einbinden)."""
     if base is None:
         base = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation) or tempfile.gettempdir())
     folder = base / "sesam-ui"
-    out = {"arrow_right": "none", "arrow_down": "none", "arrow_up": "none"}
+    out = {"arrow_right": "none", "arrow_down": "none", "arrow_up": "none", "check": "none"}
     try:
         folder.mkdir(parents=True, exist_ok=True)
-        key = t["muted"].lstrip("#")
-        for token, name in (("arrow_right", "chevron_right"), ("arrow_down", "chevron_down"), ("arrow_up", "chevron_up")):
-            base = folder / f"{name}-{key}.png"
-            for scale, path in ((1, base), (2, base.with_name(f"{base.stem}@2x.png"))):
-                pix = _pixmap(name, t["muted"], 12 * scale)
+        for token, name, color, size in (("arrow_right", "chevron_right", t["muted"], 12), ("arrow_down", "chevron_down", t["muted"], 12),
+                                         ("arrow_up", "chevron_up", t["muted"], 12), ("check", "check", t["accent_text"], 16)):
+            target = folder / f"{name}-{color.lstrip('#')}.png"
+            for scale, path in ((1, target), (2, target.with_name(f"{target.stem}@2x.png"))):
+                pix = _pixmap(name, color, size * scale)
                 pix.setDevicePixelRatio(1.0)
-                pix = pix.scaled(12 * scale, 12 * scale, Qt.AspectRatioMode.IgnoreAspectRatio,
+                pix = pix.scaled(size * scale, size * scale, Qt.AspectRatioMode.IgnoreAspectRatio,
                                  Qt.TransformationMode.SmoothTransformation)
                 pix.save(str(path), "PNG")
-            out[token] = base.as_posix()
+            out[token] = target.as_posix()
     except OSError:
         pass  # ohne Pfeil-Dateien bleibt der Baum bedienbar (Doppelklick/Pfeiltasten)
     return out
@@ -280,6 +299,7 @@ _ICONS = {
     "sliders": '<path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.200"/><circle cx="8" cy="17" r="2.200"/>',
     "box": '<path d="M12 3l8 4.500v9L12 21l-8-4.500v-9z"/><path d="M4 7.500l8 4.500 8-4.500M12 12v9"/>',
     "server": '<rect x="4" y="4" width="16" height="6.500" rx="2"/><rect x="4" y="13.500" width="16" height="6.500" rx="2"/><path d="M8 7.250h.01M8 16.750h.01"/>',
+    "check": '<path d="M5 12.5l4.500 4.500L19 7.500"/>',
     "chevron_right": '<path d="M9 6l6 6-6 6"/>',
     "chevron_up": '<path d="M6 15l6-6 6 6"/>',
     "chevron_down": '<path d="M6 9l6 6 6-6"/>',

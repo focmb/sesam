@@ -29,6 +29,17 @@ class StyleTests(unittest.TestCase):
             self.assertNotIn("@", qss, "Platzhalter im Stylesheet nicht ersetzt")
             self.assertIn(style.tokens(mode)["accent"], qss)
 
+    def test_keyboard_focus_is_visible_on_buttons_and_checkboxes(self):
+        from sesam.gui import style
+
+        for mode in ("light", "dark"):
+            qss = style.stylesheet(style.tokens(mode))
+            for rule in ("QPushButton:focus", "QToolButton:focus", "QCheckBox::indicator:focus", "QRadioButton::indicator:focus",
+                         "QCheckBox::indicator:checked", "QAbstractScrollArea::corner"):
+                self.assertIn(rule, qss, rule)
+            # Der Standard-Button behält seine Füllung: seine Regel steht nach der Fokusregel.
+            self.assertLess(qss.index("QPushButton:focus"), qss.index("QPushButton:default {"))
+
     def test_icons_render_visible_pixels(self):
         from sesam.gui import style
 
@@ -45,7 +56,7 @@ class StyleTests(unittest.TestCase):
         from sesam.gui import style
 
         files = style._arrow_files(style.tokens("dark"))
-        for key in ("arrow_right", "arrow_down", "arrow_up"):
+        for key in ("arrow_right", "arrow_down", "arrow_up", "check"):
             self.assertNotEqual(files[key], "none", key)
             self.assertTrue(Path(files[key]).exists(), key)
 
