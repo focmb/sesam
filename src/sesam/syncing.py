@@ -1,7 +1,7 @@
 """Synchronisation von Verbindungen, Identitäten und Gruppen über ein Git-Repository.
 
 Aufbau des Repositories (ein Eintrag pro Datei, damit Änderungen sauber zusammengeführt werden):
-    connections/<id>.json   identities/<id>.json   ssh_keys/<id>.json   snippets/<id>.json   groups.json   meta.json
+    connections/<id>.json   identities/<id>.json   ssh_keys/<id>.json   snippets/<id>.json   schemes/<id>.json   groups.json   meta.json
 
 Passwörter werden nie im Klartext abgelegt, sondern mit einem Sync-Passwort (scrypt + AES-256-GCM)
 verschlüsselt im jeweiligen Eintrag (``password_enc``). Das lokale Git-Verzeichnis ist nur ein Zwischenspeicher
@@ -33,14 +33,14 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from . import duplicates, keystore, passwords, runtime, storage
-from .models import Config, Connection, Identity, Snippet, SshKey, SyncSettings
+from .models import ColorScheme, Config, Connection, Identity, Snippet, SshKey, SyncSettings
 from .i18n import tr
 
 MIN_PASSPHRASE_LEN = 12  # gilt nur beim Anlegen eines neuen verschlüsselten Repositories
 PASSPHRASE_KEY = "sync:passphrase"  # Schlüssel im Schlüsselbund für das Sync-Passwort
 GIT_PASSWORD_KEY = "sync:git-password"  # Schlüssel im Schlüsselbund für das Repository-Passwort bzw. den Token
 FORMAT = 1
-KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey), "s": ("snippets", Snippet)}
+KINDS = {"c": ("connections", Connection), "i": ("identities", Identity), "k": ("ssh_keys", SshKey), "s": ("snippets", Snippet), "p": ("schemes", ColorScheme)}
 VOLATILE = {"use_password", "remote_use_password"}  # lokal abgeleitet, nicht Teil des Vergleichs (Passwörter des Fernzugriffs werden nicht synchronisiert)
 SAFE_ID = keystore._SAFE_ID  # IDs werden zu Dateinamen im Repository: keine Pfadtrenner, kein „..“
 _SAFE_BRANCH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}")
@@ -582,7 +582,7 @@ class SyncEngine:
 
     def _local_items(self, cfg: Config, key: bytes | None) -> dict:
         items: dict = {}
-        for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys), ("s", cfg.snippets)):
+        for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys), ("s", cfg.snippets), ("p", cfg.color_schemes)):
             for o in objs:
                 pw = None
                 if key is not None and o.use_password:
@@ -702,12 +702,13 @@ class SyncEngine:
         self._plan = None
 
     def _apply_local(self, cfg: Config, local: dict, result: dict, pw_on: bool, report: SyncReport) -> None:
-        old = {k: o for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys), ("s", cfg.snippets))
+        old = {k: o for kind, objs in (("c", cfg.connections), ("i", cfg.identities), ("k", cfg.ssh_keys), ("s", cfg.snippets), ("p", cfg.color_schemes))
                for o in objs for k in [(kind, o.id)]}
         new_conns: list[Connection] = []
         new_idents: list[Identity] = []
         new_keys: list[SshKey] = []
         new_snippets: list[Snippet] = []
+        new_schemes: list[ColorScheme] = []
         undo: list[tuple] = []        # (Speicher, ID, alter Wert): macht Schlüsselbund-Änderungen bei einem Fehler rückgängig
         deferred: list[tuple] = []    # (bestehendes Objekt, neue Werte): erst nach allen Schlüsselbund-Schritten anwenden
 
@@ -721,7 +722,7 @@ class SyncEngine:
 
         try:
             self._apply_secrets_and_objects(cfg, local, result, pw_on, report, old, new_conns, new_idents, new_keys, new_snippets,
-                                            deferred, secret_set)
+                                            new_schemes, deferred, secret_set)
         except Exception as exc:  # noqa: BLE001 - egal was schiefgeht: Schlüsselbund zurücksetzen, cfg bleibt unverändert
             for store, ident, previous in reversed(undo):
                 try:
@@ -734,10 +735,10 @@ class SyncEngine:
         for existing, obj in deferred:
             for f in fields(obj):  # in place, damit offene Dialoge gültige Objekte behalten
                 setattr(existing, f.name, getattr(obj, f.name))
-        self._finish_apply(cfg, new_conns, new_idents, new_keys, new_snippets)
+        self._finish_apply(cfg, new_conns, new_idents, new_keys, new_snippets, new_schemes)
 
     def _apply_secrets_and_objects(self, cfg, local, result, pw_on, report, old, new_conns, new_idents, new_keys, new_snippets,
-                                   deferred, secret_set) -> None:
+                                   new_schemes, deferred, secret_set) -> None:
         moved_old = {(k[0], it.renamed_from) for k, it in local.items() if it.renamed_from}
         for k, item in result.items():
             _folder, cls = KINDS[k[0]]
@@ -769,7 +770,7 @@ class SyncEngine:
                     report.updated += 1
                 deferred.append((existing, obj))
                 obj = existing
-            {"c": new_conns, "i": new_idents, "k": new_keys, "s": new_snippets}[k[0]].append(obj)
+            {"c": new_conns, "i": new_idents, "k": new_keys, "s": new_snippets, "p": new_schemes}[k[0]].append(obj)
         for k, o in old.items():
             if k not in result:
                 if k not in moved_old:
@@ -777,7 +778,7 @@ class SyncEngine:
                 if o.use_password and (pw_on or k in moved_old):
                     secret_set(k[0], o.id, None)
 
-    def _finish_apply(self, cfg: Config, new_conns, new_idents, new_keys, new_snippets) -> None:
+    def _finish_apply(self, cfg: Config, new_conns, new_idents, new_keys, new_snippets, new_schemes) -> None:
         ident_ids = {i.id for i in new_idents}
         key_ids = {k.id for k in new_keys}
         for c in new_conns:
@@ -790,6 +791,7 @@ class SyncEngine:
         cfg.identities = sorted(new_idents, key=lambda i: i.name.lower())
         cfg.ssh_keys = sorted(new_keys, key=lambda k: k.name.lower())
         cfg.snippets = sorted(new_snippets, key=lambda sn: (sn.category.lower(), sn.name.lower()))
+        cfg.color_schemes = sorted(new_schemes, key=lambda cs: cs.name.lower())
 
     def _write_repo(self, result: dict, groups: set, remote: RemoteState, key: bytes | None, colors: dict | None = None) -> None:
         colors = colors or {}

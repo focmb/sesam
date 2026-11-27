@@ -13,7 +13,7 @@ MAX_VALUE = 60
 
 
 def kind_label(kind: str) -> str:
-    return {"c": tr("Verbindung"), "i": tr("Identität"), "k": tr("Gespeicherter Schlüssel"), "s": tr("Snippet")}.get(kind, kind)
+    return {"c": tr("Verbindung"), "i": tr("Identität"), "k": tr("Gespeicherter Schlüssel"), "s": tr("Snippet"), "p": tr("Farbschema")}.get(kind, kind)
 
 
 def _short(value: object) -> str:

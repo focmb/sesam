@@ -75,5 +75,44 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(storage._color_schemes("x"), [])
 
 
+class SyncTests(unittest.TestCase):
+    def setUp(self):
+        import test_sync
+
+        self.h = test_sync.EngineTests("test_first_device_pushes_encrypted_and_second_device_receives")
+        self.h.setUp()
+        self.addCleanup(self.h.tmp.cleanup)
+
+    def _roundtrip(self, passwords_on):
+        cfgA, A, _ = self.h.device("A", passwords_on=passwords_on)
+        cs = ColorScheme.from_scheme(schemes.NORD, "Mein Nord")
+        cfgA.color_schemes.append(cs)
+        A.run(cfgA)
+        files = self.h.remote_text()
+        self.assertIn(f"schemes/{cs.id}.json", files)
+        self.assertIn("#2e3440", files[f"schemes/{cs.id}.json"].lower())
+        self.assertNotIn("use_password", files[f"schemes/{cs.id}.json"])
+
+        cfgB, B, _ = self.h.device("B", passwords_on=passwords_on)
+        B.run(cfgB)
+        self.assertEqual(cfgB.color_schemes, [cs])
+
+        cfgB.color_schemes[0].ui["accent"] = "#112233"
+        B.run(cfgB)
+        A.run(cfgA)
+        self.assertEqual(cfgA.color_schemes[0].ui["accent"], "#112233")
+        cfgA.color_schemes.clear()
+        A.run(cfgA)
+        B.run(cfgB)
+        self.assertEqual(cfgB.color_schemes, [])
+        self.assertFalse([f for f in self.h.remote_text() if f.startswith("schemes/")])
+
+    def test_schemes_sync_with_passwords(self):
+        self._roundtrip(True)
+
+    def test_schemes_sync_without_passwords(self):
+        self._roundtrip(False)
+
+
 if __name__ == "__main__":
     unittest.main()
